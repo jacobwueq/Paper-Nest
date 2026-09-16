@@ -20,6 +20,7 @@ window.addEventListener("message", (event) => {
     .join("");
   const margin = settings.margin;
   const safety = 0.06;
+  const collisionPadding = (settings.gap + safety) / 2;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg"><rect id="sheet" x="0" y="0" width="${settings.width - 2 * margin}" height="${settings.height - 2 * margin}"/>${body}</svg>`;
   const send = (type, data = {}) =>
     parent.postMessage({ type, run, ...data }, location.origin);
@@ -28,6 +29,16 @@ window.addEventListener("message", (event) => {
       spacing: settings.gap + safety,
       rotations: settings.rotations,
       seed,
+      exactSheetBounds: true,
+      offcut: {
+        width: settings.width - 2 * margin,
+        height: settings.height - 2 * margin,
+        padding: settings.gap + 0.03,
+        origin: collisionPadding,
+        outlines: parts.map((p) =>
+          p.outer.map((v) => ({ x: v.x + offsets.get(p.id), y: v.y })),
+        ),
+      },
       refine: settings.rotations >= 72,
       curveTolerance: 0.005,
       populationSize: 8,
@@ -48,14 +59,17 @@ window.addEventListener("message", (event) => {
             const shape = g.querySelector("polygon[id]");
             if (!shape) continue;
             const id = shape.id;
-            const m = g.transform.baseVal.consolidate().matrix;
+            // SVG transform matrices can round to float32. Keep solver doubles
+            // when cancelling large synthetic import offsets near sheet edges.
+            const raw = g.nestPlacement;
             const offset = offsets.get(id);
-            const angle = (Math.atan2(m.b, m.a) * 180) / Math.PI;
-            // SVGNest normalises the inset bin to its own origin. Add the physical sheet margin.
+            const angle = raw.rotation;
+            const radians = (angle * Math.PI) / 180;
+            // Undo the expanded collision bin origin, then add the physical margin.
             placements.push({
               id,
-              x: m.e + offset * m.a + margin,
-              y: m.f + offset * m.b + margin,
+              x: raw.x + offset * Math.cos(radians) + margin - collisionPadding,
+              y: raw.y + offset * Math.sin(radians) + margin - collisionPadding,
               angle,
               sheet: index,
             });

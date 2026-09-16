@@ -116,9 +116,11 @@
 				config.exploreConcave = !!c.exploreConcave;
 			}
 			
-			// Paper Nest: carry part identities and angles between search stages.
+			// Paper Nest: carry part identities and angles into continued searches.
 			config.seed = Array.isArray(c.seed) ? c.seed.slice(0) : [];
 			config.refine = !!c.refine;
+			config.offcut = c.offcut;
+			config.exactSheetBounds = !!c.exactSheetBounds;
 			SvgParser.config({ tolerance: config.curveTolerance});
 			
 			best = null;
@@ -174,7 +176,9 @@
 			binBounds = GeometryUtil.getPolygonBounds(binPolygon);
 						
 			if(config.spacing > 0){
-				var offsetBin = this.polygonOffset(binPolygon, -0.5*config.spacing);
+				// Expanded collision outlines need an equally expanded bin to preserve
+				// the requested physical margin. The adapter restores this origin.
+				var offsetBin = this.polygonOffset(binPolygon, (config.exactSheetBounds ? 0.5 : -0.5)*config.spacing);
 				if(offsetBin.length == 1){
 					// if the offset contains 0 or more than 1 path, something went wrong.
 					binPolygon = offsetBin.pop();
@@ -355,7 +359,7 @@
 			
 			p.require('matrix.js');
 			p.require('geometryutil.js');
-			p.require('placementworker.js');
+			p.require('placementworker.js?v=0.3.2');
 			p.require('clipper.js');
 			
 			var self = this;
@@ -560,7 +564,8 @@
 				p2.require('clipper.js');
 				p2.require('matrix.js');
 				p2.require('geometryutil.js');
-				p2.require('placementworker.js?v=0.2.0');
+				p2.require('offcut.js?v=0.3.2');
+				p2.require('placementworker.js?v=0.3.2');
 				
 				p2.map(worker.placePaths).then(function(placements){
 					if(!placements || placements.length == 0){
@@ -571,12 +576,12 @@
 					var bestresult = placements[0];
 					
 					for(var i=1; i<placements.length; i++){
-						if(placements[i].fitness < bestresult.fitness){
+						if(PaperOffcut.compare(placements[i].fitness, bestresult.fitness) < 0){
 							bestresult = placements[i];
 						}
 					}
 					
-					if(!best || bestresult.fitness < best.fitness){
+					if(!best || PaperOffcut.compare(bestresult.fitness, best.fitness) < 0){
 						best = bestresult;
 						
 						var placedArea = 0;
@@ -786,6 +791,7 @@
 					// the original path could have transforms and stuff on it, so apply our transforms on a group
 					var partgroup = document.createElementNS(svg.namespaceURI, 'g');
 					partgroup.setAttribute('transform','translate('+p.x+' '+p.y+') rotate('+p.rotation+')');
+					partgroup.nestPlacement = {x:p.x, y:p.y, rotation:p.rotation};
 					partgroup.appendChild(clone[part.source]);
 					
 					if(part.children && part.children.length > 0){
@@ -842,17 +848,40 @@
 		for(var i=0; i<adam.length; i++){
 			var step = 360/this.config.rotations;
 			var angle = ((Math.round(adam[i].seedAngle/step)*step)%360+360)%360;
-			angles.push(Number.isFinite(angle) && this.fits(adam[i], angle) ? angle : this.randomAngle(adam[i]));
+			angles.push(Number.isFinite(angle) && this.fits(adam[i], angle) ? angle : this.compactAngle(adam[i], 0));
 		}
 		
 		this.population = [{placement: adam, rotation: angles}];
 		
+		// Useful initial candidates arrive immediately; all configured angles are
+		// available from the first evaluation, with no timed refinement stages.
+		for(var mode=1; mode<=2 && this.population.length<config.populationSize; mode++){
+			var initialAngles=[];
+			for(var a=0; a<adam.length; a++) initialAngles.push(this.compactAngle(adam[a], mode));
+			this.population.push({placement:adam.slice(0),rotation:initialAngles});
+		}
 		while(this.population.length < config.populationSize){
 			var mutant = this.mutate(this.population[0]);
 			this.population.push(mutant);
 		}
 	}
 	
+	GeneticAlgorithm.prototype.compactAngle = function(part, mode){
+		var best = null, bestArea = Infinity, bestTie = Infinity;
+		for(var i=0; i<this.config.rotations; i++){
+			var angle=i*360/this.config.rotations;
+			var b=GeometryUtil.rotatePolygon(part,angle);
+			if(b.width>this.binBounds.width || b.height>this.binBounds.height) continue;
+			var area=b.width*b.height;
+			var free=Math.max((this.binBounds.width-b.width)*this.binBounds.height,(this.binBounds.height-b.height)*this.binBounds.width);
+			var tie=mode===1?b.height:mode===2?b.width:-free;
+			if(area<bestArea-1e-5 || (Math.abs(area-bestArea)<1e-5 && tie<bestTie-1e-5)){
+				best=angle;bestArea=area;bestTie=tie;
+			}
+		}
+		return best===null?0:best;
+	};
+
 	GeneticAlgorithm.prototype.fits = function(part, angle){
 		var rotated = GeometryUtil.rotatePolygon(part, angle);
 		return rotated.width <= this.binBounds.width && rotated.height <= this.binBounds.height;
@@ -980,7 +1009,7 @@
 				
 		// Individuals with higher fitness are more likely to be selected for mating
 		this.population.sort(function(a, b){
-			return a.fitness - b.fitness;
+			return PaperOffcut.compare(a.fitness, b.fitness);
 		});
 		
 		// fittest individual is preserved in the new generation (elitism)

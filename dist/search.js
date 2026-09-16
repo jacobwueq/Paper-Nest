@@ -1,47 +1,45 @@
-import { bounds, transformed } from "./geometry.js";
-
-// 0 selects the staged search; the other values count orientations per turn.
-export const ROTATIONS = [0, 1, 4, 12, 24, 72, 360];
-export function searchPlan(rotations, continuing = false) {
+import { transformed } from "./geometry.js";
+import "./engine/util/offcut.js";
+const offcut = globalThis.PaperOffcut;
+export const ROTATIONS = [1, 4, 12, 24, 72, 360];
+export function searchSettings(rotations) {
   if (!ROTATIONS.includes(rotations))
     throw new Error("Invalid rotation search");
-  if (rotations === 0 && !continuing)
-    return [
-      { rotations: 24, seconds: 10 },
-      { rotations: 72, seconds: 15 },
-      { rotations: 360, seconds: 35 },
-    ];
-  return [{ rotations: rotations || 360, seconds: 30 }];
+  return { rotations, seconds: 20 };
 }
-
-// Compare complete layouts first, then sheet count, then occupied strip width.
-// Translation coordinates alone are misleading when a part is rotated.
-export function layoutScore(parts, placements) {
+export function evaluateLayout(parts, placements, settings) {
   const byId = new Map(parts.map((p) => [p.id, p]));
   const sheets = new Map();
   for (const t of placements) {
-    const b = bounds(transformed(byId.get(t.id).outer, t));
-    const s = sheets.get(t.sheet) || { min: Infinity, max: -Infinity };
-    s.min = Math.min(s.min, b.x);
-    s.max = Math.max(s.max, b.x + b.w);
-    sheets.set(t.sheet, s);
+    if (!sheets.has(t.sheet)) sheets.set(t.sheet, []);
+    sheets.get(t.sheet).push(transformed(byId.get(t.id).outer, t));
   }
-  return [
-    parts.length - placements.length,
-    sheets.size,
-    [...sheets.values()].reduce((sum, s) => sum + s.max - s.min, 0),
-  ];
+  const reports = [...sheets]
+    .sort((a, b) => a[0] - b[0])
+    .map(([sheet, polygons]) => ({
+      sheet,
+      ...offcut.analyse(
+        polygons,
+        {
+          x: settings.margin,
+          y: settings.margin,
+          w: settings.width - 2 * settings.margin,
+          h: settings.height - 2 * settings.margin,
+        },
+        settings.gap + 0.03,
+      ),
+    }));
+  return {
+    score: offcut.score(parts.length - placements.length, reports),
+    sheets: reports,
+  };
 }
-export function improves(candidate, incumbent) {
-  for (let i = 0; i < candidate.length; i++) {
-    if (Math.abs(candidate[i] - incumbent[i]) > (i === 2 ? 1e-5 : 0))
-      return candidate[i] < incumbent[i];
-  }
-  return false;
+export function layoutScore(parts, placements, settings) {
+  return evaluateLayout(parts, placements, settings).score;
 }
-
-// The engine returns parts in insertion order, grouped by sheet. Retain this
-// order and each part's own angle; coordinates remain the parent's incumbent.
+export function improves(a, b) {
+  return offcut.compare(a, b) < 0;
+}
 export function searchSeed(placements) {
   return placements.map(({ id, angle }) => ({
     id,

@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import {
-  searchPlan,
+  searchSettings,
+  evaluateLayout,
   layoutScore,
   improves,
   searchSeed,
@@ -30,40 +31,32 @@ const t = (id, x = 5, y = 5, angle = 0, sheet = 0) => ({
   sheet,
 });
 
-test("automatic budgets refine to 1°; continuation honours manual constraints", () => {
-  assert.deepEqual(
-    searchPlan(0).map((s) => s.rotations),
-    [24, 72, 360],
-  );
-  assert.equal(
-    searchPlan(0).reduce((s, p) => s + p.seconds, 0),
-    60,
-  );
-  assert.deepEqual(searchPlan(0, true), [{ rotations: 360, seconds: 30 }]);
-  for (const rotations of [1, 4, 12, 24, 72, 360]) {
-    assert.deepEqual(searchPlan(rotations, true), [{ rotations, seconds: 30 }]);
-  }
-  assert.throws(() => searchPlan(13));
+const settings = { width: 200, height: 200, margin: 0, gap: 0 };
+test("all selected angles are available immediately without timed stages", () => {
+  for (const rotations of [1, 4, 12, 24, 72, 360])
+    assert.deepEqual(searchSettings(rotations), { rotations, seconds: 20 });
+  assert.throws(() => searchSettings(0));
 });
-test("score prioritises completeness, sheets and true rotated occupied width", () => {
-  const upright = [t("a"), t("b", 110)];
-  const narrow = [t("a", 15, 5, 90), t("b", 5, 110)];
-  assert.equal(layoutScore(parts, upright)[2], 125);
-  assert.ok(Math.abs(layoutScore(parts, narrow)[2] - 20) < 1e-9);
-  assert.ok(improves(layoutScore(parts, narrow), layoutScore(parts, upright)));
-  assert.ok(
-    improves(layoutScore(parts, upright), layoutScore(parts, [t("a")])),
-  );
+test("larger horizontal offcut beats a narrower but less reusable layout", () => {
+  const ps = [
+    { id: "a", outer: rect(70, 20) },
+    { id: "b", outer: rect(70, 20) },
+  ];
+  const narrow = [t("a", 0, 0), t("b", 0, 22)];
+  const compact = [t("a", 0, 0), t("b", 72, 0)];
+  const report = evaluateLayout(ps, compact, settings);
+  assert.ok(improves(report.score, layoutScore(ps, narrow, settings)));
+  assert.ok(report.sheets[0].rectangle.w > 199);
+  assert.ok(report.sheets[0].rectangle.h > 179);
+  assert.ok(improves(report.score, layoutScore(ps, [t("a")], settings)));
   assert.ok(
     improves(
-      layoutScore(parts, upright),
-      layoutScore(parts, [t("a"), t("b", 5, 5, 0, 1)]),
+      report.score,
+      layoutScore(ps, [t("a"), t("b", 0, 0, 0, 1)], settings),
     ),
   );
-  const translated = upright.map((p) => ({ ...p, x: p.x + 100, y: p.y + 100 }));
-  assert.deepEqual(layoutScore(parts, translated), layoutScore(parts, upright));
 });
-test("a worse stage or continuation cannot replace the incumbent", () => {
+test("a worse candidate or continuation cannot replace the incumbent", () => {
   let best = [0, 1, 150];
   for (const proposed of [
     [1, 1, 50],
@@ -96,6 +89,10 @@ function engine(random = () => 0.5) {
   context.window = context;
   vm.runInContext(
     fs.readFileSync("dist/engine/util/geometryutil.js", "utf8"),
+    context,
+  );
+  vm.runInContext(
+    fs.readFileSync("dist/engine/util/offcut.js", "utf8"),
     context,
   );
   const src = fs
@@ -172,7 +169,7 @@ test("fine angle candidates respect the selected grid and bin bounds", () => {
     assert.ok(ga.fits(p, angle));
   }
 });
-test("single-part sheet width contributes to worker fitness; missing part loses", () => {
+test("worker fitness uses reusable offcut and prioritises complete placement", () => {
   const ctx = engine();
   vm.runInContext(
     fs.readFileSync("dist/engine/util/placementworker.js", "utf8"),
@@ -197,9 +194,11 @@ test("single-part sheet width contributes to worker fitness; missing part loses"
   ctx.global = { env: { self: worker } };
   const result = worker.placePaths([p]);
   assert.equal(result.placements.length, 1);
-  assert.equal(result.fitness, 1.1);
+  assert.deepEqual(Array.from(result.fitness), [0, 1, -9000, -9000, 200]);
   worker.nfpCache = {};
-  assert.ok(worker.placePaths([p]).fitness > result.fitness);
+  assert.ok(
+    ctx.PaperOffcut.compare(worker.placePaths([p]).fitness, result.fitness) > 0,
+  );
 });
 test("1° rotations preserve hole, engraving, distances and full-scale exports", () => {
   const entities = [
@@ -242,4 +241,110 @@ test("1° rotations preserve hole, engraving, distances and full-scale exports",
     assert.match(svg, /height="297mm"/);
     assert.match(svg, new RegExp(`rotate\\(${angle}\\)`));
   }
+});
+
+test("initial 1° candidate chooses a compact edge-aligned angle instead of a random rotation", () => {
+  const ctx = engine();
+  const part = Object.assign(
+    rect(100, 10).map((p) => transform(p, { x: 0, y: 0, angle: 23 })),
+    { id: 0 },
+  );
+  const ga = new ctx.TestGA([part], rect(104, 13), {
+    rotations: 360,
+    populationSize: 3,
+    mutationRate: 15,
+    refine: true,
+  });
+  const angle = ga.population[0].rotation[0];
+  assert.ok([157, 337].includes(angle));
+  assert.ok(ga.fits(part, angle));
+});
+
+test("worker and UI measure the same raw contours and clearances", () => {
+  const ctx = engine();
+  vm.runInContext(
+    fs.readFileSync("dist/engine/util/placementworker.js", "utf8"),
+    ctx,
+  );
+  const raw = rect(20, 10).map((p) => ({ x: p.x + 1000, y: p.y }));
+  const p = Object.assign(
+    raw.map((p) => ({ ...p })),
+    { id: 0, rotation: 0, source: 0 },
+  );
+  const key = JSON.stringify({
+    A: -1,
+    B: 0,
+    inside: true,
+    Arotation: 0,
+    Brotation: 0,
+  });
+  const worker = new ctx.PlacementWorker(
+    rect(90, 90),
+    [p],
+    [0],
+    [0],
+    { offcut: { width: 90, height: 90, padding: 2.03, outlines: [raw] } },
+    { [key]: [[{ x: 0, y: 0 }]] },
+  );
+  ctx.global = { env: { self: worker } };
+  const result = worker.placePaths([p]);
+  const parentScore = layoutScore(
+    [{ id: "a", outer: rect(20, 10) }],
+    [t("a", 5, 5)],
+    { width: 100, height: 100, margin: 5, gap: 2 },
+  );
+  for (let i = 0; i < parentScore.length; i++)
+    assert.ok(Math.abs(result.fitness[i] - parentScore[i]) < 1e-6);
+});
+
+test("expanded collision bin preserves physical margins without charging the gap twice", () => {
+  const ctx = engine();
+  vm.runInContext(
+    fs.readFileSync("dist/engine/util/placementworker.js", "utf8"),
+    ctx,
+  );
+  const pad = 1.03,
+    raw = rect(20, 10).map((p) => ({ x: p.x + 1000, y: p.y }));
+  const collision = Object.assign(
+    rect(20 + 2 * pad, 10 + 2 * pad).map((p) => ({
+      x: p.x + 1000 - pad,
+      y: p.y - pad,
+    })),
+    { id: 0, rotation: 0, source: 0 },
+  );
+  const key = JSON.stringify({
+    A: -1,
+    B: 0,
+    inside: true,
+    Arotation: 0,
+    Brotation: 0,
+  });
+  const worker = new ctx.PlacementWorker(
+    rect(90 + 2 * pad, 90 + 2 * pad),
+    [collision],
+    [0],
+    [0],
+    {
+      offcut: {
+        width: 90,
+        height: 90,
+        padding: 2.03,
+        origin: pad,
+        outlines: [raw],
+      },
+    },
+    { [key]: [[{ x: 0, y: 0 }]] },
+  );
+  ctx.global = { env: { self: worker } };
+  const result = worker.placePaths([collision]);
+  const translation = result.placements[0][0];
+  assert.ok(Math.abs(translation.x + 1000 - pad) < 1e-9);
+  assert.ok(Math.abs(translation.y - pad) < 1e-9);
+  const expected = layoutScore(
+    [{ id: "a", outer: rect(20, 10) }],
+    [t("a", 5, 5)],
+    { width: 100, height: 100, margin: 5, gap: 2 },
+  );
+  for (let i = 0; i < expected.length; i++)
+    assert.ok(Math.abs(result.fitness[i] - expected[i]) < 1e-6);
 });

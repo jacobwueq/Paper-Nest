@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Paper Nest — Support / 支援範圍</title>
     <link rel="icon" href="favicon.svg" />
-    <link rel="stylesheet" href="style.css?v=0.2.1" />
+    <link rel="stylesheet" href="style.css?v=0.3.2" />
   </head>
   <body>
     <header class="topbar">
@@ -50,11 +50,12 @@
           and open engraving; explicit groups take priority.<br />由相同端點組成嘅封閉輪廓、內部孔洞及開放刻線；指定群組優先。
         </li>
         <li>
-          Irregular-outline nesting, multiple sheets, automatic 15° → 5° → 1°
-          refinement, or 1°/5°/15°/30°/90°/fixed rotation. Continue improving
-          from the best layout. Part gap and sheet margin are validated.<br />不規則輪廓排料、多張板材、自動由
-          15° → 5° → 1° 精排，亦可手選角度。
-          可承接最佳結果繼續優化，並檢查零件間距及留邊。
+          Direct nesting with 1° free rotation or fixed angle constraints. Parts
+          are clustered to preserve a large reusable rectangular offcut. The
+          best validated result appears immediately and remains available for
+          export while improvements continue.<br />直接用 1°
+          自由旋轉排料，亦可限制方向。
+          零件集中排列以保留大塊長方形餘料；有有效排位即顯示，可即時匯出，並繼續改善。
         </li>
         <li>
           DXF input → DXF or SVG; SVG input → SVG. Sheet guides are excluded
@@ -80,18 +81,28 @@
         圖形。不相連嘅指定群組使用保守外邊界。
       </p>
       <p>
-        Limits: 5 MB, 80 parts and 3,000 entities per drawing. Automatic search
-        takes 60 seconds (10s at 15°, 15s at 5°, 35s at 1°); manual-angle
-        searches and each continuation take 30 seconds. Stop at any time to keep
-        the best validated layout. The search prioritises placing every part,
-        then fewer sheets, then narrower occupied strips. A 1° step is the angle
-        search interval, not a cutting tolerance or a promise that every
-        possible arrangement has been tested. Very complex drawings may take
-        longer to import.<br />
-        上限：5 MB、80 件零件及 3,000 個圖元。自動搜尋 60
-        秒；指定角度及每次繼續優化用 30 秒。
-        隨時可停止並保留最佳有效排位。先放齊所有零件，再減少板材張數，然後收窄佔用闊度。
-        1° 代表搜尋角度級距，並非切割公差，亦不代表已測試所有可能排法。
+        Limits: 5 MB, 80 parts and 3,000 entities per drawing. Each search has a
+        20-second improvement budget; a usable result can appear earlier.
+        Continue from the best result, or stop at any time. Objectives, in
+        order: place all parts, minimise sheet count, maximise the largest
+        single rectangular offcut, then total reusable rectangles, then compact
+        the occupied footprint.<br />
+        上限：5 MB、80 件零件及 3,000 個圖元。每次最多改善 20
+        秒，有結果即顯示；可隨時停止或承接結果繼續。
+        依次優先放齊零件、減少板材張數、保留最大塊長方形餘料，再比較各張板材餘料總和及零件佔用範圍。
+      </p>
+      <p>
+        Green rectangles show conservatively estimated clear space within the
+        sheet margin, reserving the selected part gap from contours. Full edge
+        strips are measured directly; other rectangles use a grid with at most
+        256 cells along the longest sheet edge. Curved and concave boundaries
+        can make this estimate smaller than the true available rectangle. Holes
+        are excluded. The overlay is a guide, not an exported cut line. This
+        heuristic does not prove the globally largest offcut or optimise
+        arbitrary offcut shapes.<br />綠色區域係板材留邊以內、與零件保持所選間距嘅保守餘料估算。
+        完整邊帶直接計算，其餘用最長邊最多 256
+        格嘅網格搜尋；曲線及凹形可能令估算偏小。
+        孔洞不計，綠框不會匯出成切割線。演算法未能證明全域最大餘料，亦未優化任意形狀餘料。
       </p>
       <h2>Open-source credits / 開源鳴謝</h2>
       <p>

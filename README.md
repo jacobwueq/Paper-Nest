@@ -24,16 +24,23 @@ Production approval still requires Jacob's representative DXF and an AutoCAD reo
 
 正式使用前，仍要 Jacob 嘅代表性 DXF，並用 AutoCAD 重新開啟及核對尺寸。原生文字／字體、複雜 block、手動排位、孔內排料及共線切割屬後續工作。
 
-## Rotation refinement / 旋轉精排
+## Direct nesting and reusable offcuts / 直接排料及餘料
 
-Default: 15° for 10s → 5° for 15s → 1° for 35s. Later stages inherit the best
-validated part order and angles. Fine stages mostly mutate nearby angles, retaining
-some global exploration. Continue adds 30s at 1° in Auto mode; manual modes retain
-their selected angle grid. Stop cancels the disposable engine and retains the result.
-The parent compares layouts lexicographically: unplaced parts, sheet count, total
-occupied width. The engine uses the same priorities. Original entities only receive
-rigid rotation and translation; 1° is a search grid, not fabrication accuracy.
+The full configured angle grid is available immediately (default 1°). Initial
+candidates use compact edge-aligned orientations. There are no timed rotation
+stages. Results appear and can be exported during the 20-second improvement budget;
+continuation inherits the best part order and angles.
 
-預設依次用 15°、5°、1° 搜尋，承接最佳零件次序及角度。自動模式可繼續 30 秒精排；
-手選模式沿用設定級距。隨時可停止，保留有效最佳排位。優先放齊零件，其次減少板材張數，
-再收窄佔用闊度。原始圖元只會旋轉和平移；1° 並不表示加工精度或保證最佳解。
+Worker and parent share `dist/engine/util/offcut.js`. Both rank: unplaced count,
+sheet count, largest single clear rectangle (descending), total rectangles
+(descending), occupied bounding area. Greedy placement first preserves a large edge
+rectangle, with cached bounds to avoid rescanning all vertices at every candidate.
+The final fitness also finds interior rectangles using a conservative occupancy
+grid. Thin contours cannot disappear between samples. Offcuts reserve margins and
+part clearance; holes are excluded. Grid approximation can underestimate concave
+or curved free space. A global maximum or arbitrary-shaped offcut is not guaranteed.
+
+預設直接使用完整 1° 角度範圍，先用緊密方向建立排位，沒有分階段旋轉等待。
+搜尋最多改善 20 秒，結果即時顯示並可匯出。前後端同用餘料評分：先放齊零件，
+再減少板材張數，然後最大化單塊長方形餘料、比較總餘料，最後縮小零件佔用範圍。
+網格估算保守保留輪廓及間距，可能低估曲線和凹形空間，未保證全域最佳或任意形狀餘料。

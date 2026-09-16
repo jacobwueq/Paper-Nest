@@ -9,11 +9,11 @@ import { parseDXF, parseSVG } from "./importers.js";
 import { exportSVG, exportDXF } from "./exporters.js";
 import {
   ROTATIONS,
-  searchPlan,
-  layoutScore,
+  searchSettings,
+  evaluateLayout,
   improves,
   searchSeed,
-} from "./search.js";
+} from "./search.js?v=0.3.2";
 const $ = (id) => document.getElementById(id);
 const state = {
   parts: sampleParts(),
@@ -27,8 +27,8 @@ const state = {
   running: false,
   run: 0,
   invalid: false,
-  stage: -1,
-  plan: [],
+  metrics: null,
+  firstResultSeconds: null,
   accepted: 0,
 };
 let engine = null,
@@ -36,6 +36,7 @@ let engine = null,
   ticker = null,
   started = 0,
   runSettings = null,
+  budgetSeconds = 20,
   lastFile = null;
 const readSettings = () => ({
   width: Number($("width").value),
@@ -102,6 +103,15 @@ function render() {
       t: { x: (i % cols) * cellW, y: Math.floor(i / cols) * cellH, angle: 0 },
     }));
   }
+  const remaining = layout
+    ? state.metrics?.sheets.find((r) => r.sheet === state.sheet)?.rectangle
+    : null;
+  $("offcut-summary").hidden = !layout;
+  const displayMm = (n) => Math.floor(n * 10) / 10;
+  $("offcut-size").textContent =
+    remaining?.area > 0
+      ? `${displayMm(remaining.w)} × ${displayMm(remaining.h)} mm · ${Math.floor(remaining.area / 100)} cm²`
+      : "No clear rectangle / 未有完整長方形";
   const pad = Math.max(w, h) * 0.035;
   $("canvas").setAttribute(
     "viewBox",
@@ -110,6 +120,9 @@ function render() {
   $("canvas").innerHTML =
     (layout
       ? `<rect class="sheet-outline" x="0" y="0" width="${w}" height="${h}"/><rect class="sheet-margin" x="${s.margin}" y="${s.margin}" width="${w - 2 * s.margin}" height="${h - 2 * s.margin}"/>`
+      : "") +
+    (remaining?.area > 0
+      ? `<rect class="offcut-preview" x="${remaining.x}" y="${remaining.y}" width="${remaining.w}" height="${remaining.h}"><title>Reusable offcut / 可再用餘料</title></rect>`
       : "") +
     draws
       .map(
@@ -161,9 +174,7 @@ function render() {
     ? "Start again <span>重新排料 ↗</span>"
     : "Arrange parts <span>自動排料 ↗</span>";
   $("run-note").textContent =
-    s.rotations === 0
-      ? "15° → 5° → 1° · 60s. Continue adds 30s at 1°. Best result retained. / 搜尋 60 秒；繼續精排會加 30 秒，保留最佳排位。"
-      : "30s per search. Continue keeps this angle setting and the best result. / 每次搜尋 30 秒；繼續優化沿用角度設定並保留最佳排位。";
+    "Shows a layout as soon as it is found, then improves the reusable offcut. Stop whenever ready. / 有排位即顯示，隨後改善完整餘料；可隨時停止。";
   $("file").disabled = state.running;
   $("demo").disabled = state.running;
   $("confirmed").disabled = state.running;
@@ -178,10 +189,7 @@ function render() {
   ])
     $(id).disabled = state.running;
   $("export").disabled =
-    state.running ||
-    state.invalid ||
-    state.placements.length !== parts.length ||
-    !parts.length;
+    state.invalid || state.placements.length !== parts.length || !parts.length;
   $("export-format").querySelector('[value="dxf"]').disabled =
     state.format === "svg";
   if (state.format === "svg") $("export-format").value = "svg";
@@ -219,8 +227,8 @@ function invalidate() {
   state.view = "review";
   state.sheet = 0;
   state.invalid = false;
-  state.stage = -1;
-  state.plan = [];
+  state.metrics = null;
+  state.firstResultSeconds = null;
   state.accepted = 0;
   message();
   setStatus("Review parts / 確認零件");
@@ -241,46 +249,30 @@ function beginNest(continuing = false) {
     state.placements = [];
     state.sheet = 0;
     state.accepted = 0;
+    state.metrics = null;
+    state.firstResultSeconds = null;
   }
   state.running = true;
-  state.plan = searchPlan(settings.rotations, continuing);
-  state.stage = -1;
+  budgetSeconds = searchSettings(settings.rotations).seconds;
   runSettings = settings;
   message();
   started = performance.now();
-  nextStage();
+  startEngine();
   ticker = setInterval(updateSearchStatus, 250);
   render();
 }
 function updateSearchStatus() {
   if (!state.running) return;
-  const stage = state.plan[state.stage];
   const elapsed = (performance.now() - started) / 1000;
-  const total = state.plan.reduce((sum, p) => sum + p.seconds, 0);
-  const angle =
-    stage.rotations === 1 ? "Fixed / 固定" : `${360 / stage.rotations}°`;
-  $("progress").style.width = `${Math.min(100, (elapsed / total) * 100)}%`;
-  setStatus(
-    `${angle} · ${state.stage + 1}/${state.plan.length} · ${Math.floor(elapsed)}s · Searching / 搜尋中`,
-  );
+  $("progress").style.width =
+    `${Math.min(100, (elapsed / budgetSeconds) * 100)}%`;
+  const label =
+    state.placements.length === state.parts.length
+      ? "Improving offcut / 改善餘料"
+      : "Arranging / 排料中";
+  setStatus(`${label} · ${Math.floor(elapsed)}s`);
 }
-function nextStage() {
-  if (!state.running) return;
-  clearTimeout(stopTimer);
-  if (engine) engine.remove();
-  engine = null;
-  state.stage++;
-  if (state.stage >= state.plan.length) {
-    state.stage = state.plan.length - 1;
-    stop();
-    if (!state.placements.length)
-      message(
-        "No valid layout found. Try a larger sheet or fewer parts. / 未找到有效排位，請嘗試較大板材或較少零件。",
-        true,
-      );
-    return;
-  }
-  const stage = state.plan[state.stage];
+function startEngine() {
   const run = ++state.run;
   const frame = document.createElement("iframe");
   engine = frame;
@@ -293,17 +285,22 @@ function nextStage() {
         type: "start",
         run,
         parts: state.parts.map((p) => ({ id: p.id, outer: p.outer })),
-        settings: { ...runSettings, rotations: stage.rotations },
+        settings: runSettings,
         seed: searchSeed(state.placements),
       },
       location.origin,
     );
   };
-  frame.src = "engine/index.html?v=0.2.0";
+  frame.src = "engine/index.html?v=0.3.2";
   document.body.append(frame);
-  // Removing each frame also terminates its workers. Source + run checks reject
-  // any queued result from an earlier stage or a stopped search.
-  stopTimer = setTimeout(nextStage, stage.seconds * 1000);
+  stopTimer = setTimeout(() => {
+    stop();
+    if (!state.placements.length)
+      message(
+        "No valid layout found. Try a larger sheet or fewer parts. / 未找到有效排位，請嘗試較大板材或較少零件。",
+        true,
+      );
+  }, budgetSeconds * 1000);
   updateSearchStatus();
 }
 window.addEventListener("message", (event) => {
@@ -333,14 +330,18 @@ window.addEventListener("message", (event) => {
     console.warn("Rejected layout", errors);
     return;
   }
+  const candidate = evaluateLayout(state.parts, placements, runSettings);
   if (
     placements.length &&
-    improves(
-      layoutScore(state.parts, placements),
-      layoutScore(state.parts, state.placements),
-    )
+    (!state.metrics || improves(candidate.score, state.metrics.score))
   ) {
     state.accepted++;
+    state.metrics = candidate;
+    if (
+      state.firstResultSeconds === null &&
+      placements.length === state.parts.length
+    )
+      state.firstResultSeconds = (performance.now() - started) / 1000;
     state.placements = placements;
     state.view = "layout";
     state.sheet = Math.min(state.sheet, sheetCount() - 1);
@@ -522,16 +523,19 @@ if (document.modelContext?.registerTool) {
         running: state.running,
         settings: readSettings(),
         search: {
-          stage: state.stage + 1,
-          stages: state.plan.length,
-          angleStep:
-            state.stage >= 0 ? 360 / state.plan[state.stage].rotations : null,
+          angleStep: 360 / readSettings().rotations,
           elapsedSeconds: state.running
             ? Math.floor((performance.now() - started) / 1000)
             : null,
+          firstResultSeconds: state.firstResultSeconds,
           acceptedLayouts: state.accepted,
-          bestScore: layoutScore(state.parts, state.placements),
+          bestScore: state.metrics?.score || null,
         },
+        offcuts:
+          state.metrics?.sheets.map(({ sheet, rectangle }) => ({
+            sheet: sheet + 1,
+            ...rectangle,
+          })) || [],
       }),
     },
     {
@@ -596,7 +600,6 @@ if (document.modelContext?.registerTool) {
         )
           throw new Error("Invalid export options");
         if (
-          state.running ||
           state.invalid ||
           state.placements.length !== state.parts.length ||
           validateLayout(state.parts, state.placements, readSettings()).length

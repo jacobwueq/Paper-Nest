@@ -9,9 +9,9 @@
       content="Arrange DXF and SVG paper-cutting parts on full-size sheets. Review geometry, nest and export locally in your browser."
     />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="style.css?v=0.2.1" />
+    <link rel="stylesheet" href="style.css?v=0.3.2" />
     <script src="vendor/path-data-polyfill.js"></script>
-    <script type="module" src="app.js?v=0.2.1"></script>
+    <script type="module" src="app.js?v=0.3.2"></script>
   </head>
   <body>
     <header class="topbar">
@@ -22,7 +22,7 @@
             fill="currentColor"
           /></svg
         ><span>Paper Nest <small>紙材排料</small></span></a
-      ><span class="version">WORKING PROTOTYPE · 0.2</span
+      ><span class="version">WORKING PROTOTYPE · 0.3</span
       ><span class="local"
         >Files stay in your browser <span>檔案於本機處理</span></span
       >
@@ -137,8 +137,7 @@
             <label for="rotation"
               >Rotation search <small>旋轉角度級距</small></label
             ><select id="rotation">
-              <option value="0">Auto → 1° · 自動精排</option>
-              <option value="360">Every 1° · 每 1°</option>
+              <option value="360">Free rotation · 自由旋轉（1°）</option>
               <option value="72">Every 5° · 每 5°</option>
               <option value="24">Every 15° · 每 15°</option>
               <option value="12">Every 30° · 每 30°</option>
@@ -168,7 +167,7 @@
             Stop & keep result · 停止並保留
           </button>
           <button id="continue" class="primary" hidden>
-            Continue improving <span>繼續優化 · +30s</span>
+            Improve offcut <span>改善餘料 · +20s</span>
           </button>
           <p class="help" id="run-note"></p>
         </section>
@@ -227,6 +226,16 @@
             <span class="stat-label">STATUS / 狀態</span
             ><strong id="status">Ready to review</strong>
           </div>
+        </div>
+        <div id="offcut-summary" class="offcut-summary" hidden>
+          <span class="offcut-key" aria-hidden="true"></span>
+          <div>
+            <strong>Reusable rectangle / 可再用長方形</strong>
+            <span id="offcut-size"></span>
+          </div>
+          <small
+            >Clear space on this sheet; preview only.<br />本張板材嘅完整空間；標示不會輸出。</small
+          >
         </div>
         <div class="progress-track" aria-hidden="true">
           <div id="progress"></div>

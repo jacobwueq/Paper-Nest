@@ -79,9 +79,9 @@ function PlacementWorker(binPolygon, paths, ids, rotations, config, nfpCache){
 		paths = rotated;
 		
 		var allplacements = [];
-		var fitness = 0;
+		var reports = [];
 		var originalCount = paths.length;
-		var binWidth = GeometryUtil.getPolygonBounds(self.binPolygon).width;
+		var sheetBounds = GeometryUtil.getPolygonBounds(self.binPolygon);
 		var binarea = Math.abs(GeometryUtil.polygonArea(self.binPolygon));
 		var key, nfp;
 		
@@ -125,7 +125,8 @@ function PlacementWorker(binPolygon, paths, ids, rotations, config, nfpCache){
 					// first placement, put it on the left
 					for(j=0; j<binNfp.length; j++){
 						for(k=0; k<binNfp[j].length; k++){
-							if(position === null || binNfp[j][k].x-path[0].x < position.x ){
+							if(position === null || binNfp[j][k].x-path[0].x < position.x-1e-7 ||
+								(Math.abs(binNfp[j][k].x-path[0].x-position.x)<1e-7 && binNfp[j][k].y-path[0].y < position.y)){
 								position = {
 									x: binNfp[j][k].x-path[0].x,
 									y: binNfp[j][k].y-path[0].y,
@@ -212,13 +213,15 @@ function PlacementWorker(binPolygon, paths, ids, rotations, config, nfpCache){
 				}
 				finalNfp = f;
 				
-				// choose placement that results in the smallest bounding box
-				// could use convex hull instead, but it can create oddly shaped nests (triangles or long slivers) which are not optimal for real-world use
-				// todo: generalize gravity direction
-				var minwidth = null;
-				var minarea = null;
-				var minx = null;
-				var nf, area, shiftvector;
+				// Cache the occupied bounds once per part, not once per candidate.
+				// Maximise one recoverable edge rectangle, then minimise the cluster.
+				var occupiedPoints=[];
+				for(m=0;m<placed.length;m++) for(n=0;n<placed[m].length;n++)
+					occupiedPoints.push({x:placed[m][n].x+placements[m].x,y:placed[m][n].y+placements[m].y});
+				var occupiedBounds=PaperOffcut.bounds(occupiedPoints);
+				var partBounds=PaperOffcut.bounds(path);
+				var bestFree=-Infinity, bestBox=Infinity, bestAnchor=Infinity;
+				var nf, shiftvector;
 
 				for(j=0; j<finalNfp.length; j++){
 					nf = finalNfp[j];
@@ -227,13 +230,6 @@ function PlacementWorker(binPolygon, paths, ids, rotations, config, nfpCache){
 					}
 					
 					for(k=0; k<nf.length; k++){
-						var allpoints = [];
-						for(m=0; m<placed.length; m++){
-							for(n=0; n<placed[m].length; n++){
-								allpoints.push({x:placed[m][n].x+placements[m].x, y: placed[m][n].y+placements[m].y});
-							}
-						}
-						
 						shiftvector = {
 							x: nf[k].x-path[0].x,
 							y: nf[k].y-path[0].y,
@@ -242,20 +238,16 @@ function PlacementWorker(binPolygon, paths, ids, rotations, config, nfpCache){
 							nfp: combinedNfp
 						};
 						
-						for(m=0; m<path.length; m++){
-							allpoints.push({x: path[m].x+shiftvector.x, y:path[m].y+shiftvector.y});
-						}
-						
-						var rectbounds = GeometryUtil.getPolygonBounds(allpoints);
-						
-						// weigh width more, to help compress in direction of gravity
-						area = rectbounds.width*2 + rectbounds.height;
-						
-						if(minarea === null || area < minarea || (GeometryUtil.almostEqual(minarea, area) && (minx === null || shiftvector.x < minx))){
-							minarea = area;
-							minwidth = rectbounds.width;
-							position = shiftvector;
-							minx = shiftvector.x;
+						var x=Math.min(occupiedBounds.x,partBounds.x+shiftvector.x);
+						var y=Math.min(occupiedBounds.y,partBounds.y+shiftvector.y);
+						var right=Math.max(occupiedBounds.x+occupiedBounds.w,partBounds.x+partBounds.w+shiftvector.x);
+						var bottom=Math.max(occupiedBounds.y+occupiedBounds.h,partBounds.y+partBounds.h+shiftvector.y);
+						var footprint={x:x,y:y,w:right-x,h:bottom-y};
+						var spare=PaperOffcut.edgeRectangle(footprint,{x:0,y:0,w:sheetBounds.width,h:sheetBounds.height});
+						var free=spare.w*spare.h,box=footprint.w*footprint.h,anchor=x+y;
+						if(free>bestFree+1e-5 || (Math.abs(free-bestFree)<1e-5 &&
+							(box<bestBox-1e-5 || (Math.abs(box-bestBox)<1e-5 && anchor<bestAnchor)))){
+							bestFree=free;bestBox=box;bestAnchor=anchor;position=shiftvector;
 						}
 					}
 				}
@@ -266,18 +258,16 @@ function PlacementWorker(binPolygon, paths, ids, rotations, config, nfpCache){
 			}
 			
 			if(placements.length){
-				var minX = Infinity, maxX = -Infinity;
-				for(var pi=0; pi<placed.length; pi++){
-					for(var vi=0; vi<placed[pi].length; vi++){
-						var px = placed[pi][vi].x + placements[pi].x;
-						minX = Math.min(minX, px);
-						maxX = Math.max(maxX, px);
-					}
+				var outlines=[];
+				for(var pi=0;pi<placed.length;pi++){
+					var raw=self.config.offcut && self.config.offcut.outlines[placed[pi].source];
+					var outline=raw?rotatePolygon(raw,placed[pi].rotation):placed[pi];
+					outlines.push(outline.map(function(p){return {x:p.x+placements[pi].x,y:p.y+placements[pi].y};}));
 				}
-				// All width terms combined stay below 1, so a sheet always wins.
-				fitness += 1 + (maxX-minX)/(binWidth*(originalCount+1));
+				var options=self.config.offcut || {width:sheetBounds.width,height:sheetBounds.height,padding:0};
+				reports.push(PaperOffcut.analyse(outlines,{x:options.origin||0,y:options.origin||0,w:options.width,h:options.height},options.padding));
 			}
-			
+
 			for(i=0; i<placed.length; i++){
 				var index = paths.indexOf(placed[i]);
 				if(index >= 0){
@@ -295,7 +285,7 @@ function PlacementWorker(binPolygon, paths, ids, rotations, config, nfpCache){
 		
 		// there were parts that couldn't be placed
 		// Placing one more part outranks any number of extra sheets.
-		fitness += (originalCount+1)*paths.length;
+		var fitness = PaperOffcut.score(paths.length, reports);
 		
 		return {placements: allplacements, fitness: fitness, paths: paths, area: binarea };
 	};
