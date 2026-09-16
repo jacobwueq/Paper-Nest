@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Paper Nest — Support / 支援範圍</title>
     <link rel="icon" href="favicon.svg" />
-    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="style.css?v=0.2.1" />
   </head>
   <body>
     <header class="topbar">
@@ -50,8 +50,11 @@
           and open engraving; explicit groups take priority.<br />由相同端點組成嘅封閉輪廓、內部孔洞及開放刻線；指定群組優先。
         </li>
         <li>
-          Irregular-outline nesting, multiple sheets, 15°/30°/90°/fixed
-          rotation, part gap and sheet margin.<br />不規則輪廓排料、多張板材、旋轉級距、零件間距及留邊。
+          Irregular-outline nesting, multiple sheets, automatic 15° → 5° → 1°
+          refinement, or 1°/5°/15°/30°/90°/fixed rotation. Continue improving
+          from the best layout. Part gap and sheet margin are validated.<br />不規則輪廓排料、多張板材、自動由
+          15° → 5° → 1° 精排，亦可手選角度。
+          可承接最佳結果繼續優化，並檢查零件間距及留邊。
         </li>
         <li>
           DXF input → DXF or SVG; SVG input → SVG. Sheet guides are excluded
@@ -77,9 +80,18 @@
         圖形。不相連嘅指定群組使用保守外邊界。
       </p>
       <p>
-        Limits: 5 MB, 80 parts and 3,000 entities per drawing; 30-second search.
-        Very complex drawings may take longer to import.<br />上限：5 MB、80
-        件零件及 3,000 個圖元；每次排料搜尋 30 秒。複雜圖檔匯入可能較慢。
+        Limits: 5 MB, 80 parts and 3,000 entities per drawing. Automatic search
+        takes 60 seconds (10s at 15°, 15s at 5°, 35s at 1°); manual-angle
+        searches and each continuation take 30 seconds. Stop at any time to keep
+        the best validated layout. The search prioritises placing every part,
+        then fewer sheets, then narrower occupied strips. A 1° step is the angle
+        search interval, not a cutting tolerance or a promise that every
+        possible arrangement has been tested. Very complex drawings may take
+        longer to import.<br />
+        上限：5 MB、80 件零件及 3,000 個圖元。自動搜尋 60
+        秒；指定角度及每次繼續優化用 30 秒。
+        隨時可停止並保留最佳有效排位。先放齊所有零件，再減少板材張數，然後收窄佔用闊度。
+        1° 代表搜尋角度級距，並非切割公差，亦不代表已測試所有可能排法。
       </p>
       <h2>Open-source credits / 開源鳴謝</h2>
       <p>

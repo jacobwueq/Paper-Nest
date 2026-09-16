@@ -7,7 +7,7 @@ window.addEventListener("message", (event) => {
     event.data.type !== "start"
   )
     return;
-  const { parts, settings, run } = event.data;
+  const { parts, settings, run, seed = [] } = event.data;
   const offsets = new Map();
   let x = settings.width + 1000;
   const body = parts
@@ -27,6 +27,8 @@ window.addEventListener("message", (event) => {
     SvgNest.config({
       spacing: settings.gap + safety,
       rotations: settings.rotations,
+      seed,
+      refine: settings.rotations >= 72,
       curveTolerance: 0.005,
       populationSize: 8,
       mutationRate: 15,

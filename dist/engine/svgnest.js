@@ -116,6 +116,9 @@
 				config.exploreConcave = !!c.exploreConcave;
 			}
 			
+			// Paper Nest: carry part identities and angles between search stages.
+			config.seed = Array.isArray(c.seed) ? c.seed.slice(0) : [];
+			config.refine = !!c.refine;
 			SvgParser.config({ tolerance: config.curveTolerance});
 			
 			best = null;
@@ -271,6 +274,18 @@
 					return Math.abs(GeometryUtil.polygonArea(b)) - Math.abs(GeometryUtil.polygonArea(a));
 				});
 				
+				var seeds = config.seed || [];
+				var seeded = [];
+				for(var s=0; s<seeds.length; s++){
+					for(var a=0; a<adam.length; a++){
+						if(parts[adam[a].source].id === seeds[s].id){
+							adam[a].seedAngle = seeds[s].angle;
+							seeded.push(adam.splice(a,1)[0]);
+							break;
+						}
+					}
+				}
+				adam = seeded.concat(adam);
 				GA = new GeneticAlgorithm(adam, binPolygon, config);
 			}
 			
@@ -545,7 +560,7 @@
 				p2.require('clipper.js');
 				p2.require('matrix.js');
 				p2.require('geometryutil.js');
-				p2.require('placementworker.js');				
+				p2.require('placementworker.js?v=0.2.0');
 				
 				p2.map(worker.placePaths).then(function(placements){
 					if(!placements || placements.length == 0){
@@ -825,7 +840,9 @@
 		// population is an array of individuals. Each individual is a object representing the order of insertion and the angle each part is rotated
 		var angles = [];
 		for(var i=0; i<adam.length; i++){
-			angles.push(this.randomAngle(adam[i]));
+			var step = 360/this.config.rotations;
+			var angle = ((Math.round(adam[i].seedAngle/step)*step)%360+360)%360;
+			angles.push(Number.isFinite(angle) && this.fits(adam[i], angle) ? angle : this.randomAngle(adam[i]));
 		}
 		
 		this.population = [{placement: adam, rotation: angles}];
@@ -836,6 +853,30 @@
 		}
 	}
 	
+	GeneticAlgorithm.prototype.fits = function(part, angle){
+		var rotated = GeometryUtil.rotatePolygon(part, angle);
+		return rotated.width <= this.binBounds.width && rotated.height <= this.binBounds.height;
+	};
+
+	// Fine searches mostly perturb the inherited angle, with some global
+	// exploration to escape a local minimum. Every proposal stays on the grid.
+	GeneticAlgorithm.prototype.refinedAngle = function(part, current){
+		if(!this.config.refine || Math.random() < 0.25){
+			return this.randomAngle(part);
+		}
+		var step = 360/this.config.rotations;
+		var radius = this.config.rotations >= 360 ? 5 : 3;
+		var candidates = [];
+		for(var d=1; d<=radius; d++) candidates.push(d, -d);
+		while(candidates.length){
+			var index = Math.floor(Math.random()*candidates.length);
+			var offset = candidates.splice(index,1)[0];
+			var angle = ((Math.round(current/step)+offset)*step%360+360)%360;
+			if(this.fits(part, angle)) return angle;
+		}
+		return this.fits(part, current) ? current : this.randomAngle(part);
+	};
+
 	// returns a random angle of insertion
 	GeneticAlgorithm.prototype.randomAngle = function(part){
 		
@@ -860,7 +901,7 @@
 			var rotatedPart = GeometryUtil.rotatePolygon(part, angleList[i]);
 			
 			// don't use obviously bad angles where the part doesn't fit in the bin
-			if(rotatedPart.width < this.binBounds.width && rotatedPart.height < this.binBounds.height){
+			if(rotatedPart.width <= this.binBounds.width && rotatedPart.height <= this.binBounds.height){
 				return angleList[i];
 			}
 		}
@@ -881,12 +922,16 @@
 					var temp = clone.placement[i];
 					clone.placement[i] = clone.placement[j];
 					clone.placement[j] = temp;
+					// An angle belongs to its part, including during order mutations.
+					var angle = clone.rotation[i];
+					clone.rotation[i] = clone.rotation[j];
+					clone.rotation[j] = angle;
 				}
 			}
 			
 			rand = Math.random();
 			if(rand < 0.01*this.config.mutationRate){
-				clone.rotation[i] = this.randomAngle(clone.placement[i]);
+				clone.rotation[i] = this.refinedAngle(clone.placement[i], clone.rotation[i]);
 			}
 		}
 		

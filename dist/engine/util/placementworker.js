@@ -80,6 +80,8 @@ function PlacementWorker(binPolygon, paths, ids, rotations, config, nfpCache){
 		
 		var allplacements = [];
 		var fitness = 0;
+		var originalCount = paths.length;
+		var binWidth = GeometryUtil.getPolygonBounds(self.binPolygon).width;
 		var binarea = Math.abs(GeometryUtil.polygonArea(self.binPolygon));
 		var key, nfp;
 		
@@ -87,7 +89,7 @@ function PlacementWorker(binPolygon, paths, ids, rotations, config, nfpCache){
 			
 			var placed = [];
 			var placements = [];
-			fitness += 1; // add 1 for each new bin opened (lower fitness is better)
+			// Count only sheets with placements; an unsuccessful attempt is not a sheet.
 
 			for(i=0; i<paths.length; i++){
 				path = paths[i];
@@ -263,8 +265,17 @@ function PlacementWorker(binPolygon, paths, ids, rotations, config, nfpCache){
 				}
 			}
 			
-			if(minwidth){
-				fitness += minwidth/binarea;
+			if(placements.length){
+				var minX = Infinity, maxX = -Infinity;
+				for(var pi=0; pi<placed.length; pi++){
+					for(var vi=0; vi<placed[pi].length; vi++){
+						var px = placed[pi][vi].x + placements[pi].x;
+						minX = Math.min(minX, px);
+						maxX = Math.max(maxX, px);
+					}
+				}
+				// All width terms combined stay below 1, so a sheet always wins.
+				fitness += 1 + (maxX-minX)/(binWidth*(originalCount+1));
 			}
 			
 			for(i=0; i<placed.length; i++){
@@ -283,7 +294,8 @@ function PlacementWorker(binPolygon, paths, ids, rotations, config, nfpCache){
 		}
 		
 		// there were parts that couldn't be placed
-		fitness += 2*paths.length;
+		// Placing one more part outranks any number of extra sheets.
+		fitness += (originalCount+1)*paths.length;
 		
 		return {placements: allplacements, fitness: fitness, paths: paths, area: binarea };
 	};

@@ -7,6 +7,13 @@ import {
 } from "./geometry.js";
 import { parseDXF, parseSVG } from "./importers.js";
 import { exportSVG, exportDXF } from "./exporters.js";
+import {
+  ROTATIONS,
+  searchPlan,
+  layoutScore,
+  improves,
+  searchSeed,
+} from "./search.js";
 const $ = (id) => document.getElementById(id);
 const state = {
   parts: sampleParts(),
@@ -20,11 +27,15 @@ const state = {
   running: false,
   run: 0,
   invalid: false,
+  stage: -1,
+  plan: [],
+  accepted: 0,
 };
 let engine = null,
   stopTimer = null,
   ticker = null,
   started = 0,
+  runSettings = null,
   lastFile = null;
 const readSettings = () => ({
   width: Number($("width").value),
@@ -44,7 +55,7 @@ function checkSettings(s) {
     s.gap > 50 ||
     s.margin < 0 ||
     s.margin * 2 + 2 * s.gap >= Math.min(s.width, s.height) ||
-    ![1, 4, 12, 24].includes(s.rotations)
+    !ROTATIONS.includes(s.rotations)
   )
     throw new Error(
       "Check sheet dimensions, gap and margins. / 請檢查板材尺寸、間距及留邊。",
@@ -142,6 +153,17 @@ function render() {
     !$("confirmed").checked || state.running || state.invalid || !validSettings;
   $("nest").hidden = state.running;
   $("stop").hidden = !state.running;
+  $("continue").hidden = state.running || !state.placements.length;
+  $("continue").disabled =
+    state.invalid || !validSettings || !$("confirmed").checked;
+  $("nest").className = state.placements.length ? "secondary" : "primary";
+  $("nest").innerHTML = state.placements.length
+    ? "Start again <span>重新排料 ↗</span>"
+    : "Arrange parts <span>自動排料 ↗</span>";
+  $("run-note").textContent =
+    s.rotations === 0
+      ? "15° → 5° → 1° · 60s. Continue adds 30s at 1°. Best result retained. / 搜尋 60 秒；繼續精排會加 30 秒，保留最佳排位。"
+      : "30s per search. Continue keeps this angle setting and the best result. / 每次搜尋 30 秒；繼續優化沿用角度設定並保留最佳排位。";
   $("file").disabled = state.running;
   $("demo").disabled = state.running;
   $("confirmed").disabled = state.running;
@@ -197,11 +219,14 @@ function invalidate() {
   state.view = "review";
   state.sheet = 0;
   state.invalid = false;
+  state.stage = -1;
+  state.plan = [];
+  state.accepted = 0;
   message();
   setStatus("Review parts / 確認零件");
   render();
 }
-function beginNest() {
+function beginNest(continuing = false) {
   if (state.running || state.invalid || !$("confirmed").checked) return;
   let settings;
   try {
@@ -210,46 +235,76 @@ function beginNest() {
     message(e.message, true);
     return;
   }
+  if (continuing && !state.placements.length) return;
   stop();
-  state.placements = [];
-  state.sheet = 0;
+  if (!continuing) {
+    state.placements = [];
+    state.sheet = 0;
+    state.accepted = 0;
+  }
   state.running = true;
-  state.run++;
-  const run = state.run;
+  state.plan = searchPlan(settings.rotations, continuing);
+  state.stage = -1;
+  runSettings = settings;
   message();
-  setStatus("Searching / 排料中");
   started = performance.now();
-  engine = document.createElement("iframe");
-  engine.hidden = true;
-  engine.src = "engine/index.html";
-  engine.title = "Nesting calculation";
-  document.body.append(engine);
-  engine.onload = () =>
-    engine?.contentWindow.postMessage(
+  nextStage();
+  ticker = setInterval(updateSearchStatus, 250);
+  render();
+}
+function updateSearchStatus() {
+  if (!state.running) return;
+  const stage = state.plan[state.stage];
+  const elapsed = (performance.now() - started) / 1000;
+  const total = state.plan.reduce((sum, p) => sum + p.seconds, 0);
+  const angle =
+    stage.rotations === 1 ? "Fixed / 固定" : `${360 / stage.rotations}°`;
+  $("progress").style.width = `${Math.min(100, (elapsed / total) * 100)}%`;
+  setStatus(
+    `${angle} · ${state.stage + 1}/${state.plan.length} · ${Math.floor(elapsed)}s · Searching / 搜尋中`,
+  );
+}
+function nextStage() {
+  if (!state.running) return;
+  clearTimeout(stopTimer);
+  if (engine) engine.remove();
+  engine = null;
+  state.stage++;
+  if (state.stage >= state.plan.length) {
+    state.stage = state.plan.length - 1;
+    stop();
+    if (!state.placements.length)
+      message(
+        "No valid layout found. Try a larger sheet or fewer parts. / 未找到有效排位，請嘗試較大板材或較少零件。",
+        true,
+      );
+    return;
+  }
+  const stage = state.plan[state.stage];
+  const run = ++state.run;
+  const frame = document.createElement("iframe");
+  engine = frame;
+  frame.hidden = true;
+  frame.title = "Nesting calculation";
+  frame.onload = () => {
+    if (!state.running || engine !== frame || state.run !== run) return;
+    frame.contentWindow.postMessage(
       {
         type: "start",
         run,
         parts: state.parts.map((p) => ({ id: p.id, outer: p.outer })),
-        settings,
+        settings: { ...runSettings, rotations: stage.rotations },
+        seed: searchSeed(state.placements),
       },
       location.origin,
     );
-  ticker = setInterval(() => {
-    $("progress").style.width =
-      `${Math.min(100, (performance.now() - started) / 300)}%`;
-    setStatus(
-      `Searching ${Math.round((performance.now() - started) / 1000)}s / 排料中`,
-    );
-  }, 500);
-  stopTimer = setTimeout(() => {
-    stop();
-    if (!state.placements.length)
-      message(
-        "No valid layout in 30 seconds. Try 90° rotations, fewer parts or a larger sheet. / 30 秒內未找到有效排位，可試 90°、較少零件或較大板材。",
-        true,
-      );
-  }, 30000);
-  render();
+  };
+  frame.src = "engine/index.html?v=0.2.0";
+  document.body.append(frame);
+  // Removing each frame also terminates its workers. Source + run checks reject
+  // any queued result from an earlier stage or a stopped search.
+  stopTimer = setTimeout(nextStage, stage.seconds * 1000);
+  updateSearchStatus();
 }
 window.addEventListener("message", (event) => {
   if (
@@ -278,15 +333,14 @@ window.addEventListener("message", (event) => {
     console.warn("Rejected layout", errors);
     return;
   }
-  const score = (a) => {
-    const sheets = a.length ? Math.max(...a.map((t) => t.sheet)) + 1 : 0;
-    return (
-      (state.parts.length - a.length) * 1e9 +
-      sheets * 1e6 +
-      a.reduce((s, t) => s + t.y, 0)
-    );
-  };
-  if (!state.placements.length || score(placements) < score(state.placements)) {
+  if (
+    placements.length &&
+    improves(
+      layoutScore(state.parts, placements),
+      layoutScore(state.parts, state.placements),
+    )
+  ) {
+    state.accepted++;
     state.placements = placements;
     state.view = "layout";
     state.sheet = Math.min(state.sheet, sheetCount() - 1);
@@ -384,7 +438,8 @@ document.addEventListener("click", (e) => {
 });
 $("confirmed").addEventListener("change", render);
 $("demo").onclick = loadDemo;
-$("nest").onclick = beginNest;
+$("nest").onclick = () => beginNest(false);
+$("continue").onclick = () => beginNest(true);
 $("stop").onclick = stop;
 $("export").onclick = () => {
   try {
@@ -466,6 +521,17 @@ if (document.modelContext?.registerTool) {
         sheets: sheetCount(),
         running: state.running,
         settings: readSettings(),
+        search: {
+          stage: state.stage + 1,
+          stages: state.plan.length,
+          angleStep:
+            state.stage >= 0 ? 360 / state.plan[state.stage].rotations : null,
+          elapsedSeconds: state.running
+            ? Math.floor((performance.now() - started) / 1000)
+            : null,
+          acceptedLayouts: state.accepted,
+          bestScore: layoutScore(state.parts, state.placements),
+        },
       }),
     },
     {

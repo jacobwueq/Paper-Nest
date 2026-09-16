@@ -1,3 +1,8 @@
+#continue {
+  margin-top: 8px;
+  flex-direction: column;
+  gap: 4px;
+}
 :root {
   font-family:
     Inter,
