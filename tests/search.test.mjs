@@ -11,7 +11,12 @@ import {
 } from "../dist/search.js";
 import { identifyParts, parseDXF } from "../dist/importers.js";
 import { exportDXF, exportSVG } from "../dist/exporters.js";
-import { transform, validateLayout, bounds } from "../dist/geometry.js";
+import {
+  transform,
+  validateLayout,
+  bounds,
+  sampleArc,
+} from "../dist/geometry.js";
 
 const rect = (w, h) => [
   { x: 0, y: 0 },
@@ -110,6 +115,172 @@ function gaParts() {
     Object.assign(rect(10, 15), { id: 2, seedAngle: 359 }),
   ];
 }
+test("engine enables reflected orientations only when requested", () => {
+  const ctx = engine(() => 0);
+  for (const allowMirror of [false, true]) {
+    const ps = gaParts();
+    ps[0].seedAngle = 383;
+    const ga = new ctx.TestGA(ps, rect(200, 200), {
+      rotations: 360,
+      populationSize: 3,
+      mutationRate: 15,
+      refine: true,
+      allowMirror,
+    });
+    assert.equal(ga.population[0].rotation[0], allowMirror ? 383 : 23);
+    ga.config.rotations = 1;
+    assert.equal(ga.randomAngle(ps[0]), allowMirror ? 360 : 0);
+    ga.config.rotations = 360;
+    const values = [0.9, 0];
+    ctx.Math.random = () => values.shift() ?? 0;
+    assert.equal(ga.refinedAngle(ps[0], 383), allowMirror ? 384 : 24);
+  }
+});
+test("worker reflection matches drawing transforms while preserving polygon winding", () => {
+  const ctx = engine();
+  vm.runInContext(
+    fs.readFileSync("dist/engine/util/placementworker.js", "utf8"),
+    ctx,
+  );
+  const polygon = [
+    { x: 2, y: 3 },
+    { x: 31, y: 5 },
+    { x: 6, y: 19 },
+  ];
+  polygon.children = [rect(3, 2)];
+  const rotated = ctx.rotatePolygon(polygon, 383);
+  const expected = polygon
+    .map((p) => transform(p, { x: 0, y: 0, angle: 23, mirrored: true }))
+    .reverse();
+  expected.forEach((p, i) => {
+    assert.ok(Math.hypot(p.x - rotated[i].x, p.y - rotated[i].y) < 1e-10);
+  });
+  assert.equal(
+    Math.sign(ctx.GeometryUtil.polygonArea(polygon)),
+    Math.sign(ctx.GeometryUtil.polygonArea(rotated)),
+  );
+  assert.equal(rotated.children.length, 1);
+});
+test("adapter keeps curved mirrored parts inside physical sheet margins at every degree", () => {
+  const ctx = engine();
+  ctx.navigator = { appName: "Netscape", userAgent: "" };
+  ctx.self = ctx;
+  ctx.SvgParser = { config() {} };
+  vm.runInContext(fs.readFileSync("dist/engine/util/clipper.js", "utf8"), ctx);
+  vm.runInContext(
+    fs.readFileSync("dist/engine/util/placementworker.js", "utf8"),
+    ctx,
+  );
+  let start, config, display, result;
+  const parent = {
+    postMessage(data) {
+      result = data;
+    },
+  };
+  const mock = vm.createContext({
+    window: {
+      addEventListener(type, callback) {
+        if (type === "message") start = callback;
+      },
+    },
+    parent,
+    location: { origin: "http://test" },
+    SvgNest: {
+      config(value) {
+        config = value;
+      },
+      parsesvg() {
+        return {
+          querySelector() {
+            return {};
+          },
+        };
+      },
+      setbin() {},
+      start(progress, callback) {
+        display = callback;
+      },
+    },
+  });
+  vm.runInContext(fs.readFileSync("dist/engine/adapter.js", "utf8"), mock);
+  const part = {
+    id: "circle",
+    name: "Circle",
+    outer: sampleArc(32.42, 32.42, 32.42, 0, Math.PI * 2).slice(0, -1),
+  };
+  const settings = {
+    width: 200,
+    height: 200,
+    gap: 2,
+    margin: 5,
+    scale: 1,
+    rotations: 360,
+    allowMirror: true,
+  };
+  start({
+    source: parent,
+    origin: "http://test",
+    data: { type: "start", parts: [part], settings, run: 1 },
+  });
+  ctx.SvgNest.config(config);
+  // SVG polygon coordinates pass through float32 before Clipper sees them.
+  const raw = config.offcut.outlines[0].map((p) => ({
+    x: Math.fround(p.x),
+    y: Math.fround(p.y),
+  }));
+  const collision = ctx.SvgNest.polygonOffset(
+    ctx.SvgNest.cleanPolygon(raw),
+    config.spacing / 2,
+  )[0];
+  const binPad = config.spacing / 2 - config.sheetEdgeSafety;
+  for (let angle = 0; angle < 720; angle++) {
+    const p = Object.assign(Array.from(collision), {
+      id: 0,
+      source: 0,
+      rotation: angle,
+    });
+    const bin = rect(190 + 2 * binPad, 190 + 2 * binPad);
+    const rotated = ctx.rotatePolygon(p, angle);
+    const nfp = ctx.GeometryUtil.noFitPolygonRectangle(bin, rotated);
+    const key = JSON.stringify({
+      A: -1,
+      B: 0,
+      inside: true,
+      Arotation: 0,
+      Brotation: angle,
+    });
+    const worker = new ctx.PlacementWorker(
+      bin,
+      [p],
+      [0],
+      [angle],
+      {},
+      { [key]: nfp },
+    );
+    ctx.global = { env: { self: worker } };
+    const placed = worker.placePaths([p]).placements[0][0];
+    display([
+      {
+        children: [
+          {
+            tagName: "g",
+            nestPlacement: placed,
+            querySelector() {
+              return { id: "circle" };
+            },
+          },
+        ],
+      },
+    ]);
+    assert.equal(result.type, "layout");
+    assert.deepEqual(
+      validateLayout([part], result.placements, settings),
+      [],
+      `angle ${angle}`,
+    );
+    assert.equal(result.placements[0].mirrored, angle >= 360);
+  }
+});
 test("fine engine initialises with inherited 37° and 359° angles", () => {
   const ctx = engine();
   const ga = new ctx.TestGA(gaParts(), rect(200, 200), {

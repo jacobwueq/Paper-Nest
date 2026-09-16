@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Paper Nest — Support / 支援範圍</title>
     <link rel="icon" href="favicon.svg" />
-    <link rel="stylesheet" href="style.css?v=0.3.2" />
+    <link rel="stylesheet" href="style.css?v=0.4.2" />
   </head>
   <body>
     <header class="topbar">
@@ -65,6 +65,15 @@
       </ul>
       <h2>Before cutting / 切割前</h2>
       <p>
+        Scale defaults to 100%; choose a uniform percentage when needed.
+        Mirroring is optional and off by default. Each part, its holes, outlined
+        text and engraving transform together. The solver never changes the
+        selected scale automatically.<br />比例預設
+        100%，可自行設定等比縮放百分比。
+        鏡像由用家選擇，預設關閉；零件、孔洞、已轉輪廓文字及刻線一齊變換。
+        排料不會自動更改所選比例。
+      </p>
+      <p>
         Confirm inferred part groups and a known physical dimension. Unsupported
         content is rejected rather than silently removed. The prototype does not
         guarantee the mathematical optimum. It does not place parts inside
@@ -74,11 +83,13 @@
       </p>
       <p>
         Collision curves are approximated to a nominal 0.02 mm tolerance, with
-        additional clearance during nesting. Supported original DXF curves and
-        original SVG shapes are retained for export. Disconnected explicit
-        groups use a conservative envelope.<br />碰撞計算曲線使用名義 0.02 mm
-        精度，排料另加間隙。輸出保留受支援原始 DXF 曲線及 SVG
-        圖形。不相連嘅指定群組使用保守外邊界。
+        additional clearance during nesting. A 0.03 mm edge allowance guards
+        rounding; both allowances increase with drawing enlargement. Supported
+        original DXF curves and original SVG shapes are retained for export.
+        Disconnected explicit groups use a conservative envelope.<br />碰撞計算曲線使用名義
+        0.02 mm 精度，排料另加間隙，板邊加 0.03 mm
+        精度安全量；放大圖形時安全量會相應增加。輸出保留受支援原始 DXF 曲線及
+        SVG 圖形。不相連嘅指定群組使用保守外邊界。
       </p>
       <p>
         Limits: 5 MB, 80 parts and 3,000 entities per drawing. Each search has a
@@ -89,7 +100,7 @@
         the occupied footprint.<br />
         上限：5 MB、80 件零件及 3,000 個圖元。每次最多改善 20
         秒，有結果即顯示；可隨時停止或承接結果繼續。
-        依次優先放齊零件、減少板材張數、保留最大塊長方形餘料，再比較各張板材餘料總和及零件佔用範圍。
+        依次優先放齊零件、減少板材張數、保留最大塊長方形餘料，再比較合資格餘料總和及零件佔用範圍。
       </p>
       <p>
         Green rectangles show conservatively estimated clear space within the
@@ -97,12 +108,26 @@
         strips are measured directly; other rectangles use a grid with at most
         256 cells along the longest sheet edge. Curved and concave boundaries
         can make this estimate smaller than the true available rectangle. Holes
-        are excluded. The overlay is a guide, not an exported cut line. This
-        heuristic does not prove the globally largest offcut or optimise
-        arbitrary offcut shapes.<br />綠色區域係板材留邊以內、與零件保持所選間距嘅保守餘料估算。
+        are excluded. Multiple non-overlapping rectangles are selected greedily;
+        each must cover at least 15% of the original sheet area. Smaller scraps
+        are ignored. This heuristic does not prove the globally largest offcut
+        or optimise arbitrary offcut shapes.<br />綠色區域係板材留邊以內、與零件保持所選間距嘅保守餘料估算。
         完整邊帶直接計算，其餘用最長邊最多 256
         格嘅網格搜尋；曲線及凹形可能令估算偏小。
-        孔洞不計，綠框不會匯出成切割線。演算法未能證明全域最大餘料，亦未優化任意形狀餘料。
+        孔洞不計；逐塊選取互不重疊嘅長方形，每塊至少佔原板面積
+        15%，忽略更細碎餘料。 演算法未能證明全域最大餘料，亦未優化任意形狀餘料。
+      </p>
+      <p>
+        Offcut cutting frames are off by default. Enable “Cut out selected
+        offcuts” to freeze the layout, then select individual rectangles.
+        Downloads include those closed outlines in the green OFFCUT_CUT DXF
+        layer or SVG group. An existing DXF layer with that name is preserved;
+        the new layer gets a numbered suffix. Cutting frames are checked against
+        parts and other selected offcuts before export.<br />餘料切割框預設唔輸出。
+        勾選「輸出已選餘料切割框」會固定排位，再逐塊選擇。
+        下載會包含所選封閉框，放於綠色 OFFCUT_CUT DXF layer 或 SVG group。
+        若原圖已有同名 layer，新 layer 會加編號，保留原圖設定。
+        匯出前會核對切割框同零件及其他已選餘料嘅間距。
       </p>
       <h2>Open-source credits / 開源鳴謝</h2>
       <p>

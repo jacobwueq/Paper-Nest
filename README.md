@@ -1,6 +1,6 @@
 # Paper Nest / 紙材排料
 
-Working browser prototype for full-scale paper laser nesting. 本機瀏覽器紙材排料試作版。
+Working browser prototype for paper laser nesting, defaulting to original scale. 本機瀏覽器紙材排料試作版，預設保持原尺寸。
 
 ## Architecture / 架構
 
@@ -44,3 +44,22 @@ or curved free space. A global maximum or arbitrary-shaped offcut is not guarant
 搜尋最多改善 20 秒，結果即時顯示並可匯出。前後端同用餘料評分：先放齊零件，
 再減少板材張數，然後最大化單塊長方形餘料、比較總餘料，最後縮小零件佔用範圍。
 網格估算保守保留輪廓及間距，可能低估曲線和凹形空間，未保證全域最佳或任意形狀餘料。
+
+## Recoverable material and transforms / 回收餘料及圖形變換
+
+Each numbered offcut must cover at least 15% of the full original sheet area.
+Greedy extraction reserves each rectangle before finding the next, so they do not
+overlap. Optional export includes only selected frames: closed DXF polylines in
+a green `OFFCUT_CUT` layer (uniquely suffixed on a source-layer collision), or an
+SVG group. Export revalidates clearance against parts and selected frames.
+Selecting cuts freezes the current layout; cutting frames are disabled by default.
+
+User-selected uniform scale defaults to 100%. Optional mirroring defaults off and
+transforms the complete group, including holes and engraving. Mirrored orientations
+use angle + 360 internally to distinguish NFP cache entries; continuation preserves
+handedness. DXF export adjusts arc sweeps, polyline bulges and circle radii.
+
+每塊餘料至少佔原板面積 15%，逐塊保留，互不重疊。可選擇輸出所選封閉切割框，
+DXF 使用獨立綠色 `OFFCUT_CUT` layer，SVG 使用同名 group。匯出前重新核對間距。
+比例預設 100%，鏡像預設關閉；孔洞、文字輪廓及刻線跟隨整組變換。
+測試包括多塊餘料、15% 門檻、選擇性輸出、切割框碰撞、鏡像弧線及縮放往返。

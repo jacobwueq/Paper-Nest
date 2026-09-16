@@ -1869,9 +1869,10 @@
 		
 		rotatePolygon: function(polygon, angle){
 			var rotated = [];
-			angle = angle * Math.PI / 180;
+			var mirrored = angle >= 360;
+			angle = (angle % 360) * Math.PI / 180;
 			for(var i=0; i<polygon.length; i++){
-				var x = polygon[i].x;
+				var x = polygon[i].x * (mirrored ? -1 : 1);
 				var y = polygon[i].y;
 				var x1 = x*Math.cos(angle)-y*Math.sin(angle);
 				var y1 = x*Math.sin(angle)+y*Math.cos(angle);

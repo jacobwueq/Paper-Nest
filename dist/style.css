@@ -798,3 +798,51 @@ footer > span:first-child {
     margin-left: 26px;
   }
 }
+
+.offcut-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+  padding: 0 25px 16px;
+  background: #f1f8f4;
+}
+.offcut-list[hidden] {
+  display: none;
+}
+.offcut-choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px;
+  background: #fff;
+  border: 1px solid #d6e8dd;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.offcut-choice input {
+  accent-color: #24845c;
+}
+.offcut-choice strong,
+.offcut-choice small {
+  display: block;
+  font-size: 11px;
+  line-height: 1.8;
+}
+.offcut-choice small {
+  color: #577563;
+}
+.offcut-excluded {
+  fill: #f5f6f5;
+  stroke: #929d95;
+}
+.offcut-number {
+  fill: #24845c;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  font-size: 6px;
+  font-weight: 600;
+  pointer-events: none;
+}
+.offcut-export-toggle {
+  margin: 12px 0 8px;
+}

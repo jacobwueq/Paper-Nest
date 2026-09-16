@@ -119,8 +119,10 @@
 			// Paper Nest: carry part identities and angles into continued searches.
 			config.seed = Array.isArray(c.seed) ? c.seed.slice(0) : [];
 			config.refine = !!c.refine;
+			config.allowMirror = !!c.allowMirror;
 			config.offcut = c.offcut;
 			config.exactSheetBounds = !!c.exactSheetBounds;
+			config.sheetEdgeSafety = Math.max(0, Number(c.sheetEdgeSafety) || 0);
 			SvgParser.config({ tolerance: config.curveTolerance});
 			
 			best = null;
@@ -176,9 +178,10 @@
 			binBounds = GeometryUtil.getPolygonBounds(binPolygon);
 						
 			if(config.spacing > 0){
-				// Expanded collision outlines need an equally expanded bin to preserve
-				// the requested physical margin. The adapter restores this origin.
-				var offsetBin = this.polygonOffset(binPolygon, (config.exactSheetBounds ? 0.5 : -0.5)*config.spacing);
+				// Restore physical margins while retaining a small numerical guard
+				// for rounded offsets and SVG coordinate precision at the sheet edge.
+				var binOffset = config.exactSheetBounds ? 0.5*config.spacing-config.sheetEdgeSafety : -0.5*config.spacing;
+				var offsetBin = this.polygonOffset(binPolygon, binOffset);
 				if(offsetBin.length == 1){
 					// if the offset contains 0 or more than 1 path, something went wrong.
 					binPolygon = offsetBin.pop();
@@ -358,8 +361,8 @@
 			});
 			
 			p.require('matrix.js');
-			p.require('geometryutil.js');
-			p.require('placementworker.js?v=0.3.2');
+			p.require('geometryutil.js?v=0.4.2');
+			p.require('placementworker.js?v=0.4.2');
 			p.require('clipper.js');
 			
 			var self = this;
@@ -563,9 +566,9 @@
 				p2.require('json.js');
 				p2.require('clipper.js');
 				p2.require('matrix.js');
-				p2.require('geometryutil.js');
-				p2.require('offcut.js?v=0.3.2');
-				p2.require('placementworker.js?v=0.3.2');
+				p2.require('geometryutil.js?v=0.4.2');
+				p2.require('offcut.js?v=0.4.2');
+				p2.require('placementworker.js?v=0.4.2');
 				
 				p2.map(worker.placePaths).then(function(placements){
 					if(!placements || placements.length == 0){
@@ -790,7 +793,7 @@
 					
 					// the original path could have transforms and stuff on it, so apply our transforms on a group
 					var partgroup = document.createElementNS(svg.namespaceURI, 'g');
-					partgroup.setAttribute('transform','translate('+p.x+' '+p.y+') rotate('+p.rotation+')');
+					partgroup.setAttribute('transform','translate('+p.x+' '+p.y+') rotate('+(p.rotation%360)+')'+(p.rotation>=360?' scale(-1 1)':''));
 					partgroup.nestPlacement = {x:p.x, y:p.y, rotation:p.rotation};
 					partgroup.appendChild(clone[part.source]);
 					
@@ -847,7 +850,7 @@
 		var angles = [];
 		for(var i=0; i<adam.length; i++){
 			var step = 360/this.config.rotations;
-			var angle = ((Math.round(adam[i].seedAngle/step)*step)%360+360)%360;
+			var angle = ((Math.round(adam[i].seedAngle/step)*step)%360+360)%360 + (this.config.allowMirror && adam[i].seedAngle>=360 ? 360 : 0);
 			angles.push(Number.isFinite(angle) && this.fits(adam[i], angle) ? angle : this.compactAngle(adam[i], 0));
 		}
 		
@@ -857,7 +860,11 @@
 		// available from the first evaluation, with no timed refinement stages.
 		for(var mode=1; mode<=2 && this.population.length<config.populationSize; mode++){
 			var initialAngles=[];
-			for(var a=0; a<adam.length; a++) initialAngles.push(this.compactAngle(adam[a], mode));
+			for(var a=0; a<adam.length; a++){
+				var initial=this.compactAngle(adam[a], mode);
+				if(config.allowMirror && mode===2 && a%2===1 && this.fits(adam[a],initial+360)) initial+=360;
+				initialAngles.push(initial);
+			}
 			this.population.push({placement:adam.slice(0),rotation:initialAngles});
 		}
 		while(this.population.length < config.populationSize){
@@ -900,7 +907,7 @@
 		while(candidates.length){
 			var index = Math.floor(Math.random()*candidates.length);
 			var offset = candidates.splice(index,1)[0];
-			var angle = ((Math.round(current/step)+offset)*step%360+360)%360;
+			var angle = ((Math.round(current/step)+offset)*step%360+360)%360 + (this.config.allowMirror && current>=360 ? 360 : 0);
 			if(this.fits(part, angle)) return angle;
 		}
 		return this.fits(part, current) ? current : this.randomAngle(part);
@@ -912,6 +919,7 @@
 		var angleList = [];
 		for(var i=0; i<Math.max(this.config.rotations,1); i++){
 			angleList.push(i*(360/this.config.rotations));
+			if(this.config.allowMirror) angleList.push(360+i*(360/this.config.rotations));
 		}
 		
 		function shuffleArray(array) {

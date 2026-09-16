@@ -1,5 +1,5 @@
-import { transformed } from "./geometry.js";
-import "./engine/util/offcut.js";
+import { transformed } from "./geometry.js?v=0.4.2";
+import "./engine/util/offcut.js?v=0.4.2";
 const offcut = globalThis.PaperOffcut;
 export const ROTATIONS = [1, 4, 12, 24, 72, 360];
 export function searchSettings(rotations) {
@@ -18,7 +18,7 @@ export function evaluateLayout(parts, placements, settings) {
     .sort((a, b) => a[0] - b[0])
     .map(([sheet, polygons]) => ({
       sheet,
-      ...offcut.analyse(
+      ...offcut.collect(
         polygons,
         {
           x: settings.margin,
@@ -26,7 +26,8 @@ export function evaluateLayout(parts, placements, settings) {
           w: settings.width - 2 * settings.margin,
           h: settings.height - 2 * settings.margin,
         },
-        settings.gap + 0.03,
+        settings.gap + 0.03 * Math.max(1, settings.scale ?? 1),
+        settings.width * settings.height * 0.15,
       ),
     }));
   return {
@@ -41,8 +42,8 @@ export function improves(a, b) {
   return offcut.compare(a, b) < 0;
 }
 export function searchSeed(placements) {
-  return placements.map(({ id, angle }) => ({
+  return placements.map(({ id, angle, mirrored }) => ({
     id,
-    angle: ((Math.round(angle) % 360) + 360) % 360,
+    angle: (((Math.round(angle) % 360) + 360) % 360) + (mirrored ? 360 : 0),
   }));
 }

@@ -1,15 +1,20 @@
-import { partSVG, transform, fmt, esc } from "./geometry.js";
-export function exportSVG(parts, placements, sheet, settings) {
+import { partSVG, transform, fmt, esc } from "./geometry.js?v=0.4.2";
+import { checkedOffcuts } from "./offcut-export.js?v=0.4.2";
+export function exportSVG(parts, placements, sheet, settings, options = {}) {
+  const cuts = checkedOffcuts(parts, placements, sheet, settings, options);
   const map = new Map(parts.map((p) => [p.id, p]));
   return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${settings.width}mm" height="${settings.height}mm" viewBox="0 0 ${settings.width} ${settings.height}">\n<title>Paper Nest — Sheet ${sheet + 1} — millimetres</title>\n${placements
     .filter((t) => t.sheet === sheet)
     .map(
       (t) =>
-        `<g id="${esc(t.id)}" transform="translate(${fmt(t.x)} ${fmt(t.y)}) rotate(${fmt(t.angle)})">${partSVG(map.get(t.id))}</g>`,
+        `<g id="${esc(t.id)}" transform="translate(${fmt(t.x)} ${fmt(t.y)}) rotate(${fmt(t.angle)}) scale(${fmt((t.scale ?? 1) * (t.mirrored ? -1 : 1))} ${fmt(t.scale ?? 1)})">${partSVG(map.get(t.id))}</g>`,
     )
-    .join("\n")}\n</svg>`;
+    .join(
+      "\n",
+    )}${cuts.length ? `\n<g id="OFFCUT_CUT" fill="none" stroke="#008000" stroke-width="0.1">${cuts.map((points, i) => `<polygon id="offcut-${i + 1}" points="${points.map((p) => `${fmt(p.x)},${fmt(p.y)}`).join(" ")}"/>`).join("\n")}</g>` : ""}\n</svg>`;
 }
-export function exportDXF(parts, placements, sheet, settings) {
+export function exportDXF(parts, placements, sheet, settings, options = {}) {
+  const cuts = checkedOffcuts(parts, placements, sheet, settings, options);
   const map = new Map(parts.map((p) => [p.id, p]));
   const layerSet = new Map([["0", { aci: 7, trueColor: null }]]);
   const entities = [],
@@ -97,7 +102,7 @@ export function exportDXF(parts, placements, sheet, settings) {
                     20,
                     v.y,
                     ...(e.vertices[i].bulge
-                      ? [42, fmt(-e.vertices[i].bulge)]
+                      ? [42, fmt((t.mirrored ? 1 : -1) * e.vertices[i].bulge)]
                       : []),
                   ),
                 )
@@ -110,13 +115,26 @@ export function exportDXF(parts, placements, sheet, settings) {
           entities.push(
             tags(0, "CIRCLE") +
               common +
-              tags(100, "AcDbCircle", 10, c.x, 20, c.y, 30, 0, 40, fmt(e.r)),
+              tags(
+                100,
+                "AcDbCircle",
+                10,
+                c.x,
+                20,
+                c.y,
+                30,
+                0,
+                40,
+                fmt(e.r * (t.scale ?? 1)),
+              ),
           );
         else {
           const norm = (a) => ((a % 360) + 360) % 360;
-          let a = -((e.start * 180) / Math.PI + t.angle),
-            b = -(((e.start + e.sweep) * 180) / Math.PI + t.angle);
-          if (e.sweep > 0) [a, b] = [b, a];
+          const start = t.mirrored ? Math.PI - e.start : e.start;
+          const sweep = e.sweep * (t.mirrored ? -1 : 1);
+          let a = -((start * 180) / Math.PI + t.angle),
+            b = -(((start + sweep) * 180) / Math.PI + t.angle);
+          if (sweep > 0) [a, b] = [b, a];
           entities.push(
             tags(0, "ARC") +
               common +
@@ -130,7 +148,7 @@ export function exportDXF(parts, placements, sheet, settings) {
                 30,
                 0,
                 40,
-                fmt(e.r),
+                fmt(e.r * (t.scale ?? 1)),
                 100,
                 "AcDbArc",
                 50,
@@ -143,6 +161,37 @@ export function exportDXF(parts, placements, sheet, settings) {
       }
     }
     groups.push({ handle: groupHandle, name: t.id, members });
+  }
+  if (cuts.length) {
+    let layer = "OFFCUT_CUT",
+      suffix = 2;
+    while (layerSet.has(layer)) layer = `OFFCUT_CUT_${suffix++}`;
+    layerSet.set(layer, { aci: 3, trueColor: null });
+    for (const points of cuts) {
+      entities.push(
+        tags(
+          0,
+          "LWPOLYLINE",
+          5,
+          (handle++).toString(16),
+          100,
+          "AcDbEntity",
+          8,
+          layer,
+          62,
+          256,
+          100,
+          "AcDbPolyline",
+          90,
+          4,
+          70,
+          1,
+        ) +
+          points
+            .map((p) => tags(10, fmt(p.x), 20, fmt(settings.height - p.y)))
+            .join(""),
+      );
+    }
   }
   const layers = [...layerSet]
     .map(([name, color], i) =>

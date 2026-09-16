@@ -129,13 +129,41 @@
       occupiedArea: all.w * all.h,
     };
   }
+  function collect(polygons, sheet, padding, minArea) {
+    const first = analyse(polygons, sheet, padding);
+    const rectangles = [],
+      blocked = polygons.slice();
+    let result = first;
+    // Each recovered rectangle becomes an obstacle. This keeps pieces and
+    // their cut boundaries disjoint, including clearance between offcuts.
+    for (let i = 0; i < 6; i++) {
+      const r = result.rectangle;
+      if (r.area < minArea - 1e-6 || r.w <= 0 || r.h <= 0) break;
+      rectangles.push(r);
+      blocked.push([
+        { x: r.x, y: r.y },
+        { x: r.x + r.w, y: r.y },
+        { x: r.x + r.w, y: r.y + r.h },
+        { x: r.x, y: r.y + r.h },
+      ]);
+      result = analyse(blocked, sheet, padding);
+    }
+    return { ...first, rectangles };
+  }
   function score(unplaced, reports) {
     var areas = reports.map((s) => s.rectangle.area);
     return [
       unplaced,
       reports.length,
       -Math.max(0, ...areas),
-      -areas.reduce((s, a) => s + a, 0),
+      -reports.reduce(
+        (s, r) =>
+          s +
+          (r.rectangles
+            ? r.rectangles.reduce((sum, a) => sum + a.area, 0)
+            : r.rectangle.area),
+        0,
+      ),
       reports.reduce((s, r) => s + r.occupiedArea, 0),
     ];
   }
@@ -145,5 +173,12 @@
         return a[i] < b[i] ? -1 : 1;
     return 0;
   }
-  root.PaperOffcut = { analyse, score, compare, bounds, edgeRectangle };
+  root.PaperOffcut = {
+    analyse,
+    collect,
+    score,
+    compare,
+    bounds,
+    edgeRectangle,
+  };
 })(typeof globalThis !== "undefined" ? globalThis : self);

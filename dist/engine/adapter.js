@@ -19,8 +19,10 @@ window.addEventListener("message", (event) => {
     })
     .join("");
   const margin = settings.margin;
-  const safety = 0.06;
-  const collisionPadding = (settings.gap + safety) / 2;
+  const safety = 0.06 * Math.max(1, settings.scale ?? 1);
+  // Keep the 0.03 mm safety allowance at the sheet edge too. Rounded offset
+  // polygons can otherwise fall slightly inside their ideal inflation radius.
+  const collisionPadding = settings.gap / 2;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg"><rect id="sheet" x="0" y="0" width="${settings.width - 2 * margin}" height="${settings.height - 2 * margin}"/>${body}</svg>`;
   const send = (type, data = {}) =>
     parent.postMessage({ type, run, ...data }, location.origin);
@@ -29,12 +31,15 @@ window.addEventListener("message", (event) => {
       spacing: settings.gap + safety,
       rotations: settings.rotations,
       seed,
+      allowMirror: !!settings.allowMirror,
       exactSheetBounds: true,
+      sheetEdgeSafety: safety / 2,
       offcut: {
         width: settings.width - 2 * margin,
         height: settings.height - 2 * margin,
-        padding: settings.gap + 0.03,
+        padding: settings.gap + safety / 2,
         origin: collisionPadding,
+        minArea: settings.width * settings.height * 0.15,
         outlines: parts.map((p) =>
           p.outer.map((v) => ({ x: v.x + offsets.get(p.id), y: v.y })),
         ),
@@ -63,14 +68,26 @@ window.addEventListener("message", (event) => {
             // when cancelling large synthetic import offsets near sheet edges.
             const raw = g.nestPlacement;
             const offset = offsets.get(id);
-            const angle = raw.rotation;
+            const mirrored = raw.rotation >= 360;
+            const angle = raw.rotation % 360;
+            const sign = mirrored ? -1 : 1;
             const radians = (angle * Math.PI) / 180;
             // Undo the expanded collision bin origin, then add the physical margin.
             placements.push({
               id,
-              x: raw.x + offset * Math.cos(radians) + margin - collisionPadding,
-              y: raw.y + offset * Math.sin(radians) + margin - collisionPadding,
+              x:
+                raw.x +
+                sign * offset * Math.cos(radians) +
+                margin -
+                collisionPadding,
+              y:
+                raw.y +
+                sign * offset * Math.sin(radians) +
+                margin -
+                collisionPadding,
               angle,
+              mirrored,
+              scale: settings.scale ?? 1,
               sheet: index,
             });
           }

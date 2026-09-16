@@ -4,16 +4,16 @@ import {
   pathPoints,
   esc,
   validateLayout,
-} from "./geometry.js";
-import { parseDXF, parseSVG } from "./importers.js";
-import { exportSVG, exportDXF } from "./exporters.js";
+} from "./geometry.js?v=0.4.2";
+import { parseDXF, parseSVG } from "./importers.js?v=0.4.2";
+import { exportSVG, exportDXF } from "./exporters.js?v=0.4.2";
 import {
   ROTATIONS,
   searchSettings,
   evaluateLayout,
   improves,
   searchSeed,
-} from "./search.js?v=0.3.2";
+} from "./search.js?v=0.4.2";
 const $ = (id) => document.getElementById(id);
 const state = {
   parts: sampleParts(),
@@ -30,6 +30,7 @@ const state = {
   metrics: null,
   firstResultSeconds: null,
   accepted: 0,
+  excludedOffcuts: new Set(),
 };
 let engine = null,
   stopTimer = null,
@@ -44,10 +45,16 @@ const readSettings = () => ({
   gap: Number($("gap").value),
   margin: Number($("margin").value),
   rotations: Number($("rotation").value),
+  scale: Number($("scale").value) / 100,
+  allowMirror: $("allow-mirror").checked,
 });
 function checkSettings(s) {
   if (
-    ![s.width, s.height, s.gap, s.margin, s.rotations].every(Number.isFinite) ||
+    ![s.width, s.height, s.gap, s.margin, s.rotations, s.scale].every(
+      Number.isFinite,
+    ) ||
+    s.scale < 0.01 ||
+    s.scale > 10 ||
     s.width < 10 ||
     s.height < 10 ||
     s.width > 3000 ||
@@ -76,6 +83,20 @@ function sheetCount() {
     ? Math.max(...state.placements.map((p) => p.sheet)) + 1
     : 0;
 }
+const offcutId = (sheet, r) =>
+  [sheet, r.x, r.y, r.w, r.h].map((n) => Number(n).toFixed(5)).join(":");
+function sheetOffcuts(sheet) {
+  return (
+    state.metrics?.sheets.find((r) => r.sheet === sheet)?.rectangles || []
+  ).map((r, i) => ({ ...r, id: offcutId(sheet, r), number: i + 1 }));
+}
+function exportOptions(sheet, include = $("include-offcuts").checked) {
+  return {
+    offcuts: include
+      ? sheetOffcuts(sheet).filter((r) => !state.excludedOffcuts.has(r.id))
+      : [],
+  };
+}
 function render() {
   const parts = state.parts,
     s = readSettings();
@@ -103,15 +124,19 @@ function render() {
       t: { x: (i % cols) * cellW, y: Math.floor(i / cols) * cellH, angle: 0 },
     }));
   }
-  const remaining = layout
-    ? state.metrics?.sheets.find((r) => r.sheet === state.sheet)?.rectangle
-    : null;
+  const remaining = layout ? sheetOffcuts(state.sheet) : [];
   $("offcut-summary").hidden = !layout;
+  $("offcut-list").hidden = !layout || !remaining.length;
   const displayMm = (n) => Math.floor(n * 10) / 10;
-  $("offcut-size").textContent =
-    remaining?.area > 0
-      ? `${displayMm(remaining.w)} × ${displayMm(remaining.h)} mm · ${Math.floor(remaining.area / 100)} cm²`
-      : "No clear rectangle / 未有完整長方形";
+  $("offcut-size").textContent = remaining.length
+    ? `${remaining.length} pieces / 塊 · ${Math.floor(remaining.reduce((sum, r) => sum + r.area, 0) / 100)} cm²`
+    : "No offcut ≥15% / 未有達 15% 嘅餘料";
+  $("offcut-list").innerHTML = remaining
+    .map(
+      (r) =>
+        `<label class="offcut-choice"><input type="checkbox" data-offcut="${r.id}" ${state.excludedOffcuts.has(r.id) ? "" : "checked"}/><span><strong>${r.number.toString().padStart(2, "0")} · ${displayMm(r.w)} × ${displayMm(r.h)} mm</strong><small>${Math.floor(r.area / 100)} cm² · ${((r.area / (s.width * s.height)) * 100).toFixed(1)}% of sheet / 原板</small></span></label>`,
+    )
+    .join("");
   const pad = Math.max(w, h) * 0.035;
   $("canvas").setAttribute(
     "viewBox",
@@ -121,25 +146,28 @@ function render() {
     (layout
       ? `<rect class="sheet-outline" x="0" y="0" width="${w}" height="${h}"/><rect class="sheet-margin" x="${s.margin}" y="${s.margin}" width="${w - 2 * s.margin}" height="${h - 2 * s.margin}"/>`
       : "") +
-    (remaining?.area > 0
-      ? `<rect class="offcut-preview" x="${remaining.x}" y="${remaining.y}" width="${remaining.w}" height="${remaining.h}"><title>Reusable offcut / 可再用餘料</title></rect>`
-      : "") +
+    remaining
+      .map(
+        (r) =>
+          `<rect class="offcut-preview ${state.excludedOffcuts.has(r.id) ? "offcut-excluded" : ""}" x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}"><title>Offcut ${r.number} / 餘料 ${r.number}</title></rect><text class="offcut-number" x="${r.x + r.w / 2}" y="${r.y + r.h / 2}">${r.number.toString().padStart(2, "0")}</text>`,
+      )
+      .join("") +
     draws
       .map(
         ({ p, t }) =>
-          `<g class="drawing-part ${state.selected === p.id ? "selected" : ""}" data-part="${p.id}" transform="translate(${t.x} ${t.y}) rotate(${t.angle})"><polygon class="part-hit" points="${pathPoints(p.outer)}"/><g class="part-detail">${partSVG(p)}</g>${!layout ? `<text class="part-label" x="0" y="${p.size.h + 11}">${esc(p.name)}</text>` : ""}</g>`,
+          `<g class="drawing-part ${state.selected === p.id ? "selected" : ""}" data-part="${p.id}" transform="translate(${t.x} ${t.y}) rotate(${t.angle}) scale(${(t.scale ?? 1) * (t.mirrored ? -1 : 1)} ${t.scale ?? 1})"><polygon class="part-hit" points="${pathPoints(p.outer)}"/><g class="part-detail">${partSVG(p)}</g>${!layout ? `<text class="part-label" x="0" y="${p.size.h + 11}">${esc(p.name)}</text>` : ""}</g>`,
       )
       .join("");
   $("canvas-label").textContent = layout
     ? `SHEET ${state.sheet + 1} / 板材 · ${w} × ${h} mm`
     : "PART REVIEW / 零件檢查 · 已分開顯示";
   $("canvas-caption").textContent = layout
-    ? "Full size export · 原尺寸輸出 · Preview guides excluded / 不含預覽邊框"
+    ? `${s.scale * 100}% scale / 比例 · ${$("include-offcuts").checked ? "Selected offcut cut lines included / 包括已選餘料切割線" : "Parts only / 只輸出零件"}`
     : "Select a part to check its details · 點選零件，核對內部線條";
   $("parts-list").innerHTML = parts
     .map(
       (p) =>
-        `<button class="part-row ${state.selected === p.id ? "active" : ""}" data-part="${p.id}"><svg viewBox="-3 -3 ${p.size.w + 6} ${p.size.h + 6}"><polygon points="${pathPoints(p.outer)}" fill="#eef3fe" stroke="#859bc2" stroke-width="2"/></svg><span><strong>${esc(p.name)}</strong><small>${p.size.w.toFixed(1)} × ${p.size.h.toFixed(1)} mm</small></span></button>`,
+        `<button class="part-row ${state.selected === p.id ? "active" : ""}" data-part="${p.id}"><svg viewBox="-3 -3 ${p.size.w + 6} ${p.size.h + 6}"><polygon points="${pathPoints(p.outer)}" fill="#eef3fe" stroke="#859bc2" stroke-width="2"/></svg><span><strong>${esc(p.name)}</strong><small>${(p.size.w * s.scale).toFixed(1)} × ${(p.size.h * s.scale).toFixed(1)} mm</small></span></button>`,
     )
     .join("");
   const p = parts.find((p) => p.id === state.selected),
@@ -148,7 +176,7 @@ function render() {
     ? [...new Set(p.entities.map((e) => e.layer || "0"))].map(esc).join(", ")
     : "";
   $("inspector").innerHTML = p
-    ? `<strong>${esc(p.name)}</strong>${p.entities.length} entities / 圖元<br>Layers: ${layers}<br>${esc(p.group)}${t ? `<br>Sheet ${t.sheet + 1} · ${Math.round(t.angle)}° / 第 ${t.sheet + 1} 張` : ""}`
+    ? `<strong>${esc(p.name)}</strong>${p.entities.length} entities / 圖元<br>Layers: ${layers}<br>${esc(p.group)}${t ? `<br>Sheet ${t.sheet + 1} · ${Math.round(t.angle)}° / 第 ${t.sheet + 1} 張${t.mirrored ? " · Mirrored / 鏡像" : ""}` : ""}`
     : "";
   $("count").textContent = parts.length;
   $("part-total").textContent = parts.length;
@@ -185,6 +213,8 @@ function render() {
     "margin",
     "preset",
     "rotation",
+    "scale",
+    "allow-mirror",
     "units",
   ])
     $(id).disabled = state.running;
@@ -228,6 +258,7 @@ function invalidate() {
   state.sheet = 0;
   state.invalid = false;
   state.metrics = null;
+  state.excludedOffcuts.clear();
   state.firstResultSeconds = null;
   state.accepted = 0;
   message();
@@ -284,14 +315,20 @@ function startEngine() {
       {
         type: "start",
         run,
-        parts: state.parts.map((p) => ({ id: p.id, outer: p.outer })),
+        parts: state.parts.map((p) => ({
+          id: p.id,
+          outer: p.outer.map((v) => ({
+            x: v.x * runSettings.scale,
+            y: v.y * runSettings.scale,
+          })),
+        })),
         settings: runSettings,
         seed: searchSeed(state.placements),
       },
       location.origin,
     );
   };
-  frame.src = "engine/index.html?v=0.3.2";
+  frame.src = "engine/index.html?v=0.4.2";
   document.body.append(frame);
   stopTimer = setTimeout(() => {
     stop();
@@ -327,7 +364,7 @@ window.addEventListener("message", (event) => {
   const placements = data.placements;
   const errors = validateLayout(state.parts, placements, readSettings());
   if (errors.length) {
-    console.warn("Rejected layout", errors);
+    console.warn("Rejected layout: " + errors.join("; "));
     return;
   }
   const candidate = evaluateLayout(state.parts, placements, runSettings);
@@ -413,8 +450,20 @@ function download() {
   const format = $("export-format").value;
   const content =
     format === "dxf"
-      ? exportDXF(state.parts, state.placements, state.sheet, settings)
-      : exportSVG(state.parts, state.placements, state.sheet, settings);
+      ? exportDXF(
+          state.parts,
+          state.placements,
+          state.sheet,
+          settings,
+          exportOptions(state.sheet),
+        )
+      : exportSVG(
+          state.parts,
+          state.placements,
+          state.sheet,
+          settings,
+          exportOptions(state.sheet),
+        );
   const a = document.createElement("a");
   const url = URL.createObjectURL(
     new Blob([content], {
@@ -438,6 +487,19 @@ document.addEventListener("click", (e) => {
   }
 });
 $("confirmed").addEventListener("change", render);
+$("include-offcuts").addEventListener("change", () => {
+  if (state.running) stop();
+  render();
+});
+$("offcut-list").addEventListener("change", (e) => {
+  const id = e.target.dataset.offcut;
+  if (!id) return;
+  const checked = e.target.checked;
+  if (state.running) stop();
+  if (checked) state.excludedOffcuts.delete(id);
+  else state.excludedOffcuts.add(id);
+  render();
+});
 $("demo").onclick = loadDemo;
 $("nest").onclick = () => beginNest(false);
 $("continue").onclick = () => beginNest(true);
@@ -465,7 +527,15 @@ for (const name of ["dragleave", "drop"])
     drop.classList.remove("dragging");
   });
 drop.addEventListener("drop", (e) => importFile(e.dataTransfer.files[0]));
-for (const id of ["width", "height", "gap", "margin", "rotation"])
+for (const id of [
+  "width",
+  "height",
+  "gap",
+  "margin",
+  "rotation",
+  "scale",
+  "allow-mirror",
+])
   $(id).addEventListener("change", () => {
     if (id === "width" || id === "height") $("preset").value = "custom";
     invalidate();
@@ -531,11 +601,18 @@ if (document.modelContext?.registerTool) {
           acceptedLayouts: state.accepted,
           bestScore: state.metrics?.score || null,
         },
+        mirroredParts: state.placements
+          .filter((p) => p.mirrored)
+          .map((p) => p.id),
+        includeOffcutCuts: $("include-offcuts").checked,
         offcuts:
-          state.metrics?.sheets.map(({ sheet, rectangle }) => ({
-            sheet: sheet + 1,
-            ...rectangle,
-          })) || [],
+          state.metrics?.sheets.flatMap(({ sheet }) =>
+            sheetOffcuts(sheet).map((r) => ({
+              ...r,
+              sheet: sheet + 1,
+              selected: !state.excludedOffcuts.has(r.id),
+            })),
+          ) || [],
       }),
     },
     {
@@ -565,8 +642,8 @@ if (document.modelContext?.registerTool) {
         )
           throw new Error("Invalid settings");
         const s = checkSettings({
+          ...readSettings(),
           ...input,
-          rotations: readSettings().rotations,
         });
         for (const key of ["width", "height", "gap", "margin"])
           $(key).value = s[key];
@@ -578,12 +655,17 @@ if (document.modelContext?.registerTool) {
     {
       name: "export_nesting_sheet",
       description:
-        "Produce full-scale SVG or DXF file content for one validated sheet. Does not upload or send files.",
+        "Produce SVG or DXF file content at the selected drawing scale for one validated sheet. Does not upload or send files.",
       inputSchema: {
         type: "object",
         properties: {
           format: { type: "string", enum: ["svg", "dxf"] },
           sheet: { type: "integer", minimum: 1 },
+          includeOffcuts: {
+            type: "boolean",
+            description:
+              "Include selected offcut cut lines; defaults to the page checkbox.",
+          },
         },
         required: ["format", "sheet"],
         additionalProperties: false,
@@ -596,7 +678,11 @@ if (document.modelContext?.registerTool) {
           !Number.isInteger(input.sheet) ||
           input.sheet < 1 ||
           input.sheet > sheetCount() ||
-          Object.keys(input).some((k) => !["format", "sheet"].includes(k))
+          (input.includeOffcuts !== undefined &&
+            typeof input.includeOffcuts !== "boolean") ||
+          Object.keys(input).some(
+            (k) => !["format", "sheet", "includeOffcuts"].includes(k),
+          )
         )
           throw new Error("Invalid export options");
         if (
@@ -612,12 +698,20 @@ if (document.modelContext?.registerTool) {
                 state.placements,
                 input.sheet - 1,
                 readSettings(),
+                exportOptions(
+                  input.sheet - 1,
+                  input.includeOffcuts ?? $("include-offcuts").checked,
+                ),
               )
             : exportSVG(
                 state.parts,
                 state.placements,
                 input.sheet - 1,
                 readSettings(),
+                exportOptions(
+                  input.sheet - 1,
+                  input.includeOffcuts ?? $("include-offcuts").checked,
+                ),
               );
         return {
           filename: `paper-nest-sheet-${input.sheet}.${input.format}`,

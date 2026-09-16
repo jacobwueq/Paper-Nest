@@ -9,9 +9,9 @@
       content="Arrange DXF and SVG paper-cutting parts on full-size sheets. Review geometry, nest and export locally in your browser."
     />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="style.css?v=0.3.2" />
+    <link rel="stylesheet" href="style.css?v=0.4.2" />
     <script src="vendor/path-data-polyfill.js"></script>
-    <script type="module" src="app.js?v=0.3.2"></script>
+    <script type="module" src="app.js?v=0.4.2"></script>
   </head>
   <body>
     <header class="topbar">
@@ -22,7 +22,7 @@
             fill="currentColor"
           /></svg
         ><span>Paper Nest <small>紙材排料</small></span></a
-      ><span class="version">WORKING PROTOTYPE · 0.3</span
+      ><span class="version">WORKING PROTOTYPE · 0.4</span
       ><span class="local"
         >Files stay in your browser <span>檔案於本機處理</span></span
       >
@@ -145,8 +145,28 @@
               <option value="1">Keep orientation · 固定方向</option>
             </select>
           </div>
+          <div class="field">
+            <label for="scale">Scale <small>圖形比例</small></label>
+            <div class="unit-input">
+              <input
+                id="scale"
+                type="number"
+                value="100"
+                min="1"
+                max="1000"
+                step="1"
+              /><span>%</span>
+            </div>
+          </div>
+          <label class="review-check"
+            ><input id="allow-mirror" type="checkbox" /><span
+              >Allow mirroring<br /><small
+                >容許鏡像，包括附屬文字及刻線</small
+              ></span
+            ></label
+          >
           <p class="help">
-            Original scale · No mirroring<br />保持原尺寸 · 不鏡像
+            100% keeps original dimensions.<br />100% 保持原尺寸；鏡像預設關閉。
           </p>
         </section>
         <section class="arrange-section">
@@ -230,13 +250,15 @@
         <div id="offcut-summary" class="offcut-summary" hidden>
           <span class="offcut-key" aria-hidden="true"></span>
           <div>
-            <strong>Reusable rectangle / 可再用長方形</strong>
+            <strong>Reusable offcuts / 可回收餘料 · ≥15%</strong>
             <span id="offcut-size"></span>
           </div>
           <small
-            >Clear space on this sheet; preview only.<br />本張板材嘅完整空間；標示不會輸出。</small
+            >At least 15% of the original sheet per piece.<br />每塊至少佔原板面積
+            15%。</small
           >
         </div>
+        <div id="offcut-list" class="offcut-list" hidden></div>
         <div class="progress-track" aria-hidden="true">
           <div id="progress"></div>
         </div>
@@ -255,9 +277,21 @@
           <label for="export-format"
             >Export current sheet <small>匯出目前板材</small></label
           ><select id="export-format">
-            <option value="svg">SVG · 1:1</option>
-            <option value="dxf">DXF · 1:1</option></select
-          ><button id="export" class="secondary" disabled>
+            <option value="svg">SVG · mm</option>
+            <option value="dxf">DXF · mm</option>
+          </select>
+          <label class="review-check offcut-export-toggle"
+            ><input id="include-offcuts" type="checkbox" /><span
+              >Cut out selected offcuts<br /><small
+                >輸出已選餘料切割框 · OFFCUT_CUT</small
+              ></span
+            ></label
+          >
+          <p class="help">
+            Optional green cut layer. Tick to freeze and select offcuts.<br />可選綠色切割
+            layer；勾選後固定排位，選擇要回收嘅餘料。
+          </p>
+          <button id="export" class="secondary" disabled>
             Download sheet · 下載板材圖 ↓
           </button>
           <p class="help">
@@ -267,7 +301,7 @@
       </aside>
     </main>
     <footer>
-      <span>1:1 · MILLIMETRES / 毫米</span
+      <span>MILLIMETRES / 毫米 · Check scale / 核對比例</span
       ><span
         >Prototype: check exports in CAD before cutting. 試作版：切割前請於 CAD
         核對。</span

@@ -7,7 +7,7 @@ import {
   simplePolygon,
   sampleArc,
   TOL,
-} from "./geometry.js";
+} from "./geometry.js?v=0.4.2";
 import aciColours from "./vendor/aci-colours.js";
 const fail = (s) => {
   throw new Error(s);

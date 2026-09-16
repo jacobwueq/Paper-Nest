@@ -26,9 +26,10 @@ function toNestCoordinates(polygon, scale){
 
 function rotatePolygon(polygon, degrees){
 	var rotated = [];
-	var angle = degrees * Math.PI / 180;
+	var mirrored = degrees >= 360;
+	var angle = (degrees % 360) * Math.PI / 180;
 	for(var i=0; i<polygon.length; i++){
-		var x = polygon[i].x;
+		var x = polygon[i].x * (mirrored ? -1 : 1);
 		var y = polygon[i].y;
 		var x1 = x*Math.cos(angle)-y*Math.sin(angle);
 		var y1 = x*Math.sin(angle)+y*Math.cos(angle);
@@ -36,6 +37,7 @@ function rotatePolygon(polygon, degrees){
 		rotated.push({x:x1, y:y1});
 	}
 	
+	if(mirrored) rotated.reverse();
 	if(polygon.children && polygon.children.length > 0){
 		rotated.children = [];
 		for(var j=0; j<polygon.children.length; j++){
@@ -265,7 +267,7 @@ function PlacementWorker(binPolygon, paths, ids, rotations, config, nfpCache){
 					outlines.push(outline.map(function(p){return {x:p.x+placements[pi].x,y:p.y+placements[pi].y};}));
 				}
 				var options=self.config.offcut || {width:sheetBounds.width,height:sheetBounds.height,padding:0};
-				reports.push(PaperOffcut.analyse(outlines,{x:options.origin||0,y:options.origin||0,w:options.width,h:options.height},options.padding));
+				reports.push(PaperOffcut.collect(outlines,{x:options.origin||0,y:options.origin||0,w:options.width,h:options.height},options.padding,options.minArea === undefined ? Infinity : options.minArea));
 			}
 
 			for(i=0; i<placed.length; i++){
@@ -285,6 +287,7 @@ function PlacementWorker(binPolygon, paths, ids, rotations, config, nfpCache){
 		
 		// there were parts that couldn't be placed
 		// Placing one more part outranks any number of extra sheets.
+		if(!self.config.offcut || self.config.offcut.minArea === undefined) reports.forEach(function(r){delete r.rectangles;});
 		var fitness = PaperOffcut.score(paths.length, reports);
 		
 		return {placements: allplacements, fitness: fitness, paths: paths, area: binarea };

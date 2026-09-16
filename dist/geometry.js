@@ -16,7 +16,10 @@ export function bounds(p) {
 export function transform(p, t) {
   const c = Math.cos((t.angle * Math.PI) / 180),
     s = Math.sin((t.angle * Math.PI) / 180);
-  return { x: p.x * c - p.y * s + t.x, y: p.x * s + p.y * c + t.y };
+  const scale = t.scale ?? 1;
+  const x = p.x * scale * (t.mirrored ? -1 : 1),
+    y = p.y * scale;
+  return { x: x * c - y * s + t.x, y: x * s + y * c + t.y };
 }
 export const transformed = (p, t) => p.map((v) => transform(v, t));
 export const pathPoints = (p) => p.map((v) => `${v.x},${v.y}`).join(" ");
@@ -147,6 +150,13 @@ export function validateLayout(parts, placements, settings) {
     ids.add(t.id);
     if (![t.x, t.y, t.angle, t.sheet].every(Number.isFinite)) {
       errors.push("Invalid placement / 排位座標無效");
+      continue;
+    }
+    if (
+      (t.scale !== undefined && (!Number.isFinite(t.scale) || t.scale <= 0)) ||
+      (t.mirrored && settings.allowMirror === false)
+    ) {
+      errors.push("Invalid scale or mirror setting / 比例或鏡像設定不符");
       continue;
     }
     const poly = transformed(p.outer, t),
