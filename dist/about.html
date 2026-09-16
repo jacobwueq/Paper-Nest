@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Paper Nest — Support / 支援範圍</title>
     <link rel="icon" href="favicon.svg" />
-    <link rel="stylesheet" href="style.css?v=0.4.2" />
+    <link rel="stylesheet" href="style.css?v=0.5.1" />
   </head>
   <body>
     <header class="topbar">
@@ -96,11 +96,16 @@
         20-second improvement budget; a usable result can appear earlier.
         Continue from the best result, or stop at any time. Objectives, in
         order: place all parts, minimise sheet count, maximise the largest
-        single rectangular offcut, then total reusable rectangles, then compact
-        the occupied footprint.<br />
+        single rectangular offcut, consolidate the next clear rectangles
+        (including those below 15%), then compact the occupied footprint and
+        pull individual parts closer together. A background compaction pass
+        moves, turns and reinserts parts into gaps while checking clearances.
+        Existing results are replaced only by a better validated result.<br />
         上限：5 MB、80 件零件及 3,000 個圖元。每次最多改善 20
         秒，有結果即顯示；可隨時停止或承接結果繼續。
-        依次優先放齊零件、減少板材張數、保留最大塊長方形餘料，再比較合資格餘料總和及零件佔用範圍。
+        依次優先放齊零件、減少板材張數、保留最大塊長方形餘料，再集中其餘空間（包括細過
+        15% 嘅位置），縮小佔用範圍及拉近零件。
+        背景會逐件移動、轉向及重新試位，每步核對間距，只保留更好嘅有效結果。
       </p>
       <p>
         Green rectangles show conservatively estimated clear space within the
@@ -110,12 +115,14 @@
         can make this estimate smaller than the true available rectangle. Holes
         are excluded. Multiple non-overlapping rectangles are selected greedily;
         each must cover at least 15% of the original sheet area. Smaller scraps
-        are ignored. This heuristic does not prove the globally largest offcut
+        are omitted from marking and cutting frames, but still influence
+        optimisation. This heuristic does not prove the globally largest offcut
         or optimise arbitrary offcut shapes.<br />綠色區域係板材留邊以內、與零件保持所選間距嘅保守餘料估算。
         完整邊帶直接計算，其餘用最長邊最多 256
         格嘅網格搜尋；曲線及凹形可能令估算偏小。
         孔洞不計；逐塊選取互不重疊嘅長方形，每塊至少佔原板面積
-        15%，忽略更細碎餘料。 演算法未能證明全域最大餘料，亦未優化任意形狀餘料。
+        15%，更細餘料唔標示或輸出切割框，但仍影響排料優化。
+        演算法未能證明全域最大餘料，亦未優化任意形狀餘料。
       </p>
       <p>
         Offcut cutting frames are off by default. Enable “Cut out selected

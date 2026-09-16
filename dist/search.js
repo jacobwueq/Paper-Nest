@@ -1,5 +1,5 @@
-import { transformed } from "./geometry.js?v=0.4.2";
-import "./engine/util/offcut.js?v=0.4.2";
+import { transformed } from "./geometry.js?v=0.5.1";
+import "./engine/util/offcut.js?v=0.5.1";
 const offcut = globalThis.PaperOffcut;
 export const ROTATIONS = [1, 4, 12, 24, 72, 360];
 export function searchSettings(rotations) {

@@ -361,8 +361,8 @@
 			});
 			
 			p.require('matrix.js');
-			p.require('geometryutil.js?v=0.4.2');
-			p.require('placementworker.js?v=0.4.2');
+			p.require('geometryutil.js?v=0.5.1');
+			p.require('placementworker.js?v=0.5.1');
 			p.require('clipper.js');
 			
 			var self = this;
@@ -566,9 +566,9 @@
 				p2.require('json.js');
 				p2.require('clipper.js');
 				p2.require('matrix.js');
-				p2.require('geometryutil.js?v=0.4.2');
-				p2.require('offcut.js?v=0.4.2');
-				p2.require('placementworker.js?v=0.4.2');
+				p2.require('geometryutil.js?v=0.5.1');
+				p2.require('offcut.js?v=0.5.1');
+				p2.require('placementworker.js?v=0.5.1');
 				
 				p2.map(worker.placePaths).then(function(placements){
 					if(!placements || placements.length == 0){
@@ -858,10 +858,11 @@
 		
 		// Useful initial candidates arrive immediately; all configured angles are
 		// available from the first evaluation, with no timed refinement stages.
-		for(var mode=1; mode<=2 && this.population.length<config.populationSize; mode++){
+		for(var mode=1; mode<=4 && this.population.length<config.populationSize; mode++){
 			var initialAngles=[];
 			for(var a=0; a<adam.length; a++){
-				var initial=this.compactAngle(adam[a], mode);
+				var initial=this.compactAngle(adam[a], mode<=2?mode:0);
+				if(mode>=3 && config.rotations>1 && config.rotations%2===0 && (mode===4 || a%2===0)) initial=(initial+180)%360;
 				if(config.allowMirror && mode===2 && a%2===1 && this.fits(adam[a],initial+360)) initial+=360;
 				initialAngles.push(initial);
 			}

@@ -4,16 +4,16 @@ import {
   pathPoints,
   esc,
   validateLayout,
-} from "./geometry.js?v=0.4.2";
-import { parseDXF, parseSVG } from "./importers.js?v=0.4.2";
-import { exportSVG, exportDXF } from "./exporters.js?v=0.4.2";
+} from "./geometry.js?v=0.5.1";
+import { parseDXF, parseSVG } from "./importers.js?v=0.5.1";
+import { exportSVG, exportDXF } from "./exporters.js?v=0.5.1";
 import {
   ROTATIONS,
   searchSettings,
   evaluateLayout,
   improves,
   searchSeed,
-} from "./search.js?v=0.4.2";
+} from "./search.js?v=0.5.1";
 const $ = (id) => document.getElementById(id);
 const state = {
   parts: sampleParts(),
@@ -33,6 +33,9 @@ const state = {
   excludedOffcuts: new Set(),
 };
 let engine = null,
+  compactor = null,
+  compacting = false,
+  compactQueued = false,
   stopTimer = null,
   ticker = null,
   started = 0,
@@ -202,7 +205,7 @@ function render() {
     ? "Start again <span>重新排料 ↗</span>"
     : "Arrange parts <span>自動排料 ↗</span>";
   $("run-note").textContent =
-    "Shows a layout as soon as it is found, then improves the reusable offcut. Stop whenever ready. / 有排位即顯示，隨後改善完整餘料；可隨時停止。";
+    "Shows a layout immediately, then moves and turns parts to close gaps and consolidate free space. Stop whenever ready. / 有排位即顯示，再移近及轉動零件，收緊空隙、集中餘料；可隨時停止。";
   $("file").disabled = state.running;
   $("demo").disabled = state.running;
   $("confirmed").disabled = state.running;
@@ -234,6 +237,9 @@ function render() {
 }
 function stop() {
   state.running = false;
+  compactor?.terminate();
+  compactor = null;
+  compacting = compactQueued = false;
   if (engine) {
     engine.remove();
     engine = null;
@@ -305,6 +311,24 @@ function updateSearchStatus() {
 }
 function startEngine() {
   const run = ++state.run;
+  compactor = new Worker(
+    new URL("./compaction-worker.js?v=0.5.1", import.meta.url),
+    { type: "module" },
+  );
+  compactor.onmessage = ({ data }) => {
+    if (!state.running || data.run !== state.run) return;
+    if (data.placements) considerLayout(data.placements);
+    if (data.type === "complete" || data.type === "error") {
+      compacting = false;
+      if (data.type === "error") console.warn("Compaction: " + data.message);
+      if (data.changed || data.incomplete) compactQueued = true;
+      if (compactQueued) scheduleCompaction();
+    }
+  };
+  compactor.onerror = () => {
+    compacting = false;
+  };
+  scheduleCompaction();
   const frame = document.createElement("iframe");
   engine = frame;
   frame.hidden = true;
@@ -328,7 +352,7 @@ function startEngine() {
       location.origin,
     );
   };
-  frame.src = "engine/index.html?v=0.4.2";
+  frame.src = "engine/index.html?v=0.5.1";
   document.body.append(frame);
   stopTimer = setTimeout(() => {
     stop();
@@ -361,7 +385,29 @@ window.addEventListener("message", (event) => {
     return;
   }
   if (data.run !== state.run || data.type !== "layout") return;
-  const placements = data.placements;
+  if (considerLayout(data.placements)) scheduleCompaction();
+});
+function scheduleCompaction() {
+  if (
+    !state.running ||
+    !compactor ||
+    state.placements.length !== state.parts.length
+  )
+    return;
+  if (compacting) {
+    compactQueued = true;
+    return;
+  }
+  compacting = true;
+  compactQueued = false;
+  compactor.postMessage({
+    run: state.run,
+    parts: state.parts.map((p) => ({ id: p.id, outer: p.outer })),
+    placements: state.placements,
+    settings: runSettings,
+  });
+}
+function considerLayout(placements) {
   const errors = validateLayout(state.parts, placements, readSettings());
   if (errors.length) {
     console.warn("Rejected layout: " + errors.join("; "));
@@ -383,8 +429,10 @@ window.addEventListener("message", (event) => {
     state.view = "layout";
     state.sheet = Math.min(state.sheet, sheetCount() - 1);
     render();
+    return true;
   }
-});
+  return false;
+}
 async function importFile(file) {
   if (state.running || !file) return;
   if (file.size > 5 * 1024 * 1024) {

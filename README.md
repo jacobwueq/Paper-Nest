@@ -32,8 +32,9 @@ stages. Results appear and can be exported during the 20-second improvement budg
 continuation inherits the best part order and angles.
 
 Worker and parent share `dist/engine/util/offcut.js`. Both rank: unplaced count,
-sheet count, largest single clear rectangle (descending), total rectangles
-(descending), occupied bounding area. Greedy placement first preserves a large edge
+sheet count, largest single clear rectangle (descending), the sum of squared areas
+of up to six clear rectangles (descending, with no 15% threshold), occupied bounding
+area, and part-centre dispersion. Greedy placement first preserves a large edge
 rectangle, with cached bounds to avoid rescanning all vertices at every candidate.
 The final fitness also finds interior rectangles using a conservative occupancy
 grid. Thin contours cannot disappear between samples. Offcuts reserve margins and
@@ -42,8 +43,18 @@ or curved free space. A global maximum or arbitrary-shaped offcut is not guarant
 
 預設直接使用完整 1° 角度範圍，先用緊密方向建立排位，沒有分階段旋轉等待。
 搜尋最多改善 20 秒，結果即時顯示並可匯出。前後端同用餘料評分：先放齊零件，
-再減少板材張數，然後最大化單塊長方形餘料、比較總餘料，最後縮小零件佔用範圍。
+再減少板材張數，然後最大化單塊長方形餘料、集中其餘空間，最後縮小零件佔用範圍及拉近零件。
 網格估算保守保留輪廓及間距，可能低估曲線和凹形空間，未保證全域最佳或任意形狀餘料。
+
+`dist/compaction-worker.js` runs a bounded coordinate-descent pass alongside the
+nesting worker. It slides parts to contact, tries permitted rotations and handedness,
+and reinserts them at candidate gaps. Full geometric clearance and shared fitness
+validate every accepted move. Completed passes resume from the best current layout;
+stop, reimport, changed settings and offcut selection terminate both workers.
+The 15% threshold affects only the displayed/exportable rectangles, never fitness.
+
+背景收緊程序會逐件移近、轉動及重新試位。每次接受移動均核對幾何間距及完整評分；
+停止或變更設定會同時停止兩個運算程序。15% 只用於顯示及切割框輸出。
 
 ## Recoverable material and transforms / 回收餘料及圖形變換
 

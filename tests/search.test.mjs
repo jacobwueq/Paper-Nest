@@ -365,7 +365,14 @@ test("worker fitness uses reusable offcut and prioritises complete placement", (
   ctx.global = { env: { self: worker } };
   const result = worker.placePaths([p]);
   assert.equal(result.placements.length, 1);
-  assert.deepEqual(Array.from(result.fitness), [0, 1, -9000, -9000, 200]);
+  assert.equal(result.fitness[0], 0);
+  assert.equal(result.fitness[1], 1);
+  assert.equal(result.fitness[2], -9000);
+  assert.ok(
+    result.fitness[3] < -9000 * 9000,
+    "smaller leftover rectangles also contribute",
+  );
+  assert.equal(result.fitness[4], 200);
   worker.nfpCache = {};
   assert.ok(
     ctx.PaperOffcut.compare(worker.placePaths([p]).fitness, result.fitness) > 0,

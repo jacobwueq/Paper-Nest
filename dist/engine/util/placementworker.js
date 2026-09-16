@@ -246,7 +246,11 @@ function PlacementWorker(binPolygon, paths, ids, rotations, config, nfpCache){
 						var bottom=Math.max(occupiedBounds.y+occupiedBounds.h,partBounds.y+partBounds.h+shiftvector.y);
 						var footprint={x:x,y:y,w:right-x,h:bottom-y};
 						var spare=PaperOffcut.edgeRectangle(footprint,{x:0,y:0,w:sheetBounds.width,h:sheetBounds.height});
-						var free=spare.w*spare.h,box=footprint.w*footprint.h,anchor=x+y;
+						// Within the same offcut and occupied envelope, pull this part
+						// towards the cluster corner instead of leaving NFP vertex ties arbitrary.
+						var cx=partBounds.x+shiftvector.x+partBounds.w/2;
+						var cy=partBounds.y+shiftvector.y+partBounds.h/2;
+						var free=spare.w*spare.h,box=footprint.w*footprint.h,anchor=cx*cx+cy*cy;
 						if(free>bestFree+1e-5 || (Math.abs(free-bestFree)<1e-5 &&
 							(box<bestBox-1e-5 || (Math.abs(box-bestBox)<1e-5 && anchor<bestAnchor)))){
 							bestFree=free;bestBox=box;bestAnchor=anchor;position=shiftvector;

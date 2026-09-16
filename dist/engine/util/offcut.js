@@ -127,28 +127,43 @@
     return {
       rectangle: { ...best, area: best.w * best.h },
       occupiedArea: all.w * all.h,
+      compactness: polygons.reduce((sum, p) => {
+        const b = bounds(p);
+        return (
+          sum + (b.x + b.w / 2 - all.x) ** 2 + (b.y + b.h / 2 - all.y) ** 2
+        );
+      }, 0),
     };
   }
   function collect(polygons, sheet, padding, minArea) {
     const first = analyse(polygons, sheet, padding);
-    const rectangles = [],
+    const candidates = [],
       blocked = polygons.slice();
     let result = first;
     // Each recovered rectangle becomes an obstacle. This keeps pieces and
     // their cut boundaries disjoint, including clearance between offcuts.
     for (let i = 0; i < 6; i++) {
       const r = result.rectangle;
-      if (r.area < minArea - 1e-6 || r.w <= 0 || r.h <= 0) break;
-      rectangles.push(r);
+      if (r.area <= 1e-6 || r.w <= 0 || r.h <= 0) break;
+      candidates.push(r);
       blocked.push([
         { x: r.x, y: r.y },
         { x: r.x + r.w, y: r.y },
         { x: r.x + r.w, y: r.y + r.h },
         { x: r.x, y: r.y + r.h },
       ]);
-      result = analyse(blocked, sheet, padding);
+      if (i < 5) result = analyse(blocked, sheet, padding);
     }
-    return { ...first, rectangles };
+    return {
+      ...first,
+      rectangles: candidates.filter((r) => r.area >= minArea - 1e-6),
+      // Squared areas reward consolidated free space, including pieces below
+      // the display/export threshold. That threshold never changes fitness.
+      recoveryPotential: candidates.reduce(
+        (sum, r) => sum + r.area * r.area,
+        0,
+      ),
+    };
   }
   function score(unplaced, reports) {
     var areas = reports.map((s) => s.rectangle.area);
@@ -158,13 +173,11 @@
       -Math.max(0, ...areas),
       -reports.reduce(
         (s, r) =>
-          s +
-          (r.rectangles
-            ? r.rectangles.reduce((sum, a) => sum + a.area, 0)
-            : r.rectangle.area),
+          s + (r.recoveryPotential ?? r.rectangle.area * r.rectangle.area),
         0,
       ),
       reports.reduce((s, r) => s + r.occupiedArea, 0),
+      reports.reduce((s, r) => s + (r.compactness || 0), 0),
     ];
   }
   function compare(a, b) {
