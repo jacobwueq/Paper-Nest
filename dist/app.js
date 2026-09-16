@@ -1,0 +1,571 @@
+import {
+  sampleParts,
+  partSVG,
+  pathPoints,
+  esc,
+  validateLayout,
+} from "./geometry.js";
+import { parseDXF, parseSVG } from "./importers.js";
+import { exportSVG, exportDXF } from "./exporters.js";
+const $ = (id) => document.getElementById(id);
+const state = {
+  parts: sampleParts(),
+  selected: "part-1",
+  view: "review",
+  placements: [],
+  sheet: 0,
+  format: "dxf",
+  name: "Sample · Scenic paper kit",
+  meta: "示範圖檔 · 12 paper scenery parts / 紙材模型零件",
+  running: false,
+  run: 0,
+  invalid: false,
+};
+let engine = null,
+  stopTimer = null,
+  ticker = null,
+  started = 0,
+  lastFile = null;
+const readSettings = () => ({
+  width: Number($("width").value),
+  height: Number($("height").value),
+  gap: Number($("gap").value),
+  margin: Number($("margin").value),
+  rotations: Number($("rotation").value),
+});
+function checkSettings(s) {
+  if (
+    ![s.width, s.height, s.gap, s.margin, s.rotations].every(Number.isFinite) ||
+    s.width < 10 ||
+    s.height < 10 ||
+    s.width > 3000 ||
+    s.height > 3000 ||
+    s.gap < 0.1 ||
+    s.gap > 50 ||
+    s.margin < 0 ||
+    s.margin * 2 + 2 * s.gap >= Math.min(s.width, s.height) ||
+    ![1, 4, 12, 24].includes(s.rotations)
+  )
+    throw new Error(
+      "Check sheet dimensions, gap and margins. / 請檢查板材尺寸、間距及留邊。",
+    );
+  return s;
+}
+function message(text = "", error = false) {
+  $("message").hidden = !text;
+  $("message").textContent = text;
+  $("message").classList.toggle("error", error);
+}
+function setStatus(text) {
+  $("status").textContent = text;
+}
+function sheetCount() {
+  return state.placements.length
+    ? Math.max(...state.placements.map((p) => p.sheet)) + 1
+    : 0;
+}
+function render() {
+  const parts = state.parts,
+    s = readSettings();
+  $("drawing-name").textContent = state.name;
+  $("drawing-meta").textContent = state.meta;
+  let draws = [],
+    w,
+    h;
+  const layout = state.view === "layout" && state.placements.length;
+  if (layout) {
+    w = s.width;
+    h = s.height;
+    const map = new Map(parts.map((p) => [p.id, p]));
+    draws = state.placements
+      .filter((t) => t.sheet === state.sheet)
+      .map((t) => ({ p: map.get(t.id), t }));
+  } else {
+    const cols = Math.min(3, parts.length || 1),
+      cellW = Math.max(1, ...parts.map((p) => p.size.w)) + 22,
+      cellH = Math.max(1, ...parts.map((p) => p.size.h)) + 26;
+    w = cols * cellW - 15;
+    h = Math.ceil(parts.length / cols) * cellH - 12;
+    draws = parts.map((p, i) => ({
+      p,
+      t: { x: (i % cols) * cellW, y: Math.floor(i / cols) * cellH, angle: 0 },
+    }));
+  }
+  const pad = Math.max(w, h) * 0.035;
+  $("canvas").setAttribute(
+    "viewBox",
+    `${-pad} ${-pad} ${w + 2 * pad} ${h + 2 * pad}`,
+  );
+  $("canvas").innerHTML =
+    (layout
+      ? `<rect class="sheet-outline" x="0" y="0" width="${w}" height="${h}"/><rect class="sheet-margin" x="${s.margin}" y="${s.margin}" width="${w - 2 * s.margin}" height="${h - 2 * s.margin}"/>`
+      : "") +
+    draws
+      .map(
+        ({ p, t }) =>
+          `<g class="drawing-part ${state.selected === p.id ? "selected" : ""}" data-part="${p.id}" transform="translate(${t.x} ${t.y}) rotate(${t.angle})"><polygon class="part-hit" points="${pathPoints(p.outer)}"/><g class="part-detail">${partSVG(p)}</g>${!layout ? `<text class="part-label" x="0" y="${p.size.h + 11}">${esc(p.name)}</text>` : ""}</g>`,
+      )
+      .join("");
+  $("canvas-label").textContent = layout
+    ? `SHEET ${state.sheet + 1} / 板材 · ${w} × ${h} mm`
+    : "PART REVIEW / 零件檢查 · 已分開顯示";
+  $("canvas-caption").textContent = layout
+    ? "Full size export · 原尺寸輸出 · Preview guides excluded / 不含預覽邊框"
+    : "Select a part to check its details · 點選零件，核對內部線條";
+  $("parts-list").innerHTML = parts
+    .map(
+      (p) =>
+        `<button class="part-row ${state.selected === p.id ? "active" : ""}" data-part="${p.id}"><svg viewBox="-3 -3 ${p.size.w + 6} ${p.size.h + 6}"><polygon points="${pathPoints(p.outer)}" fill="#eef3fe" stroke="#859bc2" stroke-width="2"/></svg><span><strong>${esc(p.name)}</strong><small>${p.size.w.toFixed(1)} × ${p.size.h.toFixed(1)} mm</small></span></button>`,
+    )
+    .join("");
+  const p = parts.find((p) => p.id === state.selected),
+    t = state.placements.find((t) => t.id === state.selected);
+  const layers = p
+    ? [...new Set(p.entities.map((e) => e.layer || "0"))].map(esc).join(", ")
+    : "";
+  $("inspector").innerHTML = p
+    ? `<strong>${esc(p.name)}</strong>${p.entities.length} entities / 圖元<br>Layers: ${layers}<br>${esc(p.group)}${t ? `<br>Sheet ${t.sheet + 1} · ${Math.round(t.angle)}° / 第 ${t.sheet + 1} 張` : ""}`
+    : "";
+  $("count").textContent = parts.length;
+  $("part-total").textContent = parts.length;
+  $("sheets").textContent = sheetCount() || "—";
+  $("unplaced").textContent = state.placements.length
+    ? parts.length - state.placements.length
+    : "—";
+  let validSettings = true;
+  try {
+    checkSettings(s);
+  } catch {
+    validSettings = false;
+  }
+  $("nest").disabled =
+    !$("confirmed").checked || state.running || state.invalid || !validSettings;
+  $("nest").hidden = state.running;
+  $("stop").hidden = !state.running;
+  $("file").disabled = state.running;
+  $("demo").disabled = state.running;
+  $("confirmed").disabled = state.running;
+  for (const id of [
+    "width",
+    "height",
+    "gap",
+    "margin",
+    "preset",
+    "rotation",
+    "units",
+  ])
+    $(id).disabled = state.running;
+  $("export").disabled =
+    state.running ||
+    state.invalid ||
+    state.placements.length !== parts.length ||
+    !parts.length;
+  $("export-format").querySelector('[value="dxf"]').disabled =
+    state.format === "svg";
+  if (state.format === "svg") $("export-format").value = "svg";
+  $("review-tab").classList.toggle("active", !layout);
+  $("layout-tab").classList.toggle("active", !!layout);
+  $("layout-tab").disabled = !state.placements.length;
+  $("sheet-navigation").hidden = !layout || sheetCount() < 2;
+  $("sheet-number").textContent =
+    `Sheet ${state.sheet + 1} of ${sheetCount()} · 第 ${state.sheet + 1} / ${sheetCount()} 張`;
+  $("previous").disabled = state.sheet === 0;
+  $("next").disabled = state.sheet >= sheetCount() - 1;
+}
+function stop() {
+  state.running = false;
+  if (engine) {
+    engine.remove();
+    engine = null;
+  }
+  clearTimeout(stopTimer);
+  clearInterval(ticker);
+  $("progress").style.width = "0%";
+  const n = state.parts.length - state.placements.length;
+  if (state.placements.length) {
+    setStatus(n ? `${n} unplaced / 未排` : "Ready to export / 可匯出");
+    if (n)
+      message(
+        `${n} parts were not placed. Try a larger sheet or finer rotations. Export remains disabled. / ${n} 件零件未排好，請嘗試較大板材或更細旋轉級距。`,
+      );
+  } else setStatus("No layout yet / 未有排位");
+  render();
+}
+function invalidate() {
+  stop();
+  state.placements = [];
+  state.view = "review";
+  state.sheet = 0;
+  state.invalid = false;
+  message();
+  setStatus("Review parts / 確認零件");
+  render();
+}
+function beginNest() {
+  if (state.running || state.invalid || !$("confirmed").checked) return;
+  let settings;
+  try {
+    settings = checkSettings(readSettings());
+  } catch (e) {
+    message(e.message, true);
+    return;
+  }
+  stop();
+  state.placements = [];
+  state.sheet = 0;
+  state.running = true;
+  state.run++;
+  const run = state.run;
+  message();
+  setStatus("Searching / 排料中");
+  started = performance.now();
+  engine = document.createElement("iframe");
+  engine.hidden = true;
+  engine.src = "engine/index.html";
+  engine.title = "Nesting calculation";
+  document.body.append(engine);
+  engine.onload = () =>
+    engine?.contentWindow.postMessage(
+      {
+        type: "start",
+        run,
+        parts: state.parts.map((p) => ({ id: p.id, outer: p.outer })),
+        settings,
+      },
+      location.origin,
+    );
+  ticker = setInterval(() => {
+    $("progress").style.width =
+      `${Math.min(100, (performance.now() - started) / 300)}%`;
+    setStatus(
+      `Searching ${Math.round((performance.now() - started) / 1000)}s / 排料中`,
+    );
+  }, 500);
+  stopTimer = setTimeout(() => {
+    stop();
+    if (!state.placements.length)
+      message(
+        "No valid layout in 30 seconds. Try 90° rotations, fewer parts or a larger sheet. / 30 秒內未找到有效排位，可試 90°、較少零件或較大板材。",
+        true,
+      );
+  }, 30000);
+  render();
+}
+window.addEventListener("message", (event) => {
+  if (
+    event.origin !== location.origin ||
+    !engine ||
+    event.source !== engine.contentWindow ||
+    !state.running
+  )
+    return;
+  const data = event.data;
+  if (
+    data.type === "engine-error" ||
+    (data.type === "error" && data.run === state.run)
+  ) {
+    stop();
+    message(
+      `Nesting calculation failed: ${data.message} / 排料運算失敗。`,
+      true,
+    );
+    return;
+  }
+  if (data.run !== state.run || data.type !== "layout") return;
+  const placements = data.placements;
+  const errors = validateLayout(state.parts, placements, readSettings());
+  if (errors.length) {
+    console.warn("Rejected layout", errors);
+    return;
+  }
+  const score = (a) => {
+    const sheets = a.length ? Math.max(...a.map((t) => t.sheet)) + 1 : 0;
+    return (
+      (state.parts.length - a.length) * 1e9 +
+      sheets * 1e6 +
+      a.reduce((s, t) => s + t.y, 0)
+    );
+  };
+  if (!state.placements.length || score(placements) < score(state.placements)) {
+    state.placements = placements;
+    state.view = "layout";
+    state.sheet = Math.min(state.sheet, sheetCount() - 1);
+    render();
+  }
+});
+async function importFile(file) {
+  if (state.running || !file) return;
+  if (file.size > 5 * 1024 * 1024) {
+    message("Maximum file size: 5 MB / 檔案上限 5 MB", true);
+    return;
+  }
+  const text = await file.text();
+  lastFile = { name: file.name, text };
+  loadText(file.name, text);
+}
+function loadText(name, text) {
+  invalidate();
+  $("confirmed").checked = false;
+  try {
+    const result = /\.dxf$/i.test(name)
+      ? parseDXF(text, $("units").value)
+      : /\.svg$/i.test(name)
+        ? parseSVG(text)
+        : (() => {
+            throw new Error("Choose a DXF or SVG file / 請選擇 DXF 或 SVG");
+          })();
+    state.parts = result.parts;
+    state.selected = result.parts[0]?.id;
+    state.format = result.format;
+    state.name = name;
+    state.meta = result.unitLabel;
+    message(result.warnings.join("\n"));
+    setStatus("Review parts / 確認零件");
+  } catch (e) {
+    state.invalid = true;
+    message(
+      `Import rejected / 匯入失敗\n${e.message}\nPrevious drawing remains on screen. / 畫面仍顯示上一份圖檔。`,
+      true,
+    );
+    setStatus("Import rejected / 匯入失敗");
+  }
+  render();
+}
+function loadDemo() {
+  invalidate();
+  lastFile = null;
+  state.parts = sampleParts();
+  state.selected = "part-1";
+  state.format = "dxf";
+  state.name = "Sample · Scenic paper kit";
+  state.meta = "示範圖檔 · 12 paper scenery parts / 紙材模型零件";
+  $("confirmed").checked = false;
+  message(
+    "Sample data: wall panels, braces, arches and bases. / 示範：牆板、撐架、拱片及底板。",
+  );
+  render();
+}
+function download() {
+  const settings = checkSettings(readSettings());
+  const errors = validateLayout(state.parts, state.placements, settings);
+  if (errors.length || state.placements.length !== state.parts.length) {
+    message(
+      "Export blocked: layout validation failed. / 排位未通過檢查，暫不能輸出。",
+      true,
+    );
+    return;
+  }
+  const format = $("export-format").value;
+  const content =
+    format === "dxf"
+      ? exportDXF(state.parts, state.placements, state.sheet, settings)
+      : exportSVG(state.parts, state.placements, state.sheet, settings);
+  const a = document.createElement("a");
+  const url = URL.createObjectURL(
+    new Blob([content], {
+      type: format === "svg" ? "image/svg+xml" : "application/dxf",
+    }),
+  );
+  a.href = url;
+  a.download = `${state.name.replace(/\.(dxf|svg)$/i, "").replace(/[^\p{L}\p{N}._-]+/gu, "-")}-sheet-${state.sheet + 1}.${format}`;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+document.addEventListener("click", (e) => {
+  const row = e.target.closest("[data-part]");
+  if (row) {
+    state.selected = row.dataset.part;
+    const t = state.placements.find((t) => t.id === state.selected);
+    if (t && state.view === "layout") state.sheet = t.sheet;
+    render();
+  }
+});
+$("confirmed").addEventListener("change", render);
+$("demo").onclick = loadDemo;
+$("nest").onclick = beginNest;
+$("stop").onclick = stop;
+$("export").onclick = () => {
+  try {
+    download();
+  } catch (e) {
+    message(e.message, true);
+  }
+};
+$("file").onchange = (e) => {
+  importFile(e.target.files[0]);
+  e.target.value = "";
+};
+const drop = $("dropzone");
+for (const name of ["dragenter", "dragover"])
+  drop.addEventListener(name, (e) => {
+    e.preventDefault();
+    drop.classList.add("dragging");
+  });
+for (const name of ["dragleave", "drop"])
+  drop.addEventListener(name, (e) => {
+    e.preventDefault();
+    drop.classList.remove("dragging");
+  });
+drop.addEventListener("drop", (e) => importFile(e.dataTransfer.files[0]));
+for (const id of ["width", "height", "gap", "margin", "rotation"])
+  $(id).addEventListener("change", () => {
+    if (id === "width" || id === "height") $("preset").value = "custom";
+    invalidate();
+  });
+$("preset").onchange = () => {
+  const p = $("preset").value;
+  if (p === "a3") {
+    $("width").value = 420;
+    $("height").value = 297;
+  }
+  if (p === "a4") {
+    $("width").value = 297;
+    $("height").value = 210;
+  }
+  invalidate();
+};
+$("units").onchange = () => {
+  if (lastFile && /\.dxf$/i.test(lastFile.name))
+    loadText(lastFile.name, lastFile.text);
+};
+$("review-tab").onclick = () => {
+  state.view = "review";
+  render();
+};
+$("layout-tab").onclick = () => {
+  state.view = "layout";
+  render();
+};
+$("previous").onclick = () => {
+  state.sheet--;
+  render();
+};
+$("next").onclick = () => {
+  state.sheet++;
+  render();
+};
+render();
+if (document.modelContext?.registerTool) {
+  const lifecycle = new AbortController();
+  const tools = [
+    {
+      name: "read_nesting_status",
+      description: "Read the drawing, settings, part count and layout status.",
+      inputSchema: {
+        type: "object",
+        properties: {},
+        additionalProperties: false,
+      },
+      annotations: { readOnlyHint: true, untrustedContentHint: true },
+      execute: () => ({
+        drawing: state.name,
+        parts: state.parts.length,
+        placed: state.placements.length,
+        sheets: sheetCount(),
+        running: state.running,
+        settings: readSettings(),
+      }),
+    },
+    {
+      name: "configure_nesting_sheet",
+      description:
+        "Set sheet dimensions, clearance and margin; clears the previous layout.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          width: { type: "number", minimum: 10, maximum: 3000 },
+          height: { type: "number", minimum: 10, maximum: 3000 },
+          gap: { type: "number", minimum: 0.1, maximum: 50 },
+          margin: { type: "number", minimum: 0 },
+        },
+        required: ["width", "height", "gap", "margin"],
+        additionalProperties: false,
+      },
+      annotations: { readOnlyHint: false },
+      execute: (input) => {
+        if (state.running)
+          throw new Error("Stop nesting before changing settings.");
+        if (
+          !input ||
+          Object.keys(input).some(
+            (k) => !["width", "height", "gap", "margin"].includes(k),
+          )
+        )
+          throw new Error("Invalid settings");
+        const s = checkSettings({
+          ...input,
+          rotations: readSettings().rotations,
+        });
+        for (const key of ["width", "height", "gap", "margin"])
+          $(key).value = s[key];
+        $("preset").value = "custom";
+        invalidate();
+        return { settings: readSettings(), layoutCleared: true };
+      },
+    },
+    {
+      name: "export_nesting_sheet",
+      description:
+        "Produce full-scale SVG or DXF file content for one validated sheet. Does not upload or send files.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          format: { type: "string", enum: ["svg", "dxf"] },
+          sheet: { type: "integer", minimum: 1 },
+        },
+        required: ["format", "sheet"],
+        additionalProperties: false,
+      },
+      annotations: { readOnlyHint: true, untrustedContentHint: true },
+      execute: (input) => {
+        if (
+          !input ||
+          !["svg", "dxf"].includes(input.format) ||
+          !Number.isInteger(input.sheet) ||
+          input.sheet < 1 ||
+          input.sheet > sheetCount() ||
+          Object.keys(input).some((k) => !["format", "sheet"].includes(k))
+        )
+          throw new Error("Invalid export options");
+        if (
+          state.running ||
+          state.invalid ||
+          state.placements.length !== state.parts.length ||
+          validateLayout(state.parts, state.placements, readSettings()).length
+        )
+          throw new Error("A complete validated layout is required.");
+        const content =
+          input.format === "dxf"
+            ? exportDXF(
+                state.parts,
+                state.placements,
+                input.sheet - 1,
+                readSettings(),
+              )
+            : exportSVG(
+                state.parts,
+                state.placements,
+                input.sheet - 1,
+                readSettings(),
+              );
+        return {
+          filename: `paper-nest-sheet-${input.sheet}.${input.format}`,
+          content,
+        };
+      },
+    },
+  ];
+  for (const tool of tools)
+    try {
+      Promise.resolve(
+        document.modelContext.registerTool(tool, { signal: lifecycle.signal }),
+      ).catch((error) =>
+        console.warn("Agent tool registration:", tool.name, error.message),
+      );
+    } catch (error) {
+      console.warn("Agent tool registration:", tool.name, error.message);
+    }
+  window.addEventListener("pagehide", () => lifecycle.abort(), { once: true });
+}

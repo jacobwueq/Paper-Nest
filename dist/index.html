@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Paper Nest · 紙材排料</title>
+    <meta
+      name="description"
+      content="Arrange DXF and SVG paper-cutting parts on full-size sheets. Review geometry, nest and export locally in your browser."
+    />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="style.css" />
+    <script src="vendor/path-data-polyfill.js"></script>
+    <script type="module" src="app.js?v=0.1.1"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="./"
+        ><svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true">
+          <path
+            d="M3 3h13v9H3zM19 3h8v24H16v-9H3v9h8V13h8z"
+            fill="currentColor"
+          /></svg
+        ><span>Paper Nest <small>紙材排料</small></span></a
+      ><span class="version">WORKING PROTOTYPE · 0.1</span
+      ><span class="local"
+        >Files stay in your browser <span>檔案於本機處理</span></span
+      >
+    </header>
+    <main class="workspace">
+      <aside class="controls">
+        <section>
+          <div class="section-title">
+            <span class="step">01</span>
+            <h2>Drawing <small>圖檔</small></h2>
+          </div>
+          <label class="import-area" id="dropzone" for="file"
+            ><svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
+              <path d="M12 16V3m-5 5 5-5 5 5M4 15v6h16v-6" /></svg
+            ><strong>Import DXF / SVG</strong><span>匯入或拖放圖檔</span
+            ><small>Vector geometry · max. 5 MB</small></label
+          ><input id="file" type="file" accept=".dxf,.svg" hidden />
+          <button id="demo" class="text-button">
+            Load sample drawing · 載入示範
+          </button>
+          <div class="field">
+            <label for="units">DXF drawing units <small>圖面單位</small></label
+            ><select id="units">
+              <option value="auto">Read from file · 自動</option>
+              <option value="1">Millimetres · mm</option>
+              <option value="10">Centimetres · cm</option>
+              <option value="25.4">Inches · in</option>
+              <option value="1000">Metres · m</option>
+            </select>
+          </div>
+          <p class="help">
+            2D outlines + attached detail. Convert text to outlines first.<br />二維輪廓及附屬刻線；文字請先轉輪廓。
+          </p>
+        </section>
+        <section>
+          <div class="section-title">
+            <span class="step">02</span>
+            <h2>Sheet <small>板材</small></h2>
+          </div>
+          <div class="field">
+            <label for="preset">Sheet size <small>板材尺寸</small></label
+            ><select id="preset">
+              <option value="a3">A3 · 420 × 297 mm</option>
+              <option value="a4">A4 · 297 × 210 mm</option>
+              <option value="custom">Custom · 自訂</option>
+            </select>
+          </div>
+          <div class="field-pair">
+            <div class="field">
+              <label for="width">Width · 闊</label>
+              <div class="unit-input">
+                <input
+                  id="width"
+                  type="number"
+                  value="420"
+                  min="10"
+                  max="3000"
+                  step="0.1"
+                /><span>mm</span>
+              </div>
+            </div>
+            <div class="field">
+              <label for="height">Height · 高</label>
+              <div class="unit-input">
+                <input
+                  id="height"
+                  type="number"
+                  value="297"
+                  min="10"
+                  max="3000"
+                  step="0.1"
+                /><span>mm</span>
+              </div>
+            </div>
+          </div>
+          <div class="field-pair">
+            <div class="field">
+              <label for="gap">Part gap · 間距</label>
+              <div class="unit-input">
+                <input
+                  id="gap"
+                  type="number"
+                  value="2"
+                  min="0.1"
+                  max="50"
+                  step="0.1"
+                /><span>mm</span>
+              </div>
+            </div>
+            <div class="field">
+              <label for="margin">Margin · 留邊</label>
+              <div class="unit-input">
+                <input
+                  id="margin"
+                  type="number"
+                  value="5"
+                  min="0"
+                  max="100"
+                  step="0.5"
+                /><span>mm</span>
+              </div>
+            </div>
+          </div>
+          <div class="field">
+            <label for="rotation"
+              >Rotation search <small>旋轉角度級距</small></label
+            ><select id="rotation">
+              <option value="24">Every 15° · 每 15°</option>
+              <option value="12">Every 30° · 每 30°</option>
+              <option value="4">Every 90° · 每 90°</option>
+              <option value="1">Keep orientation · 固定方向</option>
+            </select>
+          </div>
+          <p class="help">
+            Original scale · No mirroring<br />保持原尺寸 · 不鏡像
+          </p>
+        </section>
+        <section class="arrange-section">
+          <div class="section-title">
+            <span class="step">03</span>
+            <h2>Arrange <small>排料</small></h2>
+          </div>
+          <label class="review-check"
+            ><input id="confirmed" type="checkbox" /><span
+              >I’ve checked the part groups<br /><small
+                >已確認零件及內部線條歸屬</small
+              ></span
+            ></label
+          >
+          <button id="nest" class="primary" disabled>
+            Arrange parts <span>自動排料 ↗</span></button
+          ><button id="stop" class="secondary" hidden>
+            Stop & keep result · 停止並保留
+          </button>
+          <p class="help" id="run-note">
+            Searches for 30 seconds. Stop when ready.<br />搜尋 30
+            秒，可提早停止。
+          </p>
+        </section>
+      </aside>
+      <section class="drawing-area">
+        <div class="drawing-toolbar">
+          <div>
+            <h1 id="drawing-name">Sample · Scenic paper kit</h1>
+            <p id="drawing-meta">
+              示範圖檔 · Select a part to check its attached detail
+            </p>
+          </div>
+          <div class="view-tabs" role="group" aria-label="Drawing view">
+            <button id="review-tab" class="active">
+              Parts <small>零件</small></button
+            ><button id="layout-tab" disabled>
+              Layout <small>排料</small>
+            </button>
+          </div>
+        </div>
+        <div
+          class="message"
+          id="message"
+          role="status"
+          aria-live="polite"
+          hidden
+        ></div>
+        <div class="canvas-wrap" id="canvas-wrap">
+          <div class="canvas-label" id="canvas-label">
+            SOURCE DRAWING / 原圖
+          </div>
+          <svg id="canvas" aria-label="Drawing preview" role="img"></svg>
+          <div class="canvas-caption" id="canvas-caption">
+            Click a part · 點選零件
+          </div>
+        </div>
+        <div class="sheet-navigation" id="sheet-navigation" hidden>
+          <button id="previous" aria-label="Previous sheet">←</button
+          ><span id="sheet-number"></span
+          ><button id="next" aria-label="Next sheet">→</button>
+        </div>
+        <div class="result-strip">
+          <div>
+            <span class="stat-label">PARTS / 零件</span
+            ><strong id="count">—</strong>
+          </div>
+          <div>
+            <span class="stat-label">SHEETS / 板材</span
+            ><strong id="sheets">—</strong>
+          </div>
+          <div>
+            <span class="stat-label">UNPLACED / 未排</span
+            ><strong id="unplaced">—</strong>
+          </div>
+          <div class="status-stat">
+            <span class="stat-label">STATUS / 狀態</span
+            ><strong id="status">Ready to review</strong>
+          </div>
+        </div>
+        <div class="progress-track" aria-hidden="true">
+          <div id="progress"></div>
+        </div>
+      </section>
+      <aside class="parts-panel">
+        <div class="parts-heading">
+          <h2>Parts <small>零件清單</small></h2>
+          <span id="part-total"></span>
+        </div>
+        <p class="help">
+          Select to inspect. Details travel together.<br />點選檢查；內部線條會一齊移動。
+        </p>
+        <div id="parts-list" class="parts-list"></div>
+        <div id="inspector" class="inspector"></div>
+        <div class="export-area">
+          <label for="export-format"
+            >Export current sheet <small>匯出目前板材</small></label
+          ><select id="export-format">
+            <option value="svg">SVG · 1:1</option>
+            <option value="dxf">DXF · 1:1</option></select
+          ><button id="export" class="secondary" disabled>
+            Download sheet · 下載板材圖 ↓
+          </button>
+          <p class="help">
+            Sheet border is a preview guide only.<br />板邊框只供預覽，不會輸出。
+          </p>
+        </div>
+      </aside>
+    </main>
+    <footer>
+      <span>1:1 · MILLIMETRES / 毫米</span
+      ><span
+        >Prototype: check exports in CAD before cutting. 試作版：切割前請於 CAD
+        核對。</span
+      ><a href="about.html" target="_blank" rel="noopener"
+        >Support & credits · 支援範圍</a
+      >
+    </footer>
+  </body>
+</html>

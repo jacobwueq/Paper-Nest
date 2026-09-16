@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Paper Nest — Support / 支援範圍</title>
+    <link rel="icon" href="favicon.svg" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="./">← Paper Nest <small>紙材排料</small></a>
+    </header>
+    <main
+      style="
+        max-width: 850px;
+        margin: 40px auto;
+        padding: 0 24px;
+        line-height: 1.8;
+      "
+    >
+      <h1>Prototype support / 試作版支援範圍</h1>
+      <p>
+        A browser-based feasibility prototype for paper laser-cutting layouts.
+        Files are processed in this browser and are not uploaded. Refreshing
+        closes the drawing.<br />用於紙材 laser cut
+        嘅排料試作版。圖檔只喺瀏覽器內處理，不會上載；重新整理會清除目前圖檔。
+      </p>
+      <h2>Supported / 已支援</h2>
+      <ul>
+        <li>
+          ASCII DXF: model-space XY geometry, LINE, ARC, CIRCLE and zero-width
+          LWPOLYLINE, including bulges.<br />ASCII DXF：Model Space XY
+          平面直線、圓弧、圓及零闊度 LWPOLYLINE，包含 bulge。
+        </li>
+        <li>
+          AutoCAD GROUP and simple uniformly scaled, unmirrored BLOCK/INSERT.
+          Imported blocks are expanded; exported parts use GROUP.<br />AutoCAD
+          GROUP，以及等比、非鏡像嘅簡單 BLOCK／INSERT。匯入 block
+          會展開；輸出零件使用 GROUP。
+        </li>
+        <li>
+          SVG paths, rectangles, circles, ellipses, lines, polylines, polygons
+          and nested transforms. Explicit dimensions are required; text and
+          styles must be expanded.<br />SVG 路徑、基本圖形及巢狀
+          transform；需要明確尺寸，文字及 styles 請先展開。
+        </li>
+        <li>
+          Closed boundaries assembled from matching endpoints, contained holes
+          and open engraving; explicit groups take priority.<br />由相同端點組成嘅封閉輪廓、內部孔洞及開放刻線；指定群組優先。
+        </li>
+        <li>
+          Irregular-outline nesting, multiple sheets, 15°/30°/90°/fixed
+          rotation, part gap and sheet margin.<br />不規則輪廓排料、多張板材、旋轉級距、零件間距及留邊。
+        </li>
+        <li>
+          DXF input → DXF or SVG; SVG input → SVG. Sheet guides are excluded
+          from exports.<br />DXF 輸入可匯出 DXF／SVG；SVG 輸入可匯出
+          SVG。板邊預覽線不會輸出。
+        </li>
+      </ul>
+      <h2>Before cutting / 切割前</h2>
+      <p>
+        Confirm inferred part groups and a known physical dimension. Unsupported
+        content is rejected rather than silently removed. The prototype does not
+        guarantee the mathematical optimum. It does not place parts inside
+        holes, merge cut lines, compensate kerf or generate machine toolpaths. A
+        real AutoCAD round trip remains required for production approval.<br />請核對推斷分組及已知尺寸。不支援內容會拒絕匯入，不會略過。試作版不保證數學最佳解，亦未提供孔內排料、共線切割、kerf
+        補償或機器刀路。正式使用前仍需於 AutoCAD 完成實際往返驗證。
+      </p>
+      <p>
+        Collision curves are approximated to a nominal 0.02 mm tolerance, with
+        additional clearance during nesting. Supported original DXF curves and
+        original SVG shapes are retained for export. Disconnected explicit
+        groups use a conservative envelope.<br />碰撞計算曲線使用名義 0.02 mm
+        精度，排料另加間隙。輸出保留受支援原始 DXF 曲線及 SVG
+        圖形。不相連嘅指定群組使用保守外邊界。
+      </p>
+      <p>
+        Limits: 5 MB, 80 parts and 3,000 entities per drawing; 30-second search.
+        Very complex drawings may take longer to import.<br />上限：5 MB、80
+        件零件及 3,000 個圖元；每次排料搜尋 30 秒。複雜圖檔匯入可能較慢。
+      </p>
+      <h2>Open-source credits / 開源鳴謝</h2>
+      <p>
+        Nesting engine:
+        <a href="https://github.com/Jack000/SVGnest">SVGNest</a>, Jack Qiao,
+        MIT. <a href="engine/LICENSE.txt">Licence</a>. Its bundled utilities
+        retain their original notices, including Clipper, Parallel.js,
+        SVGPathSeg and geometry utilities.<br />排料引擎採用
+        SVGNest；保留所有隨附程式庫嘅授權聲明。
+      </p>
+      <p>
+        SVG path measurement:
+        <a href="https://github.com/jarek-foksa/path-data-polyfill"
+          >path-data-polyfill</a
+        >
+        by Jarosław Foksa, MIT; includes credited path normalisation utilities.
+      </p>
+      <p>
+        DXF indexed colour table:
+        <a href="https://github.com/gdsestimating/dxf-parser">dxf-parser</a>,
+        MIT. <a href="vendor/dxf-parser-LICENSE.txt">Licence</a>.
+      </p>
+    </main>
+  </body>
+</html>
