@@ -266,3 +266,29 @@ and occupied bounding area are reported separately.
 固定時間搜尋唔代表完成時間或最佳解；單次完整幾何／評分計算可能超出時間預算。
 目前最值得再優化嘅方向係增量餘料佔用格／row spans，重用未移動零件嘅資料，
 保持現有解析度，而唔係減少候選或降低精度。
+
+## v0.9.1 profiling / 第二輪效能量度
+
+Offcut collection now reuses the unchanged input-part occupancy mask within each
+collection and removes duplicate continuation states before their expensive
+analysis. Resolution, candidate sources, tie retention and ranking are unchanged.
+A frozen v0.9 collector tests complete-report equivalence.
+
+餘料計算重用單次 collection 內原始零件佔用格，並提前排除重複分割狀態；
+解析度、候選來源、保留平手方案數量及評分規則不變。
+
+Reproduce the current-baseline comparison:
+
+- `node scripts/benchmark-v09.mjs` (reconstructs published v0.9 from Git; three runs
+  each of baseline OFF/new OFF/baseline ON/new ON at 8/24/64 parts)
+- `node scripts/benchmark-v09-offcuts.mjs` (fixed-work exact-output comparison)
+- `node scripts/check-v09-search-parity.mjs` (after baseline reconstruction)
+
+These measure the compaction stage, with four orientations and no pair clusters;
+they do not measure the complete browser workflow or guarantee 360-angle timings.
+24/64-part fixed-work offcut calculation was about 1.94/1.99× faster on the tested
+machine; eight-part speed was unchanged. Whole-workflow improvement is smaller.
+
+以上係四方向、關閉 pair clusters 嘅 compaction 測試，唔係完整瀏覽器流程或
+360 方向速度保證。24／64 件固定工作量餘料計算約快 1.94／1.99 倍；8 件不變。
+完整流程改善幅度較細。原始數據及雙語報告會寫入 outputs。

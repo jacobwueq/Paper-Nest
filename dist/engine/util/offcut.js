@@ -53,7 +53,9 @@
     padding = 0,
     minSide = 0,
     findAlternatives = false,
+    context = null,
   ) {
+    context?.count?.("offcutAnalyses");
     var x = sheet.x || 0,
       y = sheet.y || 0;
     if (!polygons.length)
@@ -91,8 +93,17 @@
     var rows = Math.max(1, Math.ceil(sheet.h / step));
     var dx = sheet.w / cols,
       dy = sheet.h / rows;
-    var occupied = new Uint8Array(cols * rows);
-    for (var poly of polygons) {
+    // This context belongs to one collect() call: sheet and padding are fixed.
+    // Original parts never change while additional offcuts are marked occupied.
+    var reuse = !!context?.baseMask;
+    var occupied = reuse
+      ? context.baseMask.slice()
+      : new Uint8Array(cols * rows);
+    context?.count?.(
+      reuse ? "offcutBaseRasterReuses" : "offcutBaseRasterBuilds",
+    );
+    for (var poly of reuse ? polygons.slice(context.baseCount) : polygons) {
+      context?.count?.("offcutRasterisedPolygons");
       var b = bounds(poly);
       var first = Math.max(0, Math.floor((b.y - padding - y) / dy));
       var last = Math.min(rows - 1, Math.floor((b.y + b.h + padding - y) / dy));
@@ -130,6 +141,8 @@
         occupied.fill(1, row * cols + begin, row * cols + end + 1);
       }
     }
+    if (context && !reuse && polygons.length === context.baseCount)
+      context.baseMask = occupied.slice();
     var heights = new Uint16Array(cols),
       stackStarts = new Uint16Array(cols + 1),
       stackHeights = new Uint16Array(cols + 1);
@@ -186,8 +199,9 @@
     { x: r.x + r.w, y: r.y + r.h },
     { x: r.x, y: r.y + r.h },
   ];
-  function collect(polygons, sheet, padding = 0, minSide = 20) {
-    const first = analyse(polygons, sheet, padding, minSide, true);
+  function collect(polygons, sheet, padding = 0, minSide = 20, options = {}) {
+    const context = { baseCount: polygons.length, count: options.count };
+    const first = analyse(polygons, sheet, padding, minSide, true, context);
     // Keep alternative equal-largest placements alive, comparing their next
     // rectangles before pruning. Bounds apply to search alternatives, never to
     // the number of recovered rectangles. The grid itself is conservative.
@@ -222,7 +236,7 @@
           next.push({
             rectangles: [...state.rectangles, r],
             blocked,
-            next: analyse(blocked, sheet, padding, minSide, true),
+            next: null,
             done: false,
           });
         }
@@ -233,10 +247,24 @@
           .map((r) => [r.x, r.y, r.w, r.h].map((v) => v.toFixed(7)).join(","))
           .sort()
           .join(";");
-        if (seen.has(key)) return false;
+        if (seen.has(key)) {
+          context.count?.("offcutDuplicateStatesAvoided");
+          return false;
+        }
         seen.add(key);
         return true;
       });
+      // Same first-wins deduplication as before, before the expensive analysis.
+      for (const state of next)
+        if (!state.next)
+          state.next = analyse(
+            state.blocked,
+            sheet,
+            padding,
+            minSide,
+            true,
+            context,
+          );
       const ranked = (s) => [
         ...s.rectangles.map((r) => r.area),
         ...(s.done ? [] : [s.next.rectangle.area]),

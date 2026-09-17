@@ -1,7 +1,7 @@
-import { mergeCommonLines } from "./common-line.js?v=0.9.0";
-import { prepareCommonLineExport } from "./common-line-export.js?v=0.9.0";
-import { partSVG, transform, fmt, esc } from "./geometry.js?v=0.9.0";
-import { checkedOffcuts } from "./offcut-export.js?v=0.9.0";
+import { mergeCommonLines } from "./common-line.js?v=0.9.1";
+import { prepareCommonLineExport } from "./common-line-export.js?v=0.9.1";
+import { partSVG, transform, fmt, esc } from "./geometry.js?v=0.9.1";
+import { checkedOffcuts } from "./offcut-export.js?v=0.9.1";
 function offcutLines(cuts, options) {
   return mergeCommonLines(
     cuts.flatMap((points) =>

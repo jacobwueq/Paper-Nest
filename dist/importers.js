@@ -1,4 +1,4 @@
-import { svgStraightSegments } from "./common-edge.js?v=0.9.0";
+import { svgStraightSegments } from "./common-edge.js?v=0.9.1";
 import {
   bounds,
   area,
@@ -8,7 +8,7 @@ import {
   simplePolygon,
   sampleArc,
   TOL,
-} from "./geometry.js?v=0.9.0";
+} from "./geometry.js?v=0.9.1";
 import aciColours from "./vendor/aci-colours.js";
 const fail = (s) => {
   throw new Error(s);
