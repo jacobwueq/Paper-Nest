@@ -1,0 +1,6 @@
+(princ (strcat "\nPAPER_NEST_ENTITIES=" (itoa (if (ssget "_X") (sslength (ssget "_X")) 0))))
+(princ (strcat "\nPAPER_NEST_UNITS=" (itoa (getvar "INSUNITS"))))
+_.AUDIT
+_N
+_.QUIT
+_Y

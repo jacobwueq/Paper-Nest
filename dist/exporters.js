@@ -1,7 +1,16 @@
-import { mergeCommonLines } from "./common-line.js?v=0.9.1";
-import { prepareCommonLineExport } from "./common-line-export.js?v=0.9.1";
-import { partSVG, transform, fmt, esc } from "./geometry.js?v=0.9.1";
-import { checkedOffcuts } from "./offcut-export.js?v=0.9.1";
+import {
+  dxfDocument,
+  dxfTags,
+  DXF_MODEL_SPACE,
+  DXF_GROUP_DICTIONARY,
+  DXF_LAYER_TABLE,
+  DXF_PLOT_STYLE,
+  DXF_MATERIAL,
+} from "./dxf-document.js?v=0.9.2";
+import { mergeCommonLines } from "./common-line.js?v=0.9.2";
+import { prepareCommonLineExport } from "./common-line-export.js?v=0.9.2";
+import { partSVG, transform, fmt, esc } from "./geometry.js?v=0.9.2";
+import { checkedOffcuts } from "./offcut-export.js?v=0.9.2";
 function offcutLines(cuts, options) {
   return mergeCommonLines(
     cuts.flatMap((points) =>
@@ -63,9 +72,9 @@ export function exportDXF(parts, placements, sheet, settings, options = {}) {
   const entities = [],
     groups = [];
   let handle = 65536;
-  const tags = (...values) => values.map(String).join("\n") + "\n";
+  const tags = dxfTags;
   for (const t of placements.filter((p) => p.sheet === sheet)) {
-    const groupHandle = (1048576 + groups.length).toString(16),
+    const groupHandle = (handle++).toString(16),
       members = [];
     const part = map.get(t.id);
     const point = (p) => {
@@ -93,6 +102,8 @@ export function exportDXF(parts, placements, sheet, settings, options = {}) {
         groupHandle,
         102,
         "}",
+        330,
+        DXF_MODEL_SPACE,
         100,
         "AcDbEntity",
         8,
@@ -218,6 +229,8 @@ export function exportDXF(parts, placements, sheet, settings, options = {}) {
             "LINE",
             5,
             (handle++).toString(16),
+            330,
+            DXF_MODEL_SPACE,
             100,
             "AcDbEntity",
             8,
@@ -248,6 +261,8 @@ export function exportDXF(parts, placements, sheet, settings, options = {}) {
           "LWPOLYLINE",
           5,
           (handle++).toString(16),
+          330,
+          DXF_MODEL_SPACE,
           100,
           "AcDbEntity",
           8,
@@ -273,7 +288,9 @@ export function exportDXF(parts, placements, sheet, settings, options = {}) {
         0,
         "LAYER",
         5,
-        (4096 + i).toString(16),
+        (handle++).toString(16),
+        330,
+        DXF_LAYER_TABLE,
         100,
         "AcDbSymbolTableRecord",
         100,
@@ -287,127 +304,37 @@ export function exportDXF(parts, placements, sheet, settings, options = {}) {
         ...(color.trueColor !== null ? [420, color.trueColor] : []),
         6,
         "CONTINUOUS",
+        370,
+        -3,
+        390,
+        DXF_PLOT_STYLE,
+        347,
+        DXF_MATERIAL,
       ),
     )
     .join("");
-  return (
-    tags(
-      0,
-      "SECTION",
-      2,
-      "HEADER",
-      9,
-      "$ACADVER",
-      1,
-      "AC1018",
-      9,
-      "$INSUNITS",
-      70,
-      4,
-      9,
-      "$MEASUREMENT",
-      70,
-      1,
-      9,
-      "$LUNITS",
-      70,
-      2,
-      0,
-      "ENDSEC",
-      0,
-      "SECTION",
-      2,
-      "TABLES",
-      0,
-      "TABLE",
-      2,
-      "LTYPE",
-      70,
-      1,
-      0,
-      "LTYPE",
-      100,
-      "AcDbSymbolTableRecord",
-      100,
-      "AcDbLinetypeTableRecord",
-      2,
-      "CONTINUOUS",
-      70,
-      0,
-      3,
-      "Solid line",
-      72,
-      65,
-      73,
-      0,
-      40,
-      0,
-      0,
-      "ENDTAB",
-      0,
-      "TABLE",
-      2,
-      "LAYER",
-      70,
-      layerSet.size,
-    ) +
-    layers +
-    tags(0, "ENDTAB", 0, "ENDSEC", 0, "SECTION", 2, "ENTITIES") +
-    entities.join("") +
-    tags(
-      0,
-      "ENDSEC",
-      0,
-      "SECTION",
-      2,
-      "OBJECTS",
-      0,
-      "DICTIONARY",
-      5,
-      "1",
-      330,
-      "0",
-      100,
-      "AcDbDictionary",
-      281,
-      1,
-      3,
-      "ACAD_GROUP",
-      350,
-      "2",
-      0,
-      "DICTIONARY",
-      5,
-      "2",
-      330,
-      "1",
-      100,
-      "AcDbDictionary",
-      281,
-      1,
-    ) +
-    groups.map((g) => tags(3, g.name, 350, g.handle)).join("") +
-    groups
-      .map(
-        (g) =>
-          tags(
-            0,
-            "GROUP",
-            5,
-            g.handle,
-            330,
-            "2",
-            100,
-            "AcDbGroup",
-            300,
-            "Paper Nest part",
-            70,
-            0,
-            71,
-            1,
-          ) + g.members.map((h) => tags(340, h)).join(""),
-      )
-      .join("") +
-    tags(0, "ENDSEC", 0, "EOF")
-  );
+  return dxfDocument({
+    entities,
+    groups,
+    width: settings.width,
+    height: settings.height,
+    handseed: handle.toString(16),
+    layers:
+      tags(
+        0,
+        "TABLE",
+        2,
+        "LAYER",
+        5,
+        DXF_LAYER_TABLE,
+        330,
+        "0",
+        100,
+        "AcDbSymbolTable",
+        70,
+        layerSet.size,
+      ) +
+      layers +
+      tags(0, "ENDTAB"),
+  });
 }

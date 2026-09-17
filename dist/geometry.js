@@ -3,8 +3,8 @@ import {
   objectKey,
   poseKey,
   count,
-} from "./nesting-profile.js?v=0.9.1";
-import { commonContactClearance } from "./common-contact.js?v=0.9.1";
+} from "./nesting-profile.js?v=0.9.2";
+import { commonContactClearance } from "./common-contact.js?v=0.9.2";
 // Geometry is expressed in millimetres, with screen Y pointing down.
 export const TOL = 0.02;
 export const near = (a, b, e = 1e-5) => Math.hypot(a.x - b.x, a.y - b.y) <= e;

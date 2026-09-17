@@ -1,18 +1,18 @@
-import { compactPairClusters } from "./pair-cluster.js?v=0.9.1";
-import { profiled, count } from "./nesting-profile.js?v=0.9.1";
+import { compactPairClusters } from "./pair-cluster.js?v=0.9.2";
+import { profiled, count } from "./nesting-profile.js?v=0.9.2";
 import {
   contactFromCandidate,
   replacePlacement,
-} from "./common-contact.js?v=0.9.1";
-import { commonEdgeCandidates } from "./common-edge.js?v=0.9.1";
-import { pocketTranslations } from "./pocket-search.js?v=0.9.1";
+} from "./common-contact.js?v=0.9.2";
+import { commonEdgeCandidates } from "./common-edge.js?v=0.9.2";
+import { pocketTranslations } from "./pocket-search.js?v=0.9.2";
 import {
   bounds,
   transformed,
   clearance,
   validateLayout,
-} from "./geometry.js?v=0.9.1";
-import { evaluateLayout, improves } from "./search.js?v=0.9.1";
+} from "./geometry.js?v=0.9.2";
+import { evaluateLayout, improves } from "./search.js?v=0.9.2";
 
 // Remove two parts together, keep several alternatives for the first, and
 // reinsert the second. Only complete, improved layouts leave this function.
