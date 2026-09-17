@@ -1,5 +1,7 @@
-import { transformed } from "./geometry.js?v=0.7.0";
-import "./engine/util/offcut.js?v=0.7.0";
+import { cached, objectKey, poseKey } from "./nesting-profile.js?v=0.9.0";
+import { cuttingMetrics } from "./cut-metrics.js?v=0.9.0";
+import { transformed } from "./geometry.js?v=0.9.0";
+import "./engine/util/offcut.js?v=0.9.0";
 const offcut = globalThis.PaperOffcut;
 export const ROTATIONS = [1, 4, 12, 24, 72, 360];
 export function searchSettings(rotations) {
@@ -8,6 +10,17 @@ export function searchSettings(rotations) {
   return { rotations, seconds: 20 };
 }
 export function evaluateLayout(parts, placements, settings) {
+  return cached(
+    "layoutScoring",
+    objectKey(parts) +
+      ":" +
+      JSON.stringify(settings) +
+      ":" +
+      placements.map(poseKey).sort().join("|"),
+    () => evaluateLayoutImpl(parts, placements, settings),
+  );
+}
+function evaluateLayoutImpl(parts, placements, settings) {
   const byId = new Map(parts.map((p) => [p.id, p]));
   const sheets = new Map();
   for (const t of placements) {
@@ -30,10 +43,26 @@ export function evaluateLayout(parts, placements, settings) {
         settings.minOffcutSide ?? 20,
       ),
     }));
-  return {
-    score: offcut.score(parts.length - placements.length, reports),
-    sheets: reports,
-  };
+  const score = offcut.score(parts.length - placements.length, reports);
+  if (settings.commonEdgeMode !== true) return { score, sheets: reports };
+  const commonEdgeWeight = settings.commonEdgeWeight ?? 1;
+  const cutLengthWeight = settings.cutLengthWeight ?? 1;
+  if (
+    ![commonEdgeWeight, cutLengthWeight].every(
+      (v) => Number.isFinite(v) && v >= 0,
+    )
+  )
+    throw new Error("Cutting weights must be finite and non-negative");
+  const cutting = cuttingMetrics(parts, placements, settings);
+  // Preserve material priorities, then compare cutting cost before the final
+  // positional compactness tie-breaker. No cutting reward can buy a worse box.
+  score.splice(
+    4,
+    0,
+    cutLengthWeight * cutting.estimatedCutLength -
+      commonEdgeWeight * cutting.sharedLength,
+  );
+  return { score, sheets: reports, cutting };
 }
 export function layoutScore(parts, placements, settings) {
   return evaluateLayout(parts, placements, settings).score;

@@ -9,9 +9,9 @@
       content="Arrange DXF and SVG paper-cutting parts on full-size sheets. Review geometry, nest and export locally in your browser."
     />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="style.css?v=0.7.0" />
+    <link rel="stylesheet" href="style.css?v=0.9.0" />
     <script src="vendor/path-data-polyfill.js"></script>
-    <script type="module" src="app.js?v=0.7.0"></script>
+    <script type="module" src="app.js?v=0.9.0"></script>
   </head>
   <body>
     <header class="topbar">
@@ -22,7 +22,7 @@
             fill="currentColor"
           /></svg
         ><span>Paper Nest <small>紙材排料</small></span></a
-      ><span class="version">WORKING PROTOTYPE · 0.7</span
+      ><span class="version">WORKING PROTOTYPE · 0.9</span
       ><span class="local"
         >Files stay in your browser <span>檔案於本機處理</span></span
       >
@@ -184,6 +184,35 @@
               ></span
             ></label
           >
+          <label class="review-check"
+            ><input id="common-edge" type="checkbox" /><span
+              >Common-edge nesting<br /><small
+                >共邊排料 · 指定共邊可零間距</small
+              ></span
+            ></label
+          >
+          <label class="review-check"
+            ><input id="pair-clusters" type="checkbox" checked disabled /><span
+              >Move shared pairs together<br /><small
+                >成對移動 · Pair cluster prototype</small
+              ></span
+            ></label
+          >
+          <div class="field">
+            <label for="common-edge-weight">Shared-edge weight · 共邊權重</label
+            ><input
+              id="common-edge-weight"
+              type="number"
+              value="1"
+              min="0"
+              max="100"
+              step="0.1"
+              disabled
+            />
+          </div>
+          <p class="help">
+            Material use stays first. Other boundaries keep the part gap.<br />物料利用優先；其他外邊維持設定間距。
+          </p>
           <p class="help">
             100% keeps original dimensions.<br />100% 保持原尺寸；鏡像預設關閉。
           </p>
@@ -269,14 +298,15 @@
         <div id="offcut-summary" class="offcut-summary" hidden>
           <span class="offcut-key" aria-hidden="true"></span>
           <div>
-            <strong>Reusable offcuts / 可回收餘料 · 最多兩塊</strong>
+            <strong>Reusable offcuts / 可回收餘料</strong>
             <span id="offcut-size"></span>
           </div>
           <small
-            >Maximise the combined area of two rectangles.<br />優先保留兩塊長方形餘料嘅合計面積。</small
+            >Largest rectangle first, then the next largest. No fixed count.<br />最大塊優先，再逐塊比較；不限兩塊。</small
           >
         </div>
         <div id="offcut-list" class="offcut-list" hidden></div>
+        <p id="cut-summary" class="help" hidden></p>
         <div class="progress-track" aria-hidden="true">
           <div id="progress"></div>
         </div>
@@ -309,6 +339,13 @@
             Optional green cut layer. Tick to freeze and select offcuts.<br />可選綠色切割
             layer；勾選後固定排位，選擇要回收嘅餘料。
           </p>
+          <label class="review-check"
+            ><input id="merge-common-lines" type="checkbox" /><span
+              >Cut shared sections once<br /><small
+                >共線段只切一次 · 保留非重疊部分</small
+              ></span
+            ></label
+          >
           <button id="export" class="secondary" disabled>
             Download sheet · 下載板材圖 ↓
           </button>

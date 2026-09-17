@@ -1,3 +1,10 @@
+import {
+  cached,
+  objectKey,
+  poseKey,
+  count,
+} from "./nesting-profile.js?v=0.9.0";
+import { commonContactClearance } from "./common-contact.js?v=0.9.0";
 // Geometry is expressed in millimetres, with screen Y pointing down.
 export const TOL = 0.02;
 export const near = (a, b, e = 1e-5) => Math.hypot(a.x - b.x, a.y - b.y) <= e;
@@ -21,7 +28,10 @@ export function transform(p, t) {
     y = p.y * scale;
   return { x: x * c - y * s + t.x, y: x * s + y * c + t.y };
 }
-export const transformed = (p, t) => p.map((v) => transform(v, t));
+export const transformed = (p, t) =>
+  cached("transformedGeometry", objectKey(p) + ":" + poseKey(t), () =>
+    p.map((v) => transform(v, t)),
+  );
 export const pathPoints = (p) => p.map((v) => `${v.x},${v.y}`).join(" ");
 export const esc = (s) =>
   String(s).replace(
@@ -105,6 +115,7 @@ export function containsPolygon(outer, inner) {
   );
 }
 export function clearance(a, b, limit) {
+  count("collisionTests");
   const ba = bounds(a),
     bb = bounds(b);
   if (
@@ -174,8 +185,37 @@ export function validateLayout(parts, placements, settings) {
     for (let j = i + 1; j < polygons.length; j++) {
       const a = polygons[i],
         b = polygons[j];
-      if (a.t.sheet === b.t.sheet && !clearance(a.poly, b.poly, settings.gap))
-        errors.push(`${a.p.name} / ${b.p.name}: clearance / 間距不足`);
+      if (a.t.sheet === b.t.sheet) {
+        const result =
+          settings.commonEdgeMode === true
+            ? commonContactClearance(a.p, a.t, b.p, b.t, settings.gap)
+            : {
+                valid: clearance(a.poly, b.poly, settings.gap),
+                reason: "clearance",
+              };
+        if (!result.valid)
+          errors.push(
+            settings.commonEdgeMode === true
+              ? `${a.p.name} / ${b.p.name}: ${result.reason} / 接觸或間距無效`
+              : `${a.p.name} / ${b.p.name}: clearance / 間距不足`,
+          );
+      }
+    }
+  if (settings.commonEdgeMode === true)
+    for (const { t } of polygons) {
+      if (t.sharedEdges !== undefined && !Array.isArray(t.sharedEdges)) {
+        errors.push("Invalid shared metadata");
+        continue;
+      }
+      for (const d of t.sharedEdges || [])
+        if (
+          !d ||
+          d.otherPartId === t.id ||
+          !polygons.some(
+            (q) => q.t.id === d.otherPartId && q.t.sheet === t.sheet,
+          )
+        )
+          errors.push("Unknown or cross-sheet shared partner");
     }
   return [...new Set(errors)];
 }

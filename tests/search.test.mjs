@@ -42,7 +42,7 @@ test("all selected angles are available immediately without timed stages", () =>
     assert.deepEqual(searchSettings(rotations), { rotations, seconds: 20 });
   assert.throws(() => searchSettings(0));
 });
-test("combined offcut area selects the more reusable arrangement", () => {
+test("largest offcut has priority over the remaining area", () => {
   const ps = [
     { id: "a", outer: rect(70, 20) },
     { id: "b", outer: rect(70, 20) },
@@ -51,7 +51,7 @@ test("combined offcut area selects the more reusable arrangement", () => {
   const compact = [t("a", 0, 0), t("b", 72, 0)];
   const report = evaluateLayout(ps, compact, settings);
   assert.ok(improves(report.score, layoutScore(ps, narrow, settings)));
-  assert.ok(report.sheets[0].recoveredArea > 36000);
+  assert.ok(report.sheets[0].rectangle.area > 35900);
   assert.ok(improves(report.score, layoutScore(ps, [t("a")], settings)));
   assert.ok(
     improves(
@@ -366,12 +366,8 @@ test("worker fitness uses reusable offcut and prioritises complete placement", (
   assert.equal(result.placements.length, 1);
   assert.equal(result.fitness[0], 0);
   assert.equal(result.fitness[1], 1);
-  assert.ok(result.fitness[2] < -9000);
-  assert.ok(
-    result.fitness[2] < result.fitness[3],
-    "the second rectangle increases the combined recoverable area",
-  );
-  assert.equal(result.fitness[4], 200);
+  assert.equal(result.fitness[2][0], 9000);
+  assert.equal(result.fitness[3], 200);
   worker.nfpCache = {};
   assert.ok(
     ctx.PaperOffcut.compare(worker.placePaths([p]).fitness, result.fitness) > 0,
@@ -470,8 +466,7 @@ test("worker and UI measure the same raw contours and clearances", () => {
     [t("a", 5, 5)],
     { width: 100, height: 100, margin: 5, gap: 2 },
   );
-  for (let i = 0; i < parentScore.length; i++)
-    assert.ok(Math.abs(result.fitness[i] - parentScore[i]) < 1e-6);
+  assert.equal(ctx.PaperOffcut.compare(result.fitness, parentScore), 0);
 });
 
 test("expanded collision bin preserves physical margins without charging the gap twice", () => {
@@ -522,6 +517,5 @@ test("expanded collision bin preserves physical margins without charging the gap
     [t("a", 5, 5)],
     { width: 100, height: 100, margin: 5, gap: 2 },
   );
-  for (let i = 0; i < expected.length; i++)
-    assert.ok(Math.abs(result.fitness[i] - expected[i]) < 1e-6);
+  assert.equal(ctx.PaperOffcut.compare(result.fitness, expected), 0);
 });

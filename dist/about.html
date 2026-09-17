@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Paper Nest — Support / 支援範圍</title>
     <link rel="icon" href="favicon.svg" />
-    <link rel="stylesheet" href="style.css?v=0.7.0" />
+    <link rel="stylesheet" href="style.css?v=0.9.0" />
   </head>
   <body>
     <header class="topbar">
@@ -77,8 +77,8 @@
         Confirm inferred part groups and a known physical dimension. Unsupported
         content is rejected rather than silently removed. The prototype does not
         guarantee the mathematical optimum. It does not place parts inside
-        holes, merge cut lines, compensate kerf or generate machine toolpaths. A
-        real AutoCAD round trip remains required for production approval.<br />請核對推斷分組及已知尺寸。不支援內容會拒絕匯入，不會略過。試作版不保證數學最佳解，亦未提供孔內排料、共線切割、kerf
+        holes, compensate kerf or generate machine toolpaths. A real AutoCAD
+        round trip remains required for production approval.<br />請核對推斷分組及已知尺寸。不支援內容會拒絕匯入，不會略過。試作版不保證數學最佳解，亦未提供孔內排料、kerf
         補償或機器刀路。正式使用前仍需於 AutoCAD 完成實際往返驗證。
       </p>
       <p>
@@ -95,18 +95,18 @@
         Limits: 5 MB, 80 parts and 3,000 entities per drawing. Each search has a
         20-second improvement budget; a usable result can appear earlier.
         Continue from the best result, or stop at any time. Objectives, in
-        order: place all parts, minimise sheet count, maximise the combined area
-        of up to two usable rectangular offcuts per sheet, favour a larger
-        primary rectangle when totals match, then compact the occupied footprint
-        and pull individual parts closer together. A background compaction pass
-        searches contour contact positions inside concave gaps and tries moving
-        pairs together while checking clearances. Pair search uses a bounded
-        candidate beam and time budget. Existing results are replaced only by a
-        better validated result.<br />
+        order: place all parts, minimise sheet count, maximise the largest
+        rectangular offcut, then the second, third and so on. Smaller pieces
+        cannot compensate for a smaller first piece. Equivalent sequences are
+        decided by compactness. A background compaction pass searches contour
+        contact positions inside concave gaps and tries moving pairs together
+        while checking clearances. Pair search uses a bounded candidate beam and
+        time budget. Existing results are replaced only by a better validated
+        result.<br />
         上限：5 MB、80 件零件及 3,000 個圖元。每次最多改善 20
         秒，有結果即顯示；可隨時停止或承接結果繼續。
-        依次優先放齊零件、減少板材張數、最大化每板最多兩塊長方形餘料嘅合計面積；
-        合計相同時保留更大第一塊，再收緊零件。
+        依次優先放齊零件、減少板材張數，再由最大塊起逐塊比較第二、第三塊……；
+        細餘料唔能夠抵銷最大塊縮細，序列相同時再收緊零件。
         背景按真實輪廓搜尋凹位，亦會嘗試兩件一齊重排；雙件搜尋有候選數及時間限制。
         每步核對間距，只保留完整而且更好嘅有效結果。
       </p>
@@ -116,12 +116,15 @@
         strips are measured directly; other rectangles use a grid with at most
         256 cells along the longest sheet edge. Curved and concave boundaries
         can make this estimate smaller than the true available rectangle. Holes
-        are excluded. Horizontal and vertical splits jointly compare two
-        rectangles; exact edge-strip alternatives are also checked. Both sides
-        must meet the selected minimum short edge (default 20 mm; 0 means no
-        size restriction). This applies to optimisation, marking and export.
-        There is no percentage threshold.<br />綠色區域係保留間距嘅餘料估算。
-        用最長邊最多 256 格嘅網格共同搜尋兩塊長方形，亦比較精確邊帶。
+        are excluded. Repeatedly reserve the largest clear rectangle until none
+        meets the minimum short edge. There is no fixed count. Equal-area
+        positions are compared using subsequent offcuts, retaining up to 32
+        spatially spread candidates and eight tied continuations. These search
+        limits do not limit the number of offcuts. Both sides must meet the
+        selected minimum short edge (default 20 mm; 0 removes this size filter).
+        No percentage threshold applies.<br />逐塊找最大長方形，直到冇符合最短邊尺寸嘅餘料，冇固定塊數上限。
+        同面積位置會比較後續餘料；搜尋最多保留 32
+        個分散候選及八條同分延續路徑，並非限制餘料數目。
         兩邊均需達到所選最短邊尺寸（預設 20 mm，0
         不限），排料、顯示及匯出使用相同設定。 不使用面積百分比門檻，孔洞不計。
         演算法未能證明全域最大餘料，亦未優化任意形狀餘料。
@@ -137,6 +140,28 @@
         下載會包含所選封閉框，放於綠色 OFFCUT_CUT DXF layer 或 SVG group。
         若原圖已有同名 layer，新 layer 會加編號，保留原圖設定。
         匯出前會核對切割框同零件及其他已選餘料嘅間距。
+      </p>
+      <h2>Common edges &amp; pair clusters / 共邊及成對排位</h2>
+      <p>
+        Enable Common-edge nesting to allow designated straight shared
+        boundaries at zero gap. All other boundaries retain normal spacing.
+        Material and offcut priorities stay ahead of cutting-length benefits.
+        Pair clusters temporarily move two already connected parts by their
+        union exterior, then restore the original child placements. The
+        prototype does not build recursive clusters or use unions with holes.<br />開啟共邊排料後，指定直邊可零間距；其他邊維持正常間距。物料及餘料優先於切線收益。Pair
+        cluster 用兩件零件嘅 union
+        外輪廓一齊移動，再還原原有零件；第一版不做遞迴合併或含內孔嘅 union。
+      </p>
+      <p>
+        Cut shared sections once is an independent export option. It splits
+        overlapping straight sections in final coordinates and keeps each shared
+        interval once, retaining curves and separate layers. Source polygons
+        remain intact; the exported cutting paths may be open segments.
+        Common-edge endpoints have a local incident-edge run-out allowance. No
+        kerf compensation or piercing order is generated.<br />「共線段只切一次」係獨立匯出選項；按最終座標拆開重疊直線，只保留共享段一次，曲線及不同
+        layer 保留。原始 polygon
+        不變，輸出切線可變成開放線段。共邊端點有局部相連邊豁免；未加入 kerf
+        補償或穿孔順序。
       </p>
       <h2>Open-source credits / 開源鳴謝</h2>
       <p>

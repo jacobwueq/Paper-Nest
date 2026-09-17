@@ -1,5 +1,6 @@
-import * as vendor from "./engine/util/clipper.js?v=0.7.0";
-import { bounds } from "./geometry.js?v=0.7.0";
+import { cached, count, measured } from "./nesting-profile.js?v=0.9.0";
+import * as vendor from "./engine/util/clipper.js?v=0.9.0";
+import { bounds } from "./geometry.js?v=0.9.0";
 const C = globalThis.ClipperLib || vendor.default,
   S = 100000;
 const path = (p) =>
@@ -15,6 +16,12 @@ export function pocketTranslations(
   gap,
   shouldStop = () => false,
 ) {
+  count("nfpRequests");
+  return measured("nfp", () =>
+    pocketTranslationsImpl(moving, obstacles, sheet, gap, shouldStop),
+  );
+}
+function pocketTranslationsImpl(moving, obstacles, sheet, gap, shouldStop) {
   const b = bounds(moving);
   const left = sheet.x - b.x,
     top = sheet.y - b.y;
@@ -42,7 +49,10 @@ export function pocketTranslations(
     );
     offset.Execute(grown, (gap + 0.01) * S);
     for (const a of grown) {
-      const sums = C.Clipper.MinkowskiSum(negative, positive(a), true);
+      count("minkowskiRequests");
+      const sums = cached("minkowski", JSON.stringify([negative, a]), () =>
+        C.Clipper.MinkowskiSum(negative, positive(a), true),
+      );
       forbidden.push(...sums);
       // Minkowski's boundary sweep can leave an artificial interior hole.
       // Include the filled obstacle at one moving vertex to fill that interior,

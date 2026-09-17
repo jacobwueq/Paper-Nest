@@ -217,7 +217,7 @@ function PlacementWorker(binPolygon, paths, ids, rotations, config, nfpCache){
 				
 				// Cache the occupied bounds once per part, not once per candidate.
 				// Fast seed: compact the occupied envelope. Complete layouts and the
-				// contour repair worker use the shared two-offcut area objective.
+				// contour repair worker use the shared largest-first offcut sequence.
 				var occupiedPoints=[];
 				for(m=0;m<placed.length;m++) for(n=0;n<placed[m].length;n++)
 					occupiedPoints.push({x:placed[m][n].x+placements[m].x,y:placed[m][n].y+placements[m].y});
@@ -292,7 +292,6 @@ function PlacementWorker(binPolygon, paths, ids, rotations, config, nfpCache){
 		
 		// there were parts that couldn't be placed
 		// Placing one more part outranks any number of extra sheets.
-		if(!self.config.offcut || self.config.offcut.minSide === undefined) reports.forEach(function(r){delete r.rectangles;});
 		var fitness = PaperOffcut.score(paths.length, reports);
 		
 		return {placements: allplacements, fitness: fitness, paths: paths, area: binarea };

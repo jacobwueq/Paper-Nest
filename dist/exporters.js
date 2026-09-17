@@ -1,21 +1,64 @@
-import { partSVG, transform, fmt, esc } from "./geometry.js?v=0.7.0";
-import { checkedOffcuts } from "./offcut-export.js?v=0.7.0";
+import { mergeCommonLines } from "./common-line.js?v=0.9.0";
+import { prepareCommonLineExport } from "./common-line-export.js?v=0.9.0";
+import { partSVG, transform, fmt, esc } from "./geometry.js?v=0.9.0";
+import { checkedOffcuts } from "./offcut-export.js?v=0.9.0";
+function offcutLines(cuts, options) {
+  return mergeCommonLines(
+    cuts.flatMap((points) =>
+      points.map((start, i) => ({
+        start,
+        end: points[(i + 1) % points.length],
+      })),
+    ),
+    { tolerance: options.lineTolerance ?? 1e-6 },
+  );
+}
 export function exportSVG(parts, placements, sheet, settings, options = {}) {
   const cuts = checkedOffcuts(parts, placements, sheet, settings, options);
-  const map = new Map(parts.map((p) => [p.id, p]));
+  const cleanup =
+    (options.mergeCommonLines ?? settings.commonEdgeMode) === true;
+  const exportParts = cleanup
+    ? prepareCommonLineExport(parts, placements, sheet, {
+        tolerance: options.lineTolerance ?? 1e-6,
+      })
+    : parts;
+  const map = new Map(exportParts.map((p) => [p.id, p]));
   return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${settings.width}mm" height="${settings.height}mm" viewBox="0 0 ${settings.width} ${settings.height}">\n<title>Paper Nest — Sheet ${sheet + 1} — millimetres</title>\n${placements
     .filter((t) => t.sheet === sheet)
     .map(
       (t) =>
         `<g id="${esc(t.id)}" transform="translate(${fmt(t.x)} ${fmt(t.y)}) rotate(${fmt(t.angle)}) scale(${fmt((t.scale ?? 1) * (t.mirrored ? -1 : 1))} ${fmt(t.scale ?? 1)})">${partSVG(map.get(t.id))}</g>`,
     )
-    .join(
-      "\n",
-    )}${cuts.length ? `\n<g id="OFFCUT_CUT" fill="none" stroke="#008000" stroke-width="0.1">${cuts.map((points, i) => `<polygon id="offcut-${i + 1}" points="${points.map((p) => `${fmt(p.x)},${fmt(p.y)}`).join(" ")}"/>`).join("\n")}</g>` : ""}\n</svg>`;
+    .join("\n")}${
+    cuts.length
+      ? `\n<g id="OFFCUT_CUT" fill="none" stroke="#008000" stroke-width="0.1">${
+          cleanup
+            ? offcutLines(cuts, options)
+                .map(
+                  (s) =>
+                    `<path d="M${fmt(s.start.x)} ${fmt(s.start.y)} L${fmt(s.end.x)} ${fmt(s.end.y)}"/>`,
+                )
+                .join("\n")
+            : cuts
+                .map(
+                  (points, i) =>
+                    `<polygon id="offcut-${i + 1}" points="${points.map((p) => `${fmt(p.x)},${fmt(p.y)}`).join(" ")}"/>`,
+                )
+                .join("\n")
+        }</g>`
+      : ""
+  }\n</svg>`;
 }
 export function exportDXF(parts, placements, sheet, settings, options = {}) {
   const cuts = checkedOffcuts(parts, placements, sheet, settings, options);
-  const map = new Map(parts.map((p) => [p.id, p]));
+  const cleanup =
+    (options.mergeCommonLines ?? settings.commonEdgeMode) === true;
+  const exportParts = cleanup
+    ? prepareCommonLineExport(parts, placements, sheet, {
+        tolerance: options.lineTolerance ?? 1e-6,
+      })
+    : parts;
+  const map = new Map(exportParts.map((p) => [p.id, p]));
   const layerSet = new Map([["0", { aci: 7, trueColor: null }]]);
   const entities = [],
     groups = [];
@@ -167,7 +210,38 @@ export function exportDXF(parts, placements, sheet, settings, options = {}) {
       suffix = 2;
     while (layerSet.has(layer)) layer = `OFFCUT_CUT_${suffix++}`;
     layerSet.set(layer, { aci: 3, trueColor: null });
-    for (const points of cuts) {
+    if (cleanup) {
+      for (const s of offcutLines(cuts, options))
+        entities.push(
+          tags(
+            0,
+            "LINE",
+            5,
+            (handle++).toString(16),
+            100,
+            "AcDbEntity",
+            8,
+            layer,
+            62,
+            256,
+            100,
+            "AcDbLine",
+            10,
+            fmt(s.start.x),
+            20,
+            fmt(settings.height - s.start.y),
+            30,
+            0,
+            11,
+            fmt(s.end.x),
+            21,
+            fmt(settings.height - s.end.y),
+            31,
+            0,
+          ),
+        );
+    }
+    for (const points of cleanup ? [] : cuts) {
       entities.push(
         tags(
           0,

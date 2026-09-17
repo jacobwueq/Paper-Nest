@@ -1,11 +1,18 @@
-import { pocketTranslations } from "./pocket-search.js?v=0.7.0";
+import { compactPairClusters } from "./pair-cluster.js?v=0.9.0";
+import { profiled, count } from "./nesting-profile.js?v=0.9.0";
+import {
+  contactFromCandidate,
+  replacePlacement,
+} from "./common-contact.js?v=0.9.0";
+import { commonEdgeCandidates } from "./common-edge.js?v=0.9.0";
+import { pocketTranslations } from "./pocket-search.js?v=0.9.0";
 import {
   bounds,
   transformed,
   clearance,
   validateLayout,
-} from "./geometry.js?v=0.7.0";
-import { evaluateLayout, improves } from "./search.js?v=0.7.0";
+} from "./geometry.js?v=0.9.0";
+import { evaluateLayout, improves } from "./search.js?v=0.9.0";
 
 // Remove two parts together, keep several alternatives for the first, and
 // reinsert the second. Only complete, improved layouts leave this function.
@@ -39,6 +46,7 @@ function repairPairs(parts, initial, settings, options) {
     for (const angle of angles) {
       if (now() >= pairDeadline) return;
       const base = { ...t, x: 0, y: 0, angle };
+      if (settings.commonEdgeMode === true) delete base.sharedEdges;
       const points = pocketTranslations(
         transformed(byId.get(t.id).outer, base),
         obstacles,
@@ -72,6 +80,8 @@ function repairPairs(parts, initial, settings, options) {
         sampled.push(p);
         if (now() >= pairDeadline) return;
         const candidate = [...fixed, { ...base, ...p }];
+        count("generatedCandidates");
+        count("pairRepairCandidates");
         if (!validateLayout(parts, candidate, settings).length) yield candidate;
       }
     }
@@ -117,7 +127,17 @@ function repairPairs(parts, initial, settings, options) {
       b = placements[j];
     pairDeadline = Math.min(deadline, now() + 450);
     visited++;
-    const fixed = placements.filter((t, k) => k !== i && k !== j);
+    const fixed = placements
+      .filter((t, k) => k !== i && k !== j)
+      .map((t) => {
+        if (settings.commonEdgeMode !== true) return t;
+        return {
+          ...t,
+          sharedEdges: (t.sharedEdges || []).filter(
+            (d) => d.otherPartId !== a.id && d.otherPartId !== b.id,
+          ),
+        };
+      });
     let best = null;
     for (const [first, second] of [
       [a, b],
@@ -162,6 +182,11 @@ function repairPairs(parts, initial, settings, options) {
 // Coordinate descent in drawing coordinates. All moves are collision checked
 // against the retained contours; no simplified or re-created drawing is exported.
 export function compactLayout(parts, initial, settings, options = {}) {
+  return profiled(options, () =>
+    compactLayoutImpl(parts, initial, settings, options),
+  );
+}
+function compactLayoutImpl(parts, initial, settings, options) {
   const now = options.now || (() => performance.now());
   const deadline = now() + (options.milliseconds ?? 1800);
   const byId = new Map(parts.map((p) => [p.id, p]));
@@ -170,8 +195,22 @@ export function compactLayout(parts, initial, settings, options = {}) {
     return { placements, changed: false };
   let report = evaluateLayout(parts, placements, settings),
     changed = false;
+  let clusterResult = null;
+  if (settings.commonEdgeMode === true && settings.pairClusters === true) {
+    clusterResult = compactPairClusters(parts, placements, settings, {
+      ...options,
+      now,
+      deadline: Math.min(deadline, now() + 450),
+    });
+    if (clusterResult.changed) {
+      placements = clusterResult.placements;
+      report = clusterResult.report;
+      changed = true;
+    }
+  }
   let visited = 0;
   const startOffset = options.startOffset || 0;
+  let commonEdgeCandidateCount = 0;
   const guard = 0.025 * Math.max(1, settings.scale ?? 1);
   const margin = settings.margin + guard;
   const gap = settings.gap + guard * 2;
@@ -210,7 +249,8 @@ export function compactLayout(parts, initial, settings, options = {}) {
         (p, i) => i !== index && placements[i].sheet === current.sheet,
       );
       const neighbourBounds = neighbours.map(bounds);
-      const seen = new Set();
+      const seen = new Set(),
+        exactSeen = new Set();
       let best = null;
       function valid(poly, b) {
         if (
@@ -232,21 +272,73 @@ export function compactLayout(parts, initial, settings, options = {}) {
           return clearance(poly, other, gap);
         });
       }
-      function consider(t, known = false) {
+      function consider(t, known = false, contact = null) {
+        count("generatedCandidates");
+        const exactKey = JSON.stringify([
+          t.x,
+          t.y,
+          t.angle,
+          t.scale ?? 1,
+          !!t.mirrored,
+          t.sheet,
+          known,
+          contact,
+        ]);
+        if (options.optimise !== false && exactSeen.has(exactKey)) {
+          count("earlyDuplicateCandidates");
+          return;
+        }
+        exactSeen.add(exactKey);
         const poly = transformed(source, t),
           b = bounds(poly);
-        if (!known && !valid(poly, b)) return;
+        const trial =
+          settings.commonEdgeMode === true
+            ? replacePlacement(placements, t, contact)
+            : placements.slice();
+        if (settings.commonEdgeMode === true) {
+          if (validateLayout(parts, trial, settings).length) return;
+        } else {
+          if (!known && !valid(poly, b)) return;
+          trial[index] = t;
+        }
         if (now() >= deadline) return;
         const key = [t.x, t.y, t.angle, !!t.mirrored]
           .map((v) => (typeof v === "number" ? v.toFixed(4) : v))
           .join(":");
-        if (seen.has(key)) return;
+        if (seen.has(key)) {
+          count("duplicateCandidates");
+          return;
+        }
         seen.add(key);
-        const trial = placements.slice();
-        trial[index] = t;
         const metrics = evaluateLayout(parts, trial, settings);
         if (improves(metrics.score, (best?.report || report).score))
           best = { placements: trial, report: metrics };
+      }
+      // Explicit contacts use the common-boundary validator only when enabled.
+      // Disabled mode retains its original geometry gate and scoring path.
+      for (const fixed of placements) {
+        if (fixed.id === current.id || fixed.sheet !== current.sheet) continue;
+        for (const candidate of commonEdgeCandidates(
+          byId.get(current.id),
+          current,
+          byId.get(fixed.id),
+          fixed,
+          {
+            rotations: settings.rotations,
+            shouldStop: () => now() >= deadline,
+          },
+        )) {
+          commonEdgeCandidateCount++;
+          options.onCandidate?.(candidate);
+          consider(
+            candidate.placement,
+            false,
+            settings.commonEdgeMode === true
+              ? contactFromCandidate(candidate)
+              : null,
+          );
+        }
+        if (now() >= deadline) break;
       }
       // Evaluate pocket candidates before local nudges. No bounding-box proxy
       // or top-eight shortlist may discard a legal pocket before full scoring.
@@ -410,6 +502,10 @@ export function compactLayout(parts, initial, settings, options = {}) {
     changed,
     incomplete: now() >= deadline,
     nextPairOffset,
+    commonEdgeCandidateCount,
+    clusterCount: clusterResult?.clusterCount || 0,
+    clustersMoved: clusterResult?.clustersMoved || 0,
+    clusterCandidateCount: clusterResult?.clusterCandidateCount || 0,
     nextOffset: (startOffset + visited) % Math.max(1, placements.length),
   };
 }

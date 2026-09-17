@@ -48,7 +48,10 @@ test("compaction closes internal gaps without shrinking the largest offcut", () 
   });
   assert.equal(result.changed, true);
   assert.ok(result.placements[1].y < 18);
-  assert.ok(result.report.score[2] <= before.score[2] + 1e-6);
+  assert.ok(
+    result.report.sheets[0].rectangle.area >=
+      before.sheets[0].rectangle.area - 1e-6,
+  );
   assert.ok(
     result.report.sheets[0].occupiedArea < before.sheets[0].occupiedArea * 0.5,
   );

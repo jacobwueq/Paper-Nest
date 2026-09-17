@@ -1,3 +1,4 @@
+import { svgStraightSegments } from "./common-edge.js?v=0.9.0";
 import {
   bounds,
   area,
@@ -7,7 +8,7 @@ import {
   simplePolygon,
   sampleArc,
   TOL,
-} from "./geometry.js?v=0.7.0";
+} from "./geometry.js?v=0.9.0";
 import aciColours from "./vendor/aci-colours.js";
 const fail = (s) => {
   throw new Error(s);
@@ -652,6 +653,16 @@ export function parseSVG(text) {
         exportedOriginal = true;
         entities.push({
           kind: "svg",
+          straightSegments: svgStraightSegments(segments, physical),
+          pathCommands: segments.map((s) => ({
+            type: s.type,
+            values: [...s.values],
+          })),
+          pathMatrix: Object.fromEntries(
+            ["a", "b", "c", "d", "e", "f"].map((k) => [k, physical[k]]),
+          ),
+          color: safeStroke,
+          pathStrokeWidth: 0.15 / sx,
           points,
           closed,
           group: svgGroup,

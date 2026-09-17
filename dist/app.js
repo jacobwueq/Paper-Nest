@@ -1,19 +1,20 @@
+import { extractPartEdges } from "./common-edge.js?v=0.9.0";
 import {
   sampleParts,
   partSVG,
   pathPoints,
   esc,
   validateLayout,
-} from "./geometry.js?v=0.7.0";
-import { parseDXF, parseSVG } from "./importers.js?v=0.7.0";
-import { exportSVG, exportDXF } from "./exporters.js?v=0.7.0";
+} from "./geometry.js?v=0.9.0";
+import { parseDXF, parseSVG } from "./importers.js?v=0.9.0";
+import { exportSVG, exportDXF } from "./exporters.js?v=0.9.0";
 import {
   ROTATIONS,
   searchSettings,
   evaluateLayout,
   improves,
   searchSeed,
-} from "./search.js?v=0.7.0";
+} from "./search.js?v=0.9.0";
 const $ = (id) => document.getElementById(id);
 const state = {
   parts: sampleParts(),
@@ -51,6 +52,9 @@ const readSettings = () => ({
   rotations: Number($("rotation").value),
   scale: Number($("scale").value) / 100,
   allowMirror: $("allow-mirror").checked,
+  commonEdgeMode: $("common-edge").checked,
+  pairClusters: $("common-edge").checked && $("pair-clusters").checked,
+  commonEdgeWeight: Number($("common-edge-weight").value),
 });
 function checkSettings(s) {
   if (
@@ -62,7 +66,10 @@ function checkSettings(s) {
       s.rotations,
       s.scale,
       s.minOffcutSide,
+      s.commonEdgeWeight,
     ].every(Number.isFinite) ||
+    s.commonEdgeWeight < 0 ||
+    s.commonEdgeWeight > 100 ||
     s.minOffcutSide < 0 ||
     s.minOffcutSide > 3000 ||
     s.scale < 0.01 ||
@@ -104,6 +111,7 @@ function sheetOffcuts(sheet) {
 }
 function exportOptions(sheet, include = $("include-offcuts").checked) {
   return {
+    mergeCommonLines: $("merge-common-lines").checked,
     offcuts: include
       ? sheetOffcuts(sheet).filter((r) => !state.excludedOffcuts.has(r.id))
       : [],
@@ -136,6 +144,11 @@ function render() {
       t: { x: (i % cols) * cellW, y: Math.floor(i / cols) * cellH, angle: 0 },
     }));
   }
+  const cutting = state.metrics?.cutting;
+  $("cut-summary").hidden = !layout || !cutting;
+  $("cut-summary").textContent = cutting
+    ? `Shared / 共邊 ${cutting.sharedLength.toFixed(1)} mm · Estimated cutting / 預計切線 ${cutting.estimatedCutLength.toFixed(1)} mm · Pair moves / 成對移動 ${state.clusterMoves || 0}`
+    : "";
   const remaining = layout ? sheetOffcuts(state.sheet) : [];
   $("offcut-summary").hidden = !layout;
   $("offcut-list").hidden = !layout || !remaining.length;
@@ -229,8 +242,11 @@ function render() {
     "allow-mirror",
     "min-offcut-side",
     "units",
+    "common-edge",
   ])
     $(id).disabled = state.running;
+  $("pair-clusters").disabled = state.running || !$("common-edge").checked;
+  $("common-edge-weight").disabled = state.running || !$("common-edge").checked;
   $("export").disabled =
     state.invalid || state.placements.length !== parts.length || !parts.length;
   $("export-format").querySelector('[value="dxf"]').disabled =
@@ -274,6 +290,7 @@ function invalidate() {
   state.sheet = 0;
   state.invalid = false;
   state.metrics = null;
+  state.clusterMoves = 0;
   state.excludedOffcuts.clear();
   state.firstResultSeconds = null;
   state.accepted = 0;
@@ -297,6 +314,7 @@ function beginNest(continuing = false) {
     state.sheet = 0;
     state.accepted = 0;
     state.metrics = null;
+    state.clusterMoves = 0;
     state.firstResultSeconds = null;
   }
   state.running = true;
@@ -322,10 +340,16 @@ function updateSearchStatus() {
 function startEngine() {
   const run = ++state.run;
   compactor = new Worker(
-    new URL("./compaction-worker.js?v=0.7.0", import.meta.url),
+    new URL("./compaction-worker.js?v=0.9.0", import.meta.url),
     { type: "module" },
   );
   compactor.onmessage = ({ data }) => {
+    if (
+      data.run === state.run &&
+      data.type === "complete" &&
+      data.clustersMoved
+    )
+      state.clusterMoves = (state.clusterMoves || 0) + data.clustersMoved;
     if (!state.running || data.run !== state.run) return;
     if (data.placements) considerLayout(data.placements);
     if (data.type === "complete" || data.type === "error") {
@@ -362,7 +386,7 @@ function startEngine() {
       location.origin,
     );
   };
-  frame.src = "engine/index.html?v=0.7.0";
+  frame.src = "engine/index.html?v=0.9.0";
   document.body.append(frame);
   stopTimer = setTimeout(() => {
     stop();
@@ -412,7 +436,14 @@ function scheduleCompaction() {
   compactQueued = false;
   compactor.postMessage({
     run: state.run,
-    parts: state.parts.map((p) => ({ id: p.id, outer: p.outer })),
+    parts: state.parts.map((p) => ({
+      id: p.id,
+      outer: p.outer,
+      edges: extractPartEdges(p),
+      ...(runSettings.commonEdgeMode === true
+        ? { entities: p.entities, origin: p.origin }
+        : {}),
+    })),
     placements: state.placements,
     settings: runSettings,
   });
@@ -594,9 +625,18 @@ for (const id of [
   "scale",
   "allow-mirror",
   "min-offcut-side",
+  "common-edge",
+  "pair-clusters",
+  "common-edge-weight",
 ])
   $(id).addEventListener("change", () => {
     if (id === "width" || id === "height") $("preset").value = "custom";
+    if (id === "common-edge") {
+      const enabled = $("common-edge").checked;
+      $("pair-clusters").disabled = !enabled;
+      $("common-edge-weight").disabled = !enabled;
+      $("merge-common-lines").checked = enabled;
+    }
     invalidate();
   });
 $("min-offcut-side").addEventListener("input", invalidate);
@@ -665,6 +705,9 @@ if (document.modelContext?.registerTool) {
           .filter((p) => p.mirrored)
           .map((p) => p.id),
         includeOffcutCuts: $("include-offcuts").checked,
+        cutting: state.metrics?.cutting || null,
+        pairMoves: state.clusterMoves || 0,
+        mergeCommonLines: $("merge-common-lines").checked,
         offcuts:
           state.metrics?.sheets.flatMap(({ sheet }) =>
             sheetOffcuts(sheet).map((r) => ({
