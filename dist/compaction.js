@@ -1,10 +1,163 @@
+import { pocketTranslations } from "./pocket-search.js?v=0.6.0";
 import {
   bounds,
   transformed,
   clearance,
   validateLayout,
-} from "./geometry.js?v=0.5.1";
-import { evaluateLayout, improves } from "./search.js?v=0.5.1";
+} from "./geometry.js?v=0.6.0";
+import { evaluateLayout, improves } from "./search.js?v=0.6.0";
+
+// Remove two parts together, keep several alternatives for the first, and
+// reinsert the second. Only complete, improved layouts leave this function.
+function repairPairs(parts, initial, settings, options) {
+  const { now, deadline } = options;
+  const byId = new Map(parts.map((p) => [p.id, p]));
+  let placements = initial,
+    report = evaluateLayout(parts, initial, settings),
+    changed = false,
+    visited = 0;
+  const guard = 0.025 * Math.max(1, settings.scale ?? 1),
+    gap = settings.gap + 2 * guard;
+  const sheet = {
+    x: settings.margin + guard,
+    y: settings.margin + guard,
+    w: settings.width - 2 * (settings.margin + guard),
+    h: settings.height - 2 * (settings.margin + guard),
+  };
+  const step = 360 / settings.rotations;
+  let pairDeadline = deadline;
+  function* insert(t, fixed) {
+    const obstacles = fixed
+      .filter((p) => p.sheet === t.sheet)
+      .map((p) => transformed(byId.get(p.id).outer, p));
+    const angles = new Set([t.angle]);
+    if (settings.rotations > 1)
+      for (const d of [180, 90, -90])
+        angles.add(
+          (((Math.round((t.angle + d) / step) * step) % 360) + 360) % 360,
+        );
+    for (const angle of angles) {
+      if (now() >= pairDeadline) return;
+      const base = { ...t, x: 0, y: 0, angle };
+      const points = pocketTranslations(
+        transformed(byId.get(t.id).outer, base),
+        obstacles,
+        sheet,
+        gap,
+        () => now() >= pairDeadline,
+      );
+      const envelope = bounds(
+        initial
+          .filter((p) => p.sheet === t.sheet)
+          .flatMap((p) => transformed(byId.get(p.id).outer, p)),
+      );
+      const movingBounds = bounds(transformed(byId.get(t.id).outer, base));
+      const expansion = (p) =>
+        Math.max(
+          0,
+          p.x + movingBounds.x + movingBounds.w - envelope.x - envelope.w,
+        ) +
+        Math.max(
+          0,
+          p.y + movingBounds.y + movingBounds.h - envelope.y - envelope.h,
+        );
+      points.sort(
+        (a, b) => expansion(a) - expansion(b) || a.y - b.y || a.x - b.x,
+      );
+      const sampled = [];
+      for (const p of points) {
+        // Rounded clearance corners create many almost-identical vertices.
+        // Give spatially different pair alternatives a turn within the budget.
+        if (sampled.some((q) => Math.hypot(q.x - p.x, q.y - p.y) < 1)) continue;
+        sampled.push(p);
+        if (now() >= pairDeadline) return;
+        const candidate = [...fixed, { ...base, ...p }];
+        if (!validateLayout(parts, candidate, settings).length) yield candidate;
+      }
+    }
+  }
+  const concave = (poly) => {
+    let positive = false,
+      negative = false;
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i],
+        b = poly[(i + 1) % poly.length],
+        c = poly[(i + 2) % poly.length];
+      const cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+      positive ||= cross > 1e-7;
+      negative ||= cross < -1e-7;
+    }
+    return positive && negative;
+  };
+  // Pocket partners need not be near the part's current location. Search all
+  // pairs, prioritising a concave holder and a convex part, and resume the queue.
+  const pairs = [];
+  for (let i = 0; i < placements.length; i++)
+    for (let j = i + 1; j < placements.length; j++) {
+      if (placements[i].sheet !== placements[j].sheet) continue;
+      const ca = concave(byId.get(placements[i].id).outer),
+        cb = concave(byId.get(placements[j].id).outer);
+      let priority = ca !== cb ? 1 : ca ? 2 : 3;
+      if (ca !== cb) {
+        const holder = bounds(byId.get(placements[ca ? i : j].id).outer);
+        const guest = bounds(byId.get(placements[ca ? j : i].id).outer);
+        if (
+          (guest.w <= holder.w && guest.h <= holder.h) ||
+          (settings.rotations > 1 && guest.h <= holder.w && guest.w <= holder.h)
+        )
+          priority = 0;
+      }
+      pairs.push({ i, j, priority });
+    }
+  pairs.sort((a, b) => a.priority - b.priority || a.i - b.i || a.j - b.j);
+  const offset = (options.pairOffset || 0) % Math.max(1, pairs.length);
+  for (let n = 0; n < pairs.length && now() < deadline; n++) {
+    const { i, j } = pairs[(offset + n) % pairs.length];
+    const a = placements[i],
+      b = placements[j];
+    pairDeadline = Math.min(deadline, now() + 450);
+    visited++;
+    const fixed = placements.filter((t, k) => k !== i && k !== j);
+    let best = null;
+    for (const [first, second] of [
+      [a, b],
+      [b, a],
+    ]) {
+      const beam = [];
+      let alternatives = 0;
+      for (const partial of insert(first, fixed)) {
+        const score = evaluateLayout(parts, partial, settings).score;
+        beam.push({ partial, score });
+        beam.sort((a, b) => globalThis.PaperOffcut.compare(a.score, b.score));
+        if (beam.length > 4) beam.pop();
+        // Reserve time for completing the pair, rather than consuming the
+        // entire job on partial arrangements that cannot be published.
+        if (++alternatives >= 12) break;
+      }
+      for (const { partial } of beam)
+        for (const complete of insert(second, partial)) {
+          const metrics = evaluateLayout(parts, complete, settings);
+          if (improves(metrics.score, (best?.report || report).score))
+            best = { placements: complete, report: metrics };
+        }
+    }
+    if (best) {
+      // Keep stable part ordering and identity for continuation and exports.
+      const map = new Map(best.placements.map((t) => [t.id, t]));
+      placements = placements.map((t) => map.get(t.id));
+      report = best.report;
+      changed = true;
+      options.onImprove?.({ placements, report });
+    }
+  }
+  return {
+    placements,
+    report,
+    changed,
+    visited,
+    nextPairOffset: (offset + visited) % Math.max(1, pairs.length),
+  };
+}
 
 // Coordinate descent in drawing coordinates. All moves are collision checked
 // against the retained contours; no simplified or re-created drawing is exported.
@@ -35,38 +188,11 @@ export function compactLayout(parts, initial, settings, options = {}) {
   const step = 360 / settings.rotations;
   const polys = () =>
     placements.map((t) => transformed(byId.get(t.id).outer, t));
-  function proxy(pp) {
-    let free = 0,
-      occupied = 0,
-      moment = 0;
-    for (const sheet of new Set(placements.map((t) => t.sheet))) {
-      const shapes = pp.filter((p, i) => placements[i].sheet === sheet);
-      const b = bounds(shapes.flat());
-      const r = globalThis.PaperOffcut.edgeRectangle(
-        b,
-        {
-          x: settings.margin,
-          y: settings.margin,
-          w: settings.width - 2 * settings.margin,
-          h: settings.height - 2 * settings.margin,
-        },
-        gap,
-      );
-      free = Math.max(free, r.w * r.h);
-      occupied += b.w * b.h;
-      for (const p of shapes) {
-        const a = bounds(p);
-        moment += (a.x + a.w / 2 - b.x) ** 2 + (a.y + a.h / 2 - b.y) ** 2;
-      }
-    }
-    return [-free, occupied, moment];
-  }
-  function compare(a, b) {
-    for (let i = 0; i < a.length; i++)
-      if (Math.abs(a[i] - b[i]) > 1e-5) return a[i] - b[i];
-    return 0;
-  }
-  for (let pass = 0; pass < (options.passes ?? 5) && now() < deadline; pass++) {
+  for (
+    let pass = 0;
+    pass < (options.groupOnly ? 0 : (options.passes ?? 5)) && now() < deadline;
+    pass++
+  ) {
     let moved = false;
     // Alternate orders so small circles can vacate gaps before large contours
     // are reconsidered, and vice versa.
@@ -79,13 +205,13 @@ export function compactLayout(parts, initial, settings, options = {}) {
       const current = placements[index],
         source = byId.get(current.id).outer;
       const pp = polys(),
-        oldBounds = bounds(pp[index]),
-        oldProxy = proxy(pp);
+        oldBounds = bounds(pp[index]);
       const neighbours = pp.filter(
         (p, i) => i !== index && placements[i].sheet === current.sheet,
       );
       const neighbourBounds = neighbours.map(bounds);
-      const candidates = [];
+      const seen = new Set();
+      let best = null;
       function valid(poly, b) {
         if (
           b.x < margin - 1e-6 ||
@@ -110,12 +236,48 @@ export function compactLayout(parts, initial, settings, options = {}) {
         const poly = transformed(source, t),
           b = bounds(poly);
         if (!known && !valid(poly, b)) return;
-        const trial = pp.slice();
-        trial[index] = poly;
-        const value = proxy(trial);
-        if (compare(value, oldProxy) >= -1e-5) return;
-        candidates.push({ t, value });
+        if (now() >= deadline) return;
+        const key = [t.x, t.y, t.angle, !!t.mirrored]
+          .map((v) => (typeof v === "number" ? v.toFixed(4) : v))
+          .join(":");
+        if (seen.has(key)) return;
+        seen.add(key);
+        const trial = placements.slice();
+        trial[index] = t;
+        const metrics = evaluateLayout(parts, trial, settings);
+        if (improves(metrics.score, (best?.report || report).score))
+          best = { placements: trial, report: metrics };
       }
+      // Evaluate pocket candidates before local nudges. No bounding-box proxy
+      // or top-eight shortlist may discard a legal pocket before full scoring.
+      const pocketAngles = new Set([current.angle]);
+      if (settings.rotations > 1)
+        pocketAngles.add(
+          (((Math.round((current.angle + 180) / step) * step) % 360) + 360) %
+            360,
+        );
+      for (const angle of pocketAngles) {
+        if (now() >= deadline) break;
+        const base = { ...current, x: 0, y: 0, angle };
+        const translations = pocketTranslations(
+          transformed(source, base),
+          neighbours,
+          {
+            x: margin,
+            y: margin,
+            w: settings.width - 2 * margin,
+            h: settings.height - 2 * margin,
+          },
+          gap,
+          () => now() >= deadline,
+        );
+        translations.sort((a, b) => a.y - b.y || a.x - b.x);
+        for (const point of translations) {
+          if (now() >= deadline) break;
+          consider({ ...base, ...point });
+        }
+      }
+
       function slide(t, dir) {
         const p = transformed(source, t),
           b = bounds(p);
@@ -219,16 +381,6 @@ export function compactLayout(parts, initial, settings, options = {}) {
             }
           }
         }
-      candidates.sort((a, b) => compare(a.value, b.value));
-      let best = null;
-      for (const candidate of candidates.slice(0, 8)) {
-        if (now() >= deadline) break;
-        const trial = placements.slice();
-        trial[index] = candidate.t;
-        const metrics = evaluateLayout(parts, trial, settings);
-        if (improves(metrics.score, (best?.report || report).score))
-          best = { placements: trial, report: metrics };
-      }
       if (best) {
         placements = best.placements;
         report = best.report;
@@ -238,11 +390,26 @@ export function compactLayout(parts, initial, settings, options = {}) {
     }
     if (!moved) break;
   }
+  let nextPairOffset = options.pairOffset || 0;
+  if (now() < deadline) {
+    const repaired = repairPairs(parts, placements, settings, {
+      ...options,
+      now,
+      deadline,
+    });
+    if (repaired.changed) {
+      placements = repaired.placements;
+      report = repaired.report;
+      changed = true;
+    }
+    nextPairOffset = repaired.nextPairOffset;
+  }
   return {
     placements,
     report,
     changed,
     incomplete: now() >= deadline,
+    nextPairOffset,
     nextOffset: (startOffset + visited) % Math.max(1, placements.length),
   };
 }

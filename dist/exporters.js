@@ -1,5 +1,5 @@
-import { partSVG, transform, fmt, esc } from "./geometry.js?v=0.5.1";
-import { checkedOffcuts } from "./offcut-export.js?v=0.5.1";
+import { partSVG, transform, fmt, esc } from "./geometry.js?v=0.6.0";
+import { checkedOffcuts } from "./offcut-export.js?v=0.6.0";
 export function exportSVG(parts, placements, sheet, settings, options = {}) {
   const cuts = checkedOffcuts(parts, placements, sheet, settings, options);
   const map = new Map(parts.map((p) => [p.id, p]));

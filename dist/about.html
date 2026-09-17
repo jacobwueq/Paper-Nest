@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Paper Nest — Support / 支援範圍</title>
     <link rel="icon" href="favicon.svg" />
-    <link rel="stylesheet" href="style.css?v=0.5.1" />
+    <link rel="stylesheet" href="style.css?v=0.6.0" />
   </head>
   <body>
     <header class="topbar">
@@ -99,13 +99,16 @@
         single rectangular offcut, consolidate the next clear rectangles
         (including those below 15%), then compact the occupied footprint and
         pull individual parts closer together. A background compaction pass
-        moves, turns and reinserts parts into gaps while checking clearances.
-        Existing results are replaced only by a better validated result.<br />
+        searches contour contact positions inside concave gaps and tries moving
+        pairs together while checking clearances. Pair search uses a bounded
+        candidate beam and time budget. Existing results are replaced only by a
+        better validated result.<br />
         上限：5 MB、80 件零件及 3,000 個圖元。每次最多改善 20
         秒，有結果即顯示；可隨時停止或承接結果繼續。
         依次優先放齊零件、減少板材張數、保留最大塊長方形餘料，再集中其餘空間（包括細過
         15% 嘅位置），縮小佔用範圍及拉近零件。
-        背景會逐件移動、轉向及重新試位，每步核對間距，只保留更好嘅有效結果。
+        背景按真實輪廓搜尋凹位，亦會嘗試兩件一齊重排；雙件搜尋有候選數及時間限制。
+        每步核對間距，只保留完整而且更好嘅有效結果。
       </p>
       <p>
         Green rectangles show conservatively estimated clear space within the

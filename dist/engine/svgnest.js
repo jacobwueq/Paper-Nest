@@ -361,8 +361,8 @@
 			});
 			
 			p.require('matrix.js');
-			p.require('geometryutil.js?v=0.5.1');
-			p.require('placementworker.js?v=0.5.1');
+			p.require('geometryutil.js?v=0.6.0');
+			p.require('placementworker.js?v=0.6.0');
 			p.require('clipper.js');
 			
 			var self = this;
@@ -566,9 +566,9 @@
 				p2.require('json.js');
 				p2.require('clipper.js');
 				p2.require('matrix.js');
-				p2.require('geometryutil.js?v=0.5.1');
-				p2.require('offcut.js?v=0.5.1');
-				p2.require('placementworker.js?v=0.5.1');
+				p2.require('geometryutil.js?v=0.6.0');
+				p2.require('offcut.js?v=0.6.0');
+				p2.require('placementworker.js?v=0.6.0');
 				
 				p2.map(worker.placePaths).then(function(placements){
 					if(!placements || placements.length == 0){

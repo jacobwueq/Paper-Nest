@@ -48,12 +48,17 @@ or curved free space. A global maximum or arbitrary-shaped offcut is not guarant
 
 `dist/compaction-worker.js` runs a bounded coordinate-descent pass alongside the
 nesting worker. It slides parts to contact, tries permitted rotations and handedness,
-and reinserts them at candidate gaps. Full geometric clearance and shared fitness
+and searches actual contour contact positions, including disconnected concave pockets.
+Single-part candidates receive full scoring without a bounding-box proxy veto.
+A resumable two-part repair search can relocate distant partners together; its
+bounded beam and time budget remain heuristic. Full geometric clearance and shared fitness
 validate every accepted move. Completed passes resume from the best current layout;
 stop, reimport, changed settings and offcut selection terminate both workers.
 The 15% threshold affects only the displayed/exportable rectangles, never fitness.
 
-背景收緊程序會逐件移近、轉動及重新試位。每次接受移動均核對幾何間距及完整評分；
+背景收緊程序按真實輪廓搜尋凹位，並可同時移開兩件零件重新排列。
+單件候選位置不再由外框代理評分篩走；雙件搜尋使用有限候選及時間，未保證全域最佳。
+每次接受完整排列均核對幾何間距及完整評分；
 停止或變更設定會同時停止兩個運算程序。15% 只用於顯示及切割框輸出。
 
 ## Recoverable material and transforms / 回收餘料及圖形變換

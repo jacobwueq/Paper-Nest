@@ -37,7 +37,7 @@ test("15% is exclusively a display/export filter and cannot change fitness", () 
   assert.equal(b.rectangles.length, 0);
   assert.deepEqual(PaperOffcut.score(0, [a]), PaperOffcut.score(0, [b]));
 });
-test("compaction closes internal gaps while preserving the same largest offcut", () => {
+test("compaction closes internal gaps without shrinking the largest offcut", () => {
   const parts = [
     { id: "a", outer: rect(10, 10) },
     { id: "b", outer: rect(10, 10) },
@@ -49,7 +49,7 @@ test("compaction closes internal gaps while preserving the same largest offcut",
   });
   assert.equal(result.changed, true);
   assert.ok(result.placements[1].y < 18);
-  assert.ok(Math.abs(result.report.score[2] - before.score[2]) < 1e-6);
+  assert.ok(result.report.score[2] <= before.score[2] + 1e-6);
   assert.ok(
     result.report.sheets[0].occupiedArea < before.sheets[0].occupiedArea * 0.5,
   );

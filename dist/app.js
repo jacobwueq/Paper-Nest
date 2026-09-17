@@ -4,16 +4,16 @@ import {
   pathPoints,
   esc,
   validateLayout,
-} from "./geometry.js?v=0.5.1";
-import { parseDXF, parseSVG } from "./importers.js?v=0.5.1";
-import { exportSVG, exportDXF } from "./exporters.js?v=0.5.1";
+} from "./geometry.js?v=0.6.0";
+import { parseDXF, parseSVG } from "./importers.js?v=0.6.0";
+import { exportSVG, exportDXF } from "./exporters.js?v=0.6.0";
 import {
   ROTATIONS,
   searchSettings,
   evaluateLayout,
   improves,
   searchSeed,
-} from "./search.js?v=0.5.1";
+} from "./search.js?v=0.6.0";
 const $ = (id) => document.getElementById(id);
 const state = {
   parts: sampleParts(),
@@ -312,7 +312,7 @@ function updateSearchStatus() {
 function startEngine() {
   const run = ++state.run;
   compactor = new Worker(
-    new URL("./compaction-worker.js?v=0.5.1", import.meta.url),
+    new URL("./compaction-worker.js?v=0.6.0", import.meta.url),
     { type: "module" },
   );
   compactor.onmessage = ({ data }) => {
@@ -352,7 +352,7 @@ function startEngine() {
       location.origin,
     );
   };
-  frame.src = "engine/index.html?v=0.5.1";
+  frame.src = "engine/index.html?v=0.6.0";
   document.body.append(frame);
   stopTimer = setTimeout(() => {
     stop();
