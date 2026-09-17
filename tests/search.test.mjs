@@ -42,7 +42,7 @@ test("all selected angles are available immediately without timed stages", () =>
     assert.deepEqual(searchSettings(rotations), { rotations, seconds: 20 });
   assert.throws(() => searchSettings(0));
 });
-test("larger horizontal offcut beats a narrower but less reusable layout", () => {
+test("combined offcut area selects the more reusable arrangement", () => {
   const ps = [
     { id: "a", outer: rect(70, 20) },
     { id: "b", outer: rect(70, 20) },
@@ -51,8 +51,7 @@ test("larger horizontal offcut beats a narrower but less reusable layout", () =>
   const compact = [t("a", 0, 0), t("b", 72, 0)];
   const report = evaluateLayout(ps, compact, settings);
   assert.ok(improves(report.score, layoutScore(ps, narrow, settings)));
-  assert.ok(report.sheets[0].rectangle.w > 199);
-  assert.ok(report.sheets[0].rectangle.h > 179);
+  assert.ok(report.sheets[0].recoveredArea > 36000);
   assert.ok(improves(report.score, layoutScore(ps, [t("a")], settings)));
   assert.ok(
     improves(
@@ -367,10 +366,10 @@ test("worker fitness uses reusable offcut and prioritises complete placement", (
   assert.equal(result.placements.length, 1);
   assert.equal(result.fitness[0], 0);
   assert.equal(result.fitness[1], 1);
-  assert.equal(result.fitness[2], -9000);
+  assert.ok(result.fitness[2] < -9000);
   assert.ok(
-    result.fitness[3] < -9000 * 9000,
-    "smaller leftover rectangles also contribute",
+    result.fitness[2] < result.fitness[3],
+    "the second rectangle increases the combined recoverable area",
   );
   assert.equal(result.fitness[4], 200);
   worker.nfpCache = {};

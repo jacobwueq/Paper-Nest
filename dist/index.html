@@ -9,9 +9,9 @@
       content="Arrange DXF and SVG paper-cutting parts on full-size sheets. Review geometry, nest and export locally in your browser."
     />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="style.css?v=0.6.0" />
+    <link rel="stylesheet" href="style.css?v=0.7.0" />
     <script src="vendor/path-data-polyfill.js"></script>
-    <script type="module" src="app.js?v=0.6.0"></script>
+    <script type="module" src="app.js?v=0.7.0"></script>
   </head>
   <body>
     <header class="topbar">
@@ -22,7 +22,7 @@
             fill="currentColor"
           /></svg
         ><span>Paper Nest <small>紙材排料</small></span></a
-      ><span class="version">WORKING PROTOTYPE · 0.6</span
+      ><span class="version">WORKING PROTOTYPE · 0.7</span
       ><span class="local"
         >Files stay in your browser <span>檔案於本機處理</span></span
       >
@@ -132,6 +132,25 @@
                 /><span>mm</span>
               </div>
             </div>
+          </div>
+          <div class="field">
+            <label for="min-offcut-side"
+              >Minimum offcut short edge · 餘料最短邊</label
+            >
+            <div class="unit-input">
+              <input
+                id="min-offcut-side"
+                type="number"
+                value="20"
+                min="0"
+                max="3000"
+                step="1"
+              /><span>mm</span>
+            </div>
+            <small
+              >Both sides must meet this size. 0 allows any size.<br />兩邊均需達到此尺寸；0
+              表示不限。</small
+            >
           </div>
           <div class="field">
             <label for="rotation"
@@ -250,12 +269,11 @@
         <div id="offcut-summary" class="offcut-summary" hidden>
           <span class="offcut-key" aria-hidden="true"></span>
           <div>
-            <strong>Reusable offcuts / 可回收餘料 · ≥15%</strong>
+            <strong>Reusable offcuts / 可回收餘料 · 最多兩塊</strong>
             <span id="offcut-size"></span>
           </div>
           <small
-            >15% filters marked offcuts only; smaller gaps still affect
-            optimisation.<br />15% 只係標示門檻；較細空隙亦會納入優化。</small
+            >Maximise the combined area of two rectangles.<br />優先保留兩塊長方形餘料嘅合計面積。</small
           >
         </div>
         <div id="offcut-list" class="offcut-list" hidden></div>

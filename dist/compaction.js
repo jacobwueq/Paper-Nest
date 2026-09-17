@@ -1,11 +1,11 @@
-import { pocketTranslations } from "./pocket-search.js?v=0.6.0";
+import { pocketTranslations } from "./pocket-search.js?v=0.7.0";
 import {
   bounds,
   transformed,
   clearance,
   validateLayout,
-} from "./geometry.js?v=0.6.0";
-import { evaluateLayout, improves } from "./search.js?v=0.6.0";
+} from "./geometry.js?v=0.7.0";
+import { evaluateLayout, improves } from "./search.js?v=0.7.0";
 
 // Remove two parts together, keep several alternatives for the first, and
 // reinsert the second. Only complete, improved layouts leave this function.

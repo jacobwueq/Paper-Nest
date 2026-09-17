@@ -14,9 +14,9 @@ const parts=identifyParts(entities);
 const placements=[{id:parts[0].id,x:5,y:5,angle:0,sheet:0}];
 const report=evaluateLayout(parts,placements,settings).sheets[0];
 
-test('multiple reusable offcuts are disjoint and each covers at least 15% of the original sheet',()=>{
+test('two reusable offcuts are disjoint and each meets the minimum short edge',()=>{
  assert.equal(report.rectangles.length,2);
- for(const r of report.rectangles) assert.ok(r.area>=6000);
+ for(const r of report.rectangles) assert.ok(Math.min(r.w,r.h)>=20);
  const [a,b]=report.rectangles.map(rectanglePoints);
  assert.ok(clearance(a,b,settings.gap));
  assert.equal(checkedOffcuts(parts,placements,0,settings,{offcuts:report.rectangles}).length,2);
@@ -44,7 +44,7 @@ test('offcut exports are opt-in and contain only the selected recovery rectangle
 test('offcut cuts crossing parts, duplicated frames and sub-threshold scraps are rejected',()=>{
  assert.throws(()=>checkedOffcuts(parts,placements,0,settings,{offcuts:[{x:5,y:5,w:100,h:100}]}),/overlap/);
  assert.throws(()=>checkedOffcuts(parts,placements,0,settings,{offcuts:[report.rectangles[0],report.rectangles[0]]}),/overlap/);
- assert.throws(()=>checkedOffcuts(parts,placements,0,settings,{offcuts:[{x:100,y:100,w:20,h:20}]}),/dimensions/);
+ assert.throws(()=>checkedOffcuts(parts,placements,0,settings,{offcuts:[{x:100,y:100,w:19,h:20}]}),/dimensions/);
 });
 test('a pre-existing OFFCUT_CUT layer is preserved and the recovery layer gets a unique name',()=>{
  const ps=identifyParts(entities.map(e=>({...e,layer:'OFFCUT_CUT'})));

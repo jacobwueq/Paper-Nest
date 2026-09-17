@@ -99,8 +99,7 @@ test("concave-part layout relocates both arches out of the lower area", () => {
   }
   assert.ok(improves(result.report.score, before.score));
   assert.ok(
-    result.report.sheets[0].recoveryPotential >
-      before.sheets[0].recoveryPotential,
+    result.report.sheets[0].recoveredArea > before.sheets[0].recoveredArea,
   );
 });
 test("search retains a disconnected cavity even when a part cannot slide through its mouth", () => {
@@ -236,7 +235,7 @@ test("screenshot-style sample improves beyond the manual reference while preserv
     ),
   );
   assert.ok(
-    result.report.sheets[0].recoveryPotential >
-      evaluateLayout(parts, initial, settings).sheets[0].recoveryPotential,
+    result.report.sheets[0].recoveredArea >
+      evaluateLayout(parts, initial, settings).sheets[0].recoveredArea,
   );
 });

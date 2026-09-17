@@ -16,7 +16,7 @@
     }
     return { x, y, w: right - x, h: bottom - y };
   }
-  function edgeRectangle(b, sheet, padding = 0) {
+  function edgeRectangle(b, sheet, padding = 0, minSide = 0) {
     var x = sheet.x || 0,
       y = sheet.y || 0;
     var right = x + sheet.w,
@@ -37,9 +37,17 @@
         h: Math.max(0, bottom - b.y - b.h - padding),
       },
     ];
-    return rectangles.reduce((a, b) => (b.w * b.h > a.w * a.h ? b : a));
+    return rectangles
+      .filter((r) => Math.min(r.w, r.h) >= minSide)
+      .reduce((a, b) => (b.w * b.h > a.w * a.h ? b : a), { x, y, w: 0, h: 0 });
   }
-  function analyse(polygons, sheet, padding = 0) {
+  function analyse(
+    polygons,
+    sheet,
+    padding = 0,
+    minSide = 0,
+    findPair = false,
+  ) {
     var x = sheet.x || 0,
       y = sheet.y || 0;
     if (!polygons.length)
@@ -48,7 +56,7 @@
         occupiedArea: 0,
       };
     var all = bounds(polygons.flat());
-    var best = edgeRectangle(all, sheet, padding);
+    var best = edgeRectangle(all, sheet, padding, minSide);
     // At most 256 cells along the longest edge. Exact full-width/full-height
     // strips are also tested above, avoiding grid rounding for common offcuts.
     var step = Math.max(sheet.w, sheet.h) / 256;
@@ -109,9 +117,10 @@
           var w = (col - start) * dx,
             h = previous.height * dy;
           if (
-            w * h > best.w * best.h + 1e-6 ||
-            (Math.abs(w * h - best.w * best.h) < 1e-6 &&
-              Math.min(w, h) > Math.min(best.w, best.h))
+            Math.min(w, h) + 1e-8 >= minSide &&
+            (w * h > best.w * best.h + 1e-6 ||
+              (Math.abs(w * h - best.w * best.h) < 1e-6 &&
+                Math.min(w, h) > Math.min(best.w, best.h)))
           )
             best = {
               x: x + start * dx,
@@ -125,6 +134,9 @@
       }
     }
     return {
+      pair: findPair
+        ? gridPair(occupied, cols, rows, dx, dy, x, y, padding, minSide)
+        : [],
       rectangle: { ...best, area: best.w * best.h },
       occupiedArea: all.w * all.h,
       compactness: polygons.reduce((sum, p) => {
@@ -135,47 +147,121 @@
       }, 0),
     };
   }
-  function collect(polygons, sheet, padding, minArea) {
-    const first = analyse(polygons, sheet, padding);
-    const candidates = [],
-      blocked = polygons.slice();
-    let result = first;
-    // Each recovered rectangle becomes an obstacle. This keeps pieces and
-    // their cut boundaries disjoint, including clearance between offcuts.
-    for (let i = 0; i < 6; i++) {
-      const r = result.rectangle;
-      if (r.area <= 1e-6 || r.w <= 0 || r.h <= 0) break;
-      candidates.push(r);
-      blocked.push([
-        { x: r.x, y: r.y },
-        { x: r.x + r.w, y: r.y },
-        { x: r.x + r.w, y: r.y + r.h },
-        { x: r.x, y: r.y + r.h },
-      ]);
-      if (i < 5) result = analyse(blocked, sheet, padding);
+  // Two disjoint axis-aligned rectangles are separated by a horizontal or
+  // vertical line. Prefix/suffix histogram maxima test every grid separation;
+  // choosing the largest rectangle first would miss better combined pairs.
+  function gridPair(occupied, cols, rows, dx, dy, x, y, padding, minSide) {
+    function sweep(transpose, reverse) {
+      const width = transpose ? rows : cols,
+        height = transpose ? cols : rows;
+      const cw = transpose ? dy : dx,
+        ch = transpose ? dx : dy;
+      const heights = new Uint16Array(width),
+        prefix = [];
+      let best = null;
+      for (let row = 0; row < height; row++) {
+        const actual = reverse ? height - 1 - row : row,
+          stack = [];
+        for (let col = 0; col <= width; col++) {
+          const cell = transpose ? col * cols + actual : actual * cols + col;
+          const h = col === width ? 0 : occupied[cell] ? 0 : heights[col] + 1;
+          if (col < width) heights[col] = h;
+          let start = col;
+          while (stack.length && stack[stack.length - 1].height > h) {
+            const prev = stack.pop();
+            start = prev.start;
+            const w = (col - start) * cw,
+              hh = prev.height * ch,
+              area = w * hh;
+            if (
+              Math.min(w, hh) + 1e-8 >= minSide &&
+              (!best || area > best.area)
+            ) {
+              const r0 = reverse ? height - 1 - row : row + 1 - prev.height;
+              best = transpose
+                ? { x: x + r0 * dx, y: y + start * dy, w: hh, h: w, area }
+                : { x: x + start * dx, y: y + r0 * dy, w, h: hh, area };
+            }
+          }
+          if (!stack.length || stack[stack.length - 1].height < h)
+            stack.push({ start, height: h });
+        }
+        prefix[row] = best;
+      }
+      return prefix;
     }
+    let best = [];
+    const total = (rs) => rs.reduce((sum, r) => sum + r.area, 0);
+    function consider(rs) {
+      rs = rs.filter(Boolean).sort((a, b) => b.area - a.area);
+      if (
+        total(rs) > total(best) + 1e-6 ||
+        (Math.abs(total(rs) - total(best)) < 1e-6 &&
+          (rs[0]?.area || 0) > (best[0]?.area || 0))
+      )
+        best = rs;
+    }
+    for (const transpose of [false, true]) {
+      const n = transpose ? cols : rows,
+        unit = transpose ? dx : dy;
+      const forward = sweep(transpose, false),
+        backward = sweep(transpose, true);
+      consider([forward[n - 1]]);
+      const gap = Math.ceil(padding / unit);
+      for (let i = 0; i < n; i++) {
+        const remaining = n - i - gap - 2;
+        if (remaining >= 0) consider([forward[i], backward[remaining]]);
+      }
+    }
+    return best;
+  }
+  function collect(polygons, sheet, padding = 0, minSide = 20) {
+    const first = analyse(polygons, sheet, padding, minSide, true);
+    let rectangles = first.pair || [];
+    const r = first.rectangle;
+    // Also preserve exact (non-grid-rounded) edge-strip solutions.
+    if (r.area > 1e-6 && Math.min(r.w, r.h) + 1e-8 >= minSide) {
+      const blocked = [
+        ...polygons,
+        [
+          { x: r.x, y: r.y },
+          { x: r.x + r.w, y: r.y },
+          { x: r.x + r.w, y: r.y + r.h },
+          { x: r.x, y: r.y + r.h },
+        ],
+      ];
+      const second = analyse(blocked, sheet, padding, minSide).rectangle;
+      const greedy = [r, ...(second.area > 1e-6 ? [second] : [])].sort(
+        (a, b) => b.area - a.area,
+      );
+      const sum = (rs) => rs.reduce((n, r) => n + r.area, 0);
+      if (
+        sum(greedy) > sum(rectangles) + 1e-6 ||
+        (Math.abs(sum(greedy) - sum(rectangles)) < 1e-6 &&
+          r.area > (rectangles[0]?.area || 0))
+      )
+        rectangles = greedy;
+    }
+    const recoveredArea = rectangles.reduce((sum, r) => sum + r.area, 0);
     return {
       ...first,
-      rectangles: candidates.filter((r) => r.area >= minArea - 1e-6),
-      // Squared areas reward consolidated free space, including pieces below
-      // the display/export threshold. That threshold never changes fitness.
-      recoveryPotential: candidates.reduce(
-        (sum, r) => sum + r.area * r.area,
-        0,
-      ),
+      rectangle: rectangles[0] || {
+        x: sheet.x || 0,
+        y: sheet.y || 0,
+        w: 0,
+        h: 0,
+        area: 0,
+      },
+      rectangles,
+      recoveredArea,
     };
   }
   function score(unplaced, reports) {
-    var areas = reports.map((s) => s.rectangle.area);
     return [
       unplaced,
       reports.length,
-      -Math.max(0, ...areas),
-      -reports.reduce(
-        (s, r) =>
-          s + (r.recoveryPotential ?? r.rectangle.area * r.rectangle.area),
-        0,
-      ),
+      -reports.reduce((s, r) => s + (r.recoveredArea ?? r.rectangle.area), 0),
+      -Math.max(0, ...reports.map((r) => r.rectangle.area)),
       reports.reduce((s, r) => s + r.occupiedArea, 0),
       reports.reduce((s, r) => s + (r.compactness || 0), 0),
     ];

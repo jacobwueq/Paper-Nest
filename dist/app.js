@@ -4,16 +4,16 @@ import {
   pathPoints,
   esc,
   validateLayout,
-} from "./geometry.js?v=0.6.0";
-import { parseDXF, parseSVG } from "./importers.js?v=0.6.0";
-import { exportSVG, exportDXF } from "./exporters.js?v=0.6.0";
+} from "./geometry.js?v=0.7.0";
+import { parseDXF, parseSVG } from "./importers.js?v=0.7.0";
+import { exportSVG, exportDXF } from "./exporters.js?v=0.7.0";
 import {
   ROTATIONS,
   searchSettings,
   evaluateLayout,
   improves,
   searchSeed,
-} from "./search.js?v=0.6.0";
+} from "./search.js?v=0.7.0";
 const $ = (id) => document.getElementById(id);
 const state = {
   parts: sampleParts(),
@@ -46,6 +46,7 @@ const readSettings = () => ({
   width: Number($("width").value),
   height: Number($("height").value),
   gap: Number($("gap").value),
+  minOffcutSide: Number($("min-offcut-side").value),
   margin: Number($("margin").value),
   rotations: Number($("rotation").value),
   scale: Number($("scale").value) / 100,
@@ -53,9 +54,17 @@ const readSettings = () => ({
 });
 function checkSettings(s) {
   if (
-    ![s.width, s.height, s.gap, s.margin, s.rotations, s.scale].every(
-      Number.isFinite,
-    ) ||
+    ![
+      s.width,
+      s.height,
+      s.gap,
+      s.margin,
+      s.rotations,
+      s.scale,
+      s.minOffcutSide,
+    ].every(Number.isFinite) ||
+    s.minOffcutSide < 0 ||
+    s.minOffcutSide > 3000 ||
     s.scale < 0.01 ||
     s.scale > 10 ||
     s.width < 10 ||
@@ -133,7 +142,7 @@ function render() {
   const displayMm = (n) => Math.floor(n * 10) / 10;
   $("offcut-size").textContent = remaining.length
     ? `${remaining.length} pieces / 塊 · ${Math.floor(remaining.reduce((sum, r) => sum + r.area, 0) / 100)} cm²`
-    : "No offcut ≥15% / 未有達 15% 嘅餘料";
+    : "No offcut meets the minimum side / 未有符合最短邊尺寸嘅餘料";
   $("offcut-list").innerHTML = remaining
     .map(
       (r) =>
@@ -218,6 +227,7 @@ function render() {
     "rotation",
     "scale",
     "allow-mirror",
+    "min-offcut-side",
     "units",
   ])
     $(id).disabled = state.running;
@@ -312,7 +322,7 @@ function updateSearchStatus() {
 function startEngine() {
   const run = ++state.run;
   compactor = new Worker(
-    new URL("./compaction-worker.js?v=0.6.0", import.meta.url),
+    new URL("./compaction-worker.js?v=0.7.0", import.meta.url),
     { type: "module" },
   );
   compactor.onmessage = ({ data }) => {
@@ -352,7 +362,7 @@ function startEngine() {
       location.origin,
     );
   };
-  frame.src = "engine/index.html?v=0.6.0";
+  frame.src = "engine/index.html?v=0.7.0";
   document.body.append(frame);
   stopTimer = setTimeout(() => {
     stop();
@@ -583,11 +593,13 @@ for (const id of [
   "rotation",
   "scale",
   "allow-mirror",
+  "min-offcut-side",
 ])
   $(id).addEventListener("change", () => {
     if (id === "width" || id === "height") $("preset").value = "custom";
     invalidate();
   });
+$("min-offcut-side").addEventListener("input", invalidate);
 $("preset").onchange = () => {
   const p = $("preset").value;
   if (p === "a3") {
@@ -674,6 +686,7 @@ if (document.modelContext?.registerTool) {
           height: { type: "number", minimum: 10, maximum: 3000 },
           gap: { type: "number", minimum: 0.1, maximum: 50 },
           margin: { type: "number", minimum: 0 },
+          minOffcutSide: { type: "number", minimum: 0, maximum: 3000 },
         },
         required: ["width", "height", "gap", "margin"],
         additionalProperties: false,
@@ -685,7 +698,10 @@ if (document.modelContext?.registerTool) {
         if (
           !input ||
           Object.keys(input).some(
-            (k) => !["width", "height", "gap", "margin"].includes(k),
+            (k) =>
+              !["width", "height", "gap", "margin", "minOffcutSide"].includes(
+                k,
+              ),
           )
         )
           throw new Error("Invalid settings");
@@ -695,6 +711,7 @@ if (document.modelContext?.registerTool) {
         });
         for (const key of ["width", "height", "gap", "margin"])
           $(key).value = s[key];
+        $("min-offcut-side").value = s.minOffcutSide;
         $("preset").value = "custom";
         invalidate();
         return { settings: readSettings(), layoutCleared: true };

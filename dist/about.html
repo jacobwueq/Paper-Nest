@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Paper Nest — Support / 支援範圍</title>
     <link rel="icon" href="favicon.svg" />
-    <link rel="stylesheet" href="style.css?v=0.6.0" />
+    <link rel="stylesheet" href="style.css?v=0.7.0" />
   </head>
   <body>
     <header class="topbar">
@@ -95,18 +95,18 @@
         Limits: 5 MB, 80 parts and 3,000 entities per drawing. Each search has a
         20-second improvement budget; a usable result can appear earlier.
         Continue from the best result, or stop at any time. Objectives, in
-        order: place all parts, minimise sheet count, maximise the largest
-        single rectangular offcut, consolidate the next clear rectangles
-        (including those below 15%), then compact the occupied footprint and
-        pull individual parts closer together. A background compaction pass
+        order: place all parts, minimise sheet count, maximise the combined area
+        of up to two usable rectangular offcuts per sheet, favour a larger
+        primary rectangle when totals match, then compact the occupied footprint
+        and pull individual parts closer together. A background compaction pass
         searches contour contact positions inside concave gaps and tries moving
         pairs together while checking clearances. Pair search uses a bounded
         candidate beam and time budget. Existing results are replaced only by a
         better validated result.<br />
         上限：5 MB、80 件零件及 3,000 個圖元。每次最多改善 20
         秒，有結果即顯示；可隨時停止或承接結果繼續。
-        依次優先放齊零件、減少板材張數、保留最大塊長方形餘料，再集中其餘空間（包括細過
-        15% 嘅位置），縮小佔用範圍及拉近零件。
+        依次優先放齊零件、減少板材張數、最大化每板最多兩塊長方形餘料嘅合計面積；
+        合計相同時保留更大第一塊，再收緊零件。
         背景按真實輪廓搜尋凹位，亦會嘗試兩件一齊重排；雙件搜尋有候選數及時間限制。
         每步核對間距，只保留完整而且更好嘅有效結果。
       </p>
@@ -116,15 +116,14 @@
         strips are measured directly; other rectangles use a grid with at most
         256 cells along the longest sheet edge. Curved and concave boundaries
         can make this estimate smaller than the true available rectangle. Holes
-        are excluded. Multiple non-overlapping rectangles are selected greedily;
-        each must cover at least 15% of the original sheet area. Smaller scraps
-        are omitted from marking and cutting frames, but still influence
-        optimisation. This heuristic does not prove the globally largest offcut
-        or optimise arbitrary offcut shapes.<br />綠色區域係板材留邊以內、與零件保持所選間距嘅保守餘料估算。
-        完整邊帶直接計算，其餘用最長邊最多 256
-        格嘅網格搜尋；曲線及凹形可能令估算偏小。
-        孔洞不計；逐塊選取互不重疊嘅長方形，每塊至少佔原板面積
-        15%，更細餘料唔標示或輸出切割框，但仍影響排料優化。
+        are excluded. Horizontal and vertical splits jointly compare two
+        rectangles; exact edge-strip alternatives are also checked. Both sides
+        must meet the selected minimum short edge (default 20 mm; 0 means no
+        size restriction). This applies to optimisation, marking and export.
+        There is no percentage threshold.<br />綠色區域係保留間距嘅餘料估算。
+        用最長邊最多 256 格嘅網格共同搜尋兩塊長方形，亦比較精確邊帶。
+        兩邊均需達到所選最短邊尺寸（預設 20 mm，0
+        不限），排料、顯示及匯出使用相同設定。 不使用面積百分比門檻，孔洞不計。
         演算法未能證明全域最大餘料，亦未優化任意形狀餘料。
       </p>
       <p>

@@ -31,20 +31,22 @@ candidates use compact edge-aligned orientations. There are no timed rotation
 stages. Results appear and can be exported during the 20-second improvement budget;
 continuation inherits the best part order and angles.
 
-Worker and parent share `dist/engine/util/offcut.js`. Both rank: unplaced count,
-sheet count, largest single clear rectangle (descending), the sum of squared areas
-of up to six clear rectangles (descending, with no 15% threshold), occupied bounding
-area, and part-centre dispersion. Greedy placement first preserves a large edge
-rectangle, with cached bounds to avoid rescanning all vertices at every candidate.
-The final fitness also finds interior rectangles using a conservative occupancy
-grid. Thin contours cannot disappear between samples. Offcuts reserve margins and
-part clearance; holes are excluded. Grid approximation can underestimate concave
-or curved free space. A global maximum or arbitrary-shaped offcut is not guaranteed.
+Worker and parent share `dist/engine/util/offcut.js`. Ranking: place all parts,
+minimise sheet count, maximise the combined area of up to two usable rectangular
+offcuts per sheet, then favour the largest primary rectangle, reduce occupied
+bounds and part-centre dispersion. The fast initial placement compacts the envelope;
+complete candidates and contour repair use the shared full score.
 
-預設直接使用完整 1° 角度範圍，先用緊密方向建立排位，沒有分階段旋轉等待。
-搜尋最多改善 20 秒，結果即時顯示並可匯出。前後端同用餘料評分：先放齊零件，
-再減少板材張數，然後最大化單塊長方形餘料、集中其餘空間，最後縮小零件佔用範圍及拉近零件。
-網格估算保守保留輪廓及間距，可能低估曲線和凹形空間，未保證全域最佳或任意形狀餘料。
+Horizontal and vertical grid splits jointly search both rectangles instead of
+fixing the largest first. Exact edge-strip alternatives are also compared. A
+conservative grid has at most 256 cells on the longest edge. Both offcuts reserve
+part clearance and mutual clearance; holes are excluded. Grid approximation and
+the time-limited placement search do not guarantee a global optimum.
+
+預設直接使用完整 1° 角度範圍，搜尋最多改善 20 秒，可承接結果繼續。
+優先放齊零件、減少板材張數，再最大化每板最多兩塊長方形餘料嘅合計面積；
+合計相同時保留更大第一塊，然後收緊零件。共同搜尋橫向及縱向分割，
+亦比較精確邊帶。網格估算及限時排料未保證全域最佳。
 
 `dist/compaction-worker.js` runs a bounded coordinate-descent pass alongside the
 nesting worker. It slides parts to contact, tries permitted rotations and handedness,
@@ -54,18 +56,19 @@ A resumable two-part repair search can relocate distant partners together; its
 bounded beam and time budget remain heuristic. Full geometric clearance and shared fitness
 validate every accepted move. Completed passes resume from the best current layout;
 stop, reimport, changed settings and offcut selection terminate both workers.
-The 15% threshold affects only the displayed/exportable rectangles, never fitness.
+No area-percentage threshold is used.
 
 背景收緊程序按真實輪廓搜尋凹位，並可同時移開兩件零件重新排列。
 單件候選位置不再由外框代理評分篩走；雙件搜尋使用有限候選及時間，未保證全域最佳。
 每次接受完整排列均核對幾何間距及完整評分；
-停止或變更設定會同時停止兩個運算程序。15% 只用於顯示及切割框輸出。
+停止或變更設定會同時停止兩個運算程序；不使用面積百分比門檻。
 
 ## Recoverable material and transforms / 回收餘料及圖形變換
 
-Each numbered offcut must cover at least 15% of the full original sheet area.
-Greedy extraction reserves each rectangle before finding the next, so they do not
-overlap. Optional export includes only selected frames: closed DXF polylines in
+Both sides of each offcut must meet the user-selected minimum short edge
+(default 20 mm; 0 removes this size restriction). This physical-size condition
+applies consistently to optimisation, display and export. Up to two mutually clear
+rectangles are retained on each sheet. Optional export includes only selected frames: closed DXF polylines in
 a green `OFFCUT_CUT` layer (uniquely suffixed on a source-layer collision), or an
 SVG group. Export revalidates clearance against parts and selected frames.
 Selecting cuts freezes the current layout; cutting frames are disabled by default.
@@ -75,7 +78,7 @@ transforms the complete group, including holes and engraving. Mirrored orientati
 use angle + 360 internally to distinguish NFP cache entries; continuation preserves
 handedness. DXF export adjusts arc sweeps, polyline bulges and circle radii.
 
-每塊餘料至少佔原板面積 15%，逐塊保留，互不重疊。可選擇輸出所選封閉切割框，
+餘料兩邊均需達到所選最短邊尺寸（預設 20 mm，0 不限）；每板最多兩塊，互不重疊。可選擇輸出所選封閉切割框，
 DXF 使用獨立綠色 `OFFCUT_CUT` layer，SVG 使用同名 group。匯出前重新核對間距。
 比例預設 100%，鏡像預設關閉；孔洞、文字輪廓及刻線跟隨整組變換。
-測試包括多塊餘料、15% 門檻、選擇性輸出、切割框碰撞、鏡像弧線及縮放往返。
+測試包括多塊餘料、最短邊尺寸、選擇性輸出、切割框碰撞、鏡像弧線及縮放往返。

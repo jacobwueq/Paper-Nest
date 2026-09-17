@@ -28,14 +28,13 @@ const settings = {
   scale: 1,
   allowMirror: false,
 };
-test("15% is exclusively a display/export filter and cannot change fitness", () => {
-  const polygons = [rect(40, 100)],
+test("minimum short edge controls usable offcuts without a percentage threshold", () => {
+  const polygons = [rect(80, 100)],
     sheet = { x: 0, y: 0, w: 100, h: 100 };
-  const a = PaperOffcut.collect(polygons, sheet, 2, 1500);
-  const b = PaperOffcut.collect(polygons, sheet, 2, 9000);
-  assert.equal(a.rectangles.length, 1);
-  assert.equal(b.rectangles.length, 0);
-  assert.deepEqual(PaperOffcut.score(0, [a]), PaperOffcut.score(0, [b]));
+  const allowed = PaperOffcut.collect(polygons, sheet, 2, 10);
+  const excluded = PaperOffcut.collect(polygons, sheet, 2, 20);
+  assert.ok(allowed.recoveredArea > 0);
+  assert.equal(excluded.recoveredArea, 0);
 });
 test("compaction closes internal gaps without shrinking the largest offcut", () => {
   const parts = [
@@ -57,15 +56,25 @@ test("compaction closes internal gaps without shrinking the largest offcut", () 
   assert.deepEqual(validateLayout(parts, result.placements, settings), []);
   assert.equal(initial[1].y, 45, "caller data must not be mutated");
 });
-test("optimisation still improves a sheet with no offcut reaching 15%", () => {
+test("optimisation improves small recoverable strips when the user allows them", () => {
+  const settings = {
+    width: 100,
+    height: 100,
+    margin: 5,
+    gap: 2,
+    rotations: 1,
+    scale: 1,
+    allowMirror: false,
+    minOffcutSide: 0,
+  };
   const parts = ["a", "b", "c"].map((id) => ({ id, outer: rect(89.9, 25) }));
   const initial = [t("a", 5.03, 5.03), t("b", 5.03, 35), t("c", 5.03, 65)];
   const before = evaluateLayout(parts, initial, settings);
   const result = compactLayout(parts, initial, settings, {
     milliseconds: 1500,
   });
-  assert.equal(before.sheets[0].rectangles.length, 0);
-  assert.equal(result.report.sheets[0].rectangles.length, 0);
+  assert.ok(before.sheets[0].rectangle.area < 1500);
+  assert.ok(result.report.sheets[0].rectangle.area < 1500);
   assert.ok(
     result.report.sheets[0].rectangle.area >
       before.sheets[0].rectangle.area * 2,

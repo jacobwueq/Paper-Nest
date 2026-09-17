@@ -1,4 +1,4 @@
-import { transformed, clearance } from "./geometry.js?v=0.6.0";
+import { transformed, clearance } from "./geometry.js?v=0.7.0";
 export const rectanglePoints = (r) => [
   { x: r.x, y: r.y },
   { x: r.x + r.w, y: r.y },
@@ -13,7 +13,7 @@ export function checkedOffcuts(
   options = {},
 ) {
   const rectangles = options.offcuts || [];
-  if (!Array.isArray(rectangles) || rectangles.length > 6)
+  if (!Array.isArray(rectangles) || rectangles.length > 2)
     throw new Error("Invalid offcut selection / 餘料選擇無效");
   const byId = new Map(parts.map((p) => [p.id, p]));
   const polygons = placements
@@ -25,7 +25,7 @@ export function checkedOffcuts(
       ![r.x, r.y, r.w, r.h].every(Number.isFinite) ||
       r.w <= 0 ||
       r.h <= 0 ||
-      r.w * r.h < settings.width * settings.height * 0.15 - 1e-6 ||
+      Math.min(r.w, r.h) < (settings.minOffcutSide ?? 20) - 1e-6 ||
       r.x < settings.margin - 1e-6 ||
       r.y < settings.margin - 1e-6 ||
       r.x + r.w > settings.width - settings.margin + 1e-6 ||

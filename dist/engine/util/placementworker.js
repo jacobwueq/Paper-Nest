@@ -216,7 +216,8 @@ function PlacementWorker(binPolygon, paths, ids, rotations, config, nfpCache){
 				finalNfp = f;
 				
 				// Cache the occupied bounds once per part, not once per candidate.
-				// Maximise one recoverable edge rectangle, then minimise the cluster.
+				// Fast seed: compact the occupied envelope. Complete layouts and the
+				// contour repair worker use the shared two-offcut area objective.
 				var occupiedPoints=[];
 				for(m=0;m<placed.length;m++) for(n=0;n<placed[m].length;n++)
 					occupiedPoints.push({x:placed[m][n].x+placements[m].x,y:placed[m][n].y+placements[m].y});
@@ -250,7 +251,7 @@ function PlacementWorker(binPolygon, paths, ids, rotations, config, nfpCache){
 						// towards the cluster corner instead of leaving NFP vertex ties arbitrary.
 						var cx=partBounds.x+shiftvector.x+partBounds.w/2;
 						var cy=partBounds.y+shiftvector.y+partBounds.h/2;
-						var free=spare.w*spare.h,box=footprint.w*footprint.h,anchor=cx*cx+cy*cy;
+						var free=sheetBounds.width*sheetBounds.height-footprint.w*footprint.h,box=footprint.w*footprint.h,anchor=cx*cx+cy*cy;
 						if(free>bestFree+1e-5 || (Math.abs(free-bestFree)<1e-5 &&
 							(box<bestBox-1e-5 || (Math.abs(box-bestBox)<1e-5 && anchor<bestAnchor)))){
 							bestFree=free;bestBox=box;bestAnchor=anchor;position=shiftvector;
@@ -271,7 +272,7 @@ function PlacementWorker(binPolygon, paths, ids, rotations, config, nfpCache){
 					outlines.push(outline.map(function(p){return {x:p.x+placements[pi].x,y:p.y+placements[pi].y};}));
 				}
 				var options=self.config.offcut || {width:sheetBounds.width,height:sheetBounds.height,padding:0};
-				reports.push(PaperOffcut.collect(outlines,{x:options.origin||0,y:options.origin||0,w:options.width,h:options.height},options.padding,options.minArea === undefined ? Infinity : options.minArea));
+				reports.push(PaperOffcut.collect(outlines,{x:options.origin||0,y:options.origin||0,w:options.width,h:options.height},options.padding,options.minSide === undefined ? 20 : options.minSide));
 			}
 
 			for(i=0; i<placed.length; i++){
@@ -291,7 +292,7 @@ function PlacementWorker(binPolygon, paths, ids, rotations, config, nfpCache){
 		
 		// there were parts that couldn't be placed
 		// Placing one more part outranks any number of extra sheets.
-		if(!self.config.offcut || self.config.offcut.minArea === undefined) reports.forEach(function(r){delete r.rectangles;});
+		if(!self.config.offcut || self.config.offcut.minSide === undefined) reports.forEach(function(r){delete r.rectangles;});
 		var fitness = PaperOffcut.score(paths.length, reports);
 		
 		return {placements: allplacements, fitness: fitness, paths: paths, area: binarea };

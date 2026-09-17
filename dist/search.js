@@ -1,5 +1,5 @@
-import { transformed } from "./geometry.js?v=0.6.0";
-import "./engine/util/offcut.js?v=0.6.0";
+import { transformed } from "./geometry.js?v=0.7.0";
+import "./engine/util/offcut.js?v=0.7.0";
 const offcut = globalThis.PaperOffcut;
 export const ROTATIONS = [1, 4, 12, 24, 72, 360];
 export function searchSettings(rotations) {
@@ -27,7 +27,7 @@ export function evaluateLayout(parts, placements, settings) {
           h: settings.height - 2 * settings.margin,
         },
         settings.gap + 0.03 * Math.max(1, settings.scale ?? 1),
-        settings.width * settings.height * 0.15,
+        settings.minOffcutSide ?? 20,
       ),
     }));
   return {
