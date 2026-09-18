@@ -3,6 +3,19 @@
 // or diagonal contour can never disappear between samples. Concave row spans
 // are conservatively filled; holes are not counted as recoverable offcuts.
 (function (root) {
+  // Bounded area discount: 4wh/(w+h)^2 is 1 for a square and tends to 0
+  // for a thin strip. Monotone in each side: trimming a rectangle cannot game it.
+  function utility(r, weight = 0) {
+    const a = r.w * r.h,
+      sum = r.w + r.h;
+    if (!Number.isFinite(weight) || weight < 0 || weight > 0.5)
+      throw new Error("Invalid offcut shape weight");
+    return weight === 0
+      ? (r.area ?? a)
+      : sum > 0
+        ? a * (1 - weight + (weight * 4 * a) / (sum * sum))
+        : 0;
+  }
   function bounds(points) {
     var x = Infinity,
       y = Infinity,
@@ -72,11 +85,13 @@
     function offer(r) {
       const area = r.w * r.h;
       if (area <= 1e-6 || Math.min(r.w, r.h) + 1e-8 < minSide) return;
-      if (area > best.w * best.h + 1e-6) {
+      const value = utility(r, context?.shapeWeight || 0),
+        bestValue = utility(best, context?.shapeWeight || 0);
+      if (value > bestValue + 1e-6) {
         best = r;
         alternatives.clear();
       }
-      if (Math.abs(area - best.w * best.h) < 1e-6) {
+      if (Math.abs(value - utility(best, context?.shapeWeight || 0)) < 1e-6) {
         if (Math.min(r.w, r.h) > Math.min(best.w, best.h)) best = r;
         if (findAlternatives)
           alternatives.set(
@@ -160,7 +175,7 @@
           var w = (col - start) * dx,
             h = previousHeight * dy;
           // An inferior rectangle cannot affect offer(). Avoid allocating it.
-          if (w * h >= best.w * best.h - 1e-6)
+          if (w * h >= utility(best, context?.shapeWeight || 0) - 1e-6)
             offer({
               x: x + start * dx,
               y: y + (row + 1 - previousHeight) * dy,
@@ -200,7 +215,11 @@
     { x: r.x, y: r.y + r.h },
   ];
   function collect(polygons, sheet, padding = 0, minSide = 20, options = {}) {
-    const context = { baseCount: polygons.length, count: options.count };
+    const context = {
+      baseCount: polygons.length,
+      count: options.count,
+      shapeWeight: options.shapeWeight || 0,
+    };
     const first = analyse(polygons, sheet, padding, minSide, true, context);
     // Keep alternative equal-largest placements alive, comparing their next
     // rectangles before pruning. Bounds apply to search alternatives, never to
@@ -266,8 +285,8 @@
             context,
           );
       const ranked = (s) => [
-        ...s.rectangles.map((r) => r.area),
-        ...(s.done ? [] : [s.next.rectangle.area]),
+        ...s.rectangles.map((r) => utility(r, context.shapeWeight)),
+        ...(s.done ? [] : [utility(s.next.rectangle, context.shapeWeight)]),
       ];
       next.sort((a, b) => compareAreas(ranked(a), ranked(b)));
       // A smaller prefix can never beat a larger one, however many small
@@ -292,9 +311,11 @@
       recoveredArea: rectangles.reduce((sum, r) => sum + r.area, 0),
     };
   }
-  function score(unplaced, reports) {
+  function score(unplaced, reports, shapeWeight = 0) {
     const areas = reports
-      .flatMap((r) => (r.rectangles || [r.rectangle]).map((q) => q.area))
+      .flatMap((r) =>
+        (r.rectangles || [r.rectangle]).map((q) => utility(q, shapeWeight)),
+      )
       .filter((a) => a > 1e-6)
       .sort((a, b) => b - a);
     return [
@@ -318,6 +339,7 @@
     return 0;
   }
   root.PaperOffcut = {
+    utility,
     analyse,
     collect,
     score,

@@ -4,21 +4,21 @@ import {
   poseKey,
   count,
   measured,
-} from "./nesting-profile.js?v=0.10.0";
+} from "./nesting-profile.js?v=0.11.0";
 // Explicit shared-boundary validation. Ordinary clearance remains untouched.
-import * as vendor from "./engine/util/clipper.js?v=0.10.0";
+import * as vendor from "./engine/util/clipper.js?v=0.11.0";
 import {
   transformed,
   segmentDistance,
   clearance,
   bounds,
-} from "./geometry.js?v=0.10.0";
+} from "./geometry.js?v=0.11.0";
 import {
   extractPartEdges,
   transformEdge,
   edgeCompatibility,
   sharedSection,
-} from "./common-edge.js?v=0.10.0";
+} from "./common-edge.js?v=0.11.0";
 const C = globalThis.ClipperLib || vendor.default;
 const EPS = 1e-6,
   SCALE = 1e6;
@@ -380,4 +380,61 @@ export function contactsAtPlacement(
     result.push(...contacts);
   }
   return result;
+}
+
+// A junction needs a local path of independently validated shared edges through
+// the very same endpoint. Membership in a distant cluster is not sufficient.
+export function sharedJunctions(sharedPairs, idA, idB, sheet) {
+  const nodes = [];
+  for (const pair of sharedPairs) {
+    if (pair.sheet !== sheet) continue;
+    for (const point of pair.shared.flat()) {
+      let node = nodes.find((n) => near(n.point, point));
+      if (!node) {
+        node = { point, links: new Map() };
+        nodes.push(node);
+      }
+      for (const [a, b] of [
+        [pair.a, pair.b],
+        [pair.b, pair.a],
+      ]) {
+        if (!node.links.has(a)) node.links.set(a, new Set());
+        node.links.get(a).add(b);
+      }
+    }
+  }
+  return nodes
+    .filter((n) => {
+      if (n.links.size < 3 || !n.links.has(idA) || !n.links.has(idB))
+        return false;
+      const queue = [idA],
+        seen = new Set(queue);
+      for (let i = 0; i < queue.length; i++)
+        for (const id of n.links.get(queue[i]) || [])
+          if (!seen.has(id)) {
+            seen.add(id);
+            queue.push(id);
+          }
+      return seen.has(idB);
+    })
+    .map((n) => n.point);
+}
+export function junctionClearance(a, b, gap, points) {
+  if (!points.length || interiorOverlap(a, b)) return false;
+  let touched = false;
+  for (const e of edges(a))
+    for (const f of edges(b)) {
+      const contact = intersection(e, f);
+      if (!contact) continue;
+      touched = true;
+      if (length(contact) > EPS || !points.some((p) => near(contact[0], p)))
+        return false;
+    }
+  if (!touched) return false;
+  const endpoints = points.map((p) => [p, p]);
+  return spaced(
+    exteriorPieces(a, endpoints, gap),
+    exteriorPieces(b, endpoints, gap),
+    gap,
+  );
 }

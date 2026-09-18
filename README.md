@@ -1,5 +1,34 @@
 # Paper Nest / 紙材排料
 
+
+## Current sheet, docking and offcut controls / 現行板材、接合及餘料設定
+
+- Landscape A4 297×210, A3 420×297 (initial selection), A2 594×420 and A1 841×594 mm.
+- `cluster-docking.js` moves an entire existing contact component using real child
+  straight-edge contact events. Original relative transforms stay intact. The
+  connected result may exceed the four-part **new assembly** limit. Candidate work
+  is bounded to 256 unique poses and a quarter of the cluster-stage deadline;
+  continuation resumes the attachment queue. Full-layout validation and scoring
+  still determine acceptance; this is not an exhaustive optimiser.
+- Local multi-part junctions are accepted only when independently validated shared
+  edges connect the incident parts at that exact point. Unrelated corner touches,
+  interior overlap and remote clearance violations remain invalid.
+- `offcutShapeWeight` is 0.35 in the UI, adjustable from 0 to 0.5. Offcut value is
+  `w*h*(1-weight + weight*4*w*h/(w+h)^2)`. The bounded discount favours broader
+  remnants without making a tiny square beat a much larger useful rectangle.
+  Extraction and global ranking use this same value. Raw displayed/exported
+  dimensions and area are unchanged. Zero (also the lower-level API fallback)
+  exactly restores legacy area-only ranking described in older sections below.
+- Multi-part tests include docking two pairs into a 2×2 junction and two triples
+  into a six-part contact network. Export retains each original child and removes
+  each shared cutting interval only once.
+
+板材提供 A4–A1；已有 cluster 可保持內部排位，沿其他邊接到另一組，形成超過四件嘅網絡。
+新組合搜尋仍設四件上限，接合另有候選及時間限制，唔保證全局最佳。
+共用交點必須有同一位置嘅合法共邊連接證據，意外碰角及其他間距違規仍拒絕。
+餘料比例偏好預設 0.35；0 代表舊式純面積排序。綠框提取同排位評分用同一綜合價值，
+實際尺寸、面積及匯出 geometry 不會因評分而改變。
+
 Working browser prototype for paper laser nesting, defaulting to original scale. 本機瀏覽器紙材排料試作版，預設保持原尺寸。
 
 ## Architecture / 架構

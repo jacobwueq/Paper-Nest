@@ -40,6 +40,7 @@ window.addEventListener("message", (event) => {
         padding: settings.gap + safety / 2,
         origin: collisionPadding,
         minSide: settings.minOffcutSide ?? 20,
+        shapeWeight: settings.offcutShapeWeight ?? 0,
         outlines: parts.map((p) =>
           p.outer.map((v) => ({ x: v.x + offsets.get(p.id), y: v.y })),
         ),

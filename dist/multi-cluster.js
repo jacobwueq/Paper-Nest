@@ -1,28 +1,29 @@
-import { clusterPierceLowerBound } from "./cluster-pierces.js?v=0.10.0";
+import { dockConnectedClusters } from "./cluster-docking.js?v=0.11.0";
+import { clusterPierceLowerBound } from "./cluster-pierces.js?v=0.11.0";
 import {
   extractPartEdges,
   commonEdgeCandidates,
-} from "./common-edge.js?v=0.10.0";
+} from "./common-edge.js?v=0.11.0";
 import {
   contactsAtPlacement,
   commonContactClearance,
-} from "./common-contact.js?v=0.10.0";
+} from "./common-contact.js?v=0.11.0";
 import {
   createPartCluster,
   expandPairCluster,
-} from "./pair-cluster.js?v=0.10.0";
+} from "./pair-cluster.js?v=0.11.0";
 import {
   area,
   bounds,
   transformed,
   clearance,
   validateLayout,
-} from "./geometry.js?v=0.10.0";
-import { cuttingMetrics } from "./cut-metrics.js?v=0.10.0";
-import { pocketTranslations } from "./pocket-search.js?v=0.10.0";
-import { evaluateLayout, improves } from "./search.js?v=0.10.0";
-import { count, measured } from "./nesting-profile.js?v=0.10.0";
-import { scoreDecision } from "./nesting-debug.js?v=0.10.0";
+} from "./geometry.js?v=0.11.0";
+import { cuttingMetrics } from "./cut-metrics.js?v=0.11.0";
+import { pocketTranslations } from "./pocket-search.js?v=0.11.0";
+import { evaluateLayout, improves } from "./search.js?v=0.11.0";
+import { count, measured } from "./nesting-profile.js?v=0.11.0";
+import { scoreDecision } from "./nesting-debug.js?v=0.11.0";
 const norm = (a) => ((a % 360) + 360) % 360;
 const perimeter = (p) =>
   p.reduce((s, a, i) => {
@@ -423,8 +424,16 @@ export function compactMultiPartClusters(
       deadline = options.deadline ?? Infinity,
       started = now(),
       debug = options.onDebug;
+    const docking = dockConnectedClusters(parts, initial, settings, {
+      ...options,
+      now,
+      deadline: Number.isFinite(deadline)
+        ? started + (deadline - started) * 0.25
+        : Infinity,
+    });
+    const assemblyStart = now();
     const assemblyDeadline = Number.isFinite(deadline)
-      ? started + (deadline - started) * 0.5
+      ? assemblyStart + (deadline - assemblyStart) * 0.5
       : Infinity;
     const search = searchMultiPartClusters(parts, initial, settings, {
       ...options,
@@ -433,8 +442,8 @@ export function compactMultiPartClusters(
       shouldStop: () => now() >= assemblyDeadline,
     });
     let report = evaluateLayout(parts, initial, settings),
-      best = null,
-      generated = 0;
+      best = docking.changed ? docking : null,
+      generated = docking.generated;
     const byId = new Map(parts.map((p) => [p.id, p])),
       byPose = new Map(initial.map((t) => [t.id, t]));
     // Give larger clusters a turn; every accepted result uses the full sheet score.
@@ -568,6 +577,8 @@ export function compactMultiPartClusters(
         ...search.candidates.map((c) => c.ids.length),
       ),
       nextClusterOffset: search.nextOffset,
+      nextDockOffset: docking.nextOffset,
+      dockingCandidateCount: docking.generated,
     };
   });
 }

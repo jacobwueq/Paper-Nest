@@ -9,9 +9,9 @@
       content="Arrange DXF and SVG paper-cutting parts on full-size sheets. Review geometry, nest and export locally in your browser."
     />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="style.css?v=0.10.0" />
+    <link rel="stylesheet" href="style.css?v=0.11.0" />
     <script src="vendor/path-data-polyfill.js"></script>
-    <script type="module" src="app.js?v=0.10.0"></script>
+    <script type="module" src="app.js?v=0.11.0"></script>
   </head>
   <body>
     <header class="topbar">
@@ -22,7 +22,7 @@
             fill="currentColor"
           /></svg
         ><span>Paper Nest <small>紙材排料</small></span></a
-      ><span class="version">WORKING PROTOTYPE · 0.10.0</span
+      ><span class="version">WORKING PROTOTYPE · 0.11.0</span
       ><span class="local"
         >Files stay in your browser <span>檔案於本機處理</span></span
       >
@@ -72,8 +72,10 @@
           <div class="field">
             <label for="preset">Sheet size <small>板材尺寸</small></label
             ><select id="preset">
-              <option value="a3">A3 · 420 × 297 mm</option>
               <option value="a4">A4 · 297 × 210 mm</option>
+              <option value="a3" selected>A3 · 420 × 297 mm</option>
+              <option value="a2">A2 · 594 × 420 mm</option>
+              <option value="a1">A1 · 841 × 594 mm</option>
               <option value="custom">Custom · 自訂</option>
             </select>
           </div>
@@ -184,6 +186,21 @@
               ></span
             ></label
           >
+          <div class="field">
+            <label for="offcut-shape-weight"
+              >Offcut proportions · 餘料長寬比例偏好</label
+            ><input
+              id="offcut-shape-weight"
+              type="number"
+              min="0"
+              max="0.5"
+              step="0.05"
+              value="0.35"
+            /><small
+              >0: area only · 0.35: balanced · 0.5: stronger preference for
+              broader remnants<br />0：純面積；0.35：平衡；0.5：較偏好闊身餘料</small
+            >
+          </div>
           <label class="review-check"
             ><input id="common-edge" type="checkbox" /><span
               >Common-edge nesting<br /><small
@@ -206,13 +223,13 @@
               disabled
             /><span
               >Explore multi-part clusters<br /><small
-                >探索 3–4 件共邊組合</small
+                >探索 3–4 件新組合；已有組合可繼續共邊連接</small
               ></span
             ></label
           >
           <div class="field">
             <label for="max-cluster-parts"
-              >Maximum cluster parts · 每組最多件數</label
+              >New cluster size · 新組合最多件數</label
             ><input
               id="max-cluster-parts"
               type="number"

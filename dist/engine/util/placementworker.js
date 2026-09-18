@@ -272,7 +272,7 @@ function PlacementWorker(binPolygon, paths, ids, rotations, config, nfpCache){
 					outlines.push(outline.map(function(p){return {x:p.x+placements[pi].x,y:p.y+placements[pi].y};}));
 				}
 				var options=self.config.offcut || {width:sheetBounds.width,height:sheetBounds.height,padding:0};
-				reports.push(PaperOffcut.collect(outlines,{x:options.origin||0,y:options.origin||0,w:options.width,h:options.height},options.padding,options.minSide === undefined ? 20 : options.minSide));
+				reports.push(PaperOffcut.collect(outlines,{x:options.origin||0,y:options.origin||0,w:options.width,h:options.height},options.padding,options.minSide === undefined ? 20 : options.minSide,{shapeWeight:options.shapeWeight || 0}));
 			}
 
 			for(i=0; i<placed.length; i++){
@@ -292,7 +292,7 @@ function PlacementWorker(binPolygon, paths, ids, rotations, config, nfpCache){
 		
 		// there were parts that couldn't be placed
 		// Placing one more part outranks any number of extra sheets.
-		var fitness = PaperOffcut.score(paths.length, reports);
+		var fitness = PaperOffcut.score(paths.length, reports, (self.config.offcut && self.config.offcut.shapeWeight) || 0);
 		
 		return {placements: allplacements, fitness: fitness, paths: paths, area: binarea };
 	};

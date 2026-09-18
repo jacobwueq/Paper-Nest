@@ -1,24 +1,25 @@
+import { SHEET_PRESETS } from "./sheet-presets.js?v=0.11.0";
 import {
   remnantPlan,
   visibleRemnantRectangles,
-} from "./remnant-policy.js?v=0.10.0";
-import { extractPartEdges } from "./common-edge.js?v=0.10.0";
+} from "./remnant-policy.js?v=0.11.0";
+import { extractPartEdges } from "./common-edge.js?v=0.11.0";
 import {
   sampleParts,
   partSVG,
   pathPoints,
   esc,
   validateLayout,
-} from "./geometry.js?v=0.10.0";
-import { parseDXF, parseSVG } from "./importers.js?v=0.10.0";
-import { exportSVG, exportDXF } from "./exporters.js?v=0.10.0";
+} from "./geometry.js?v=0.11.0";
+import { parseDXF, parseSVG } from "./importers.js?v=0.11.0";
+import { exportSVG, exportDXF } from "./exporters.js?v=0.11.0";
 import {
   ROTATIONS,
   searchSettings,
   evaluateLayout,
   improves,
   searchSeed,
-} from "./search.js?v=0.10.0";
+} from "./search.js?v=0.11.0";
 const $ = (id) => document.getElementById(id);
 const state = {
   parts: sampleParts(),
@@ -54,6 +55,7 @@ const readSettings = () => ({
   height: Number($("height").value),
   gap: Number($("gap").value),
   minOffcutSide: Number($("min-offcut-side").value),
+  offcutShapeWeight: Number($("offcut-shape-weight").value),
   margin: Number($("margin").value),
   rotations: Number($("rotation").value),
   scale: Number($("scale").value) / 100,
@@ -82,6 +84,7 @@ function checkSettings(s) {
       s.rotations,
       s.scale,
       s.minOffcutSide,
+      s.offcutShapeWeight,
       s.commonEdgeWeight,
     ].every(Number.isFinite) ||
     !Number.isInteger(s.maxClusterParts) ||
@@ -92,6 +95,8 @@ function checkSettings(s) {
     s.clusterBeamWidth > 32 ||
     s.commonEdgeWeight < 0 ||
     s.commonEdgeWeight > 100 ||
+    s.offcutShapeWeight < 0 ||
+    s.offcutShapeWeight > 0.5 ||
     s.minOffcutSide < 0 ||
     s.minOffcutSide > 3000 ||
     s.scale < 0.01 ||
@@ -189,7 +194,7 @@ function render() {
   $("offcut-list").innerHTML = remaining
     .map(
       (r) =>
-        `<label class="offcut-choice"><input type="checkbox" data-offcut="${r.id}" ${state.excludedOffcuts.has(r.id) ? "" : "checked"}/><span><strong>${r.number.toString().padStart(2, "0")} · ${displayMm(r.w)} × ${displayMm(r.h)} mm</strong><small>${Math.floor(r.area / 100)} cm² · ${((r.area / (s.width * s.height)) * 100).toFixed(1)}% of sheet / 原板</small></span></label>`,
+        `<label class="offcut-choice"><input type="checkbox" data-offcut="${r.id}" ${state.excludedOffcuts.has(r.id) ? "" : "checked"}/><span><strong>${r.number.toString().padStart(2, "0")} · ${displayMm(r.w)} × ${displayMm(r.h)} mm</strong><small>${Math.floor(r.area / 100)} cm² · ${(Math.max(r.w, r.h) / Math.min(r.w, r.h)).toFixed(1)}:1 · ${((r.area / (s.width * s.height)) * 100).toFixed(1)}% of sheet / 原板</small></span></label>`,
     )
     .join("");
   const pad = Math.max(w, h) * 0.035;
@@ -271,6 +276,7 @@ function render() {
     "scale",
     "allow-mirror",
     "min-offcut-side",
+    "offcut-shape-weight",
     "units",
     "common-edge",
   ])
@@ -388,7 +394,7 @@ function updateSearchStatus() {
 function startEngine() {
   const run = ++state.run;
   compactor = new Worker(
-    new URL("./compaction-worker.js?v=0.10.0", import.meta.url),
+    new URL("./compaction-worker.js?v=0.11.0", import.meta.url),
     { type: "module" },
   );
   compactor.onmessage = ({ data }) => {
@@ -443,7 +449,7 @@ function startEngine() {
       location.origin,
     );
   };
-  frame.src = "engine/index.html?v=0.10.0";
+  frame.src = "engine/index.html?v=0.11.0";
   document.body.append(frame);
   stopTimer = setTimeout(() => {
     stop();
@@ -721,6 +727,7 @@ for (const id of [
   "scale",
   "allow-mirror",
   "min-offcut-side",
+  "offcut-shape-weight",
   "common-edge",
   "pair-clusters",
   "multi-part-clusters",
@@ -741,14 +748,10 @@ for (const id of [
   });
 $("min-offcut-side").addEventListener("input", invalidate);
 $("preset").onchange = () => {
-  const p = $("preset").value;
-  if (p === "a3") {
-    $("width").value = 420;
-    $("height").value = 297;
-  }
-  if (p === "a4") {
-    $("width").value = 297;
-    $("height").value = 210;
+  const preset = SHEET_PRESETS[$("preset").value];
+  if (preset) {
+    $("width").value = preset.width;
+    $("height").value = preset.height;
   }
   invalidate();
 };

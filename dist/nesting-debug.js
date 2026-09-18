@@ -15,6 +15,7 @@ export function createNestingDiagnostics(enabled, limit = 600) {
               "cluster-selected",
               "cluster-search",
               "cluster-portfolio",
+              "cluster-docking-summary",
             ].includes(event.stage)
           ) {
             decisions.push(event);
@@ -32,7 +33,7 @@ export function scoreDecision(candidate, incumbent) {
   const names = [
     "unplaced-parts",
     "sheet-count",
-    "largest-first-offcuts",
+    "offcut-area-and-proportions",
     "bounding-area",
     "cutting-cost",
     "compactness",

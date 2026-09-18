@@ -1,24 +1,24 @@
-import { compactMultiPartClusters } from "./multi-cluster.js?v=0.10.0";
+import { compactMultiPartClusters } from "./multi-cluster.js?v=0.11.0";
 import {
   createNestingDiagnostics,
   scoreDecision,
-} from "./nesting-debug.js?v=0.10.0";
-import { compactPairClusters } from "./pair-cluster.js?v=0.10.0";
-import { profiled, count } from "./nesting-profile.js?v=0.10.0";
+} from "./nesting-debug.js?v=0.11.0";
+import { compactPairClusters } from "./pair-cluster.js?v=0.11.0";
+import { profiled, count } from "./nesting-profile.js?v=0.11.0";
 import {
   contactFromCandidate,
   replacePlacement,
   contactsAtPlacement,
-} from "./common-contact.js?v=0.10.0";
-import { commonEdgeCandidates } from "./common-edge.js?v=0.10.0";
-import { pocketTranslations } from "./pocket-search.js?v=0.10.0";
+} from "./common-contact.js?v=0.11.0";
+import { commonEdgeCandidates } from "./common-edge.js?v=0.11.0";
+import { pocketTranslations } from "./pocket-search.js?v=0.11.0";
 import {
   bounds,
   transformed,
   clearance,
   validateLayout,
-} from "./geometry.js?v=0.10.0";
-import { evaluateLayout, improves } from "./search.js?v=0.10.0";
+} from "./geometry.js?v=0.11.0";
+import { evaluateLayout, improves } from "./search.js?v=0.11.0";
 
 // Remove two parts together, keep several alternatives for the first, and
 // reinsert the second. Only complete, improved layouts leave this function.
@@ -634,6 +634,8 @@ function compactLayoutImpl(parts, initial, settings, options) {
     commonEdgeCandidateCount,
     clusterCount: clusterResult?.clusterCount || 0,
     nextClusterOffset: clusterResult?.nextClusterOffset || 0,
+    nextDockOffset: clusterResult?.nextDockOffset || 0,
+    dockingCandidateCount: clusterResult?.dockingCandidateCount || 0,
     maxClusterSize: clusterResult?.maxClusterSize || 0,
     clusterAssemblyCount: clusterResult?.clusterAssemblyCount || 0,
     clustersMoved:

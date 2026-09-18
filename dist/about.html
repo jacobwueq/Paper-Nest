@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Paper Nest — Support / 支援範圍</title>
     <link rel="icon" href="favicon.svg" />
-    <link rel="stylesheet" href="style.css?v=0.10.0" />
+    <link rel="stylesheet" href="style.css?v=0.11.0" />
   </head>
   <body>
     <header class="topbar">
@@ -95,18 +95,18 @@
         Limits: 5 MB, 80 parts and 3,000 entities per drawing. Each search has a
         20-second improvement budget; a usable result can appear earlier.
         Continue from the best result, or stop at any time. Objectives, in
-        order: place all parts, minimise sheet count, maximise the largest
-        rectangular offcut, then the second, third and so on. Smaller pieces
-        cannot compensate for a smaller first piece. Equivalent sequences are
-        decided by compactness. A background compaction pass searches contour
-        contact positions inside concave gaps and tries moving pairs together
-        while checking clearances. Pair search uses a bounded candidate beam and
-        time budget. Existing results are replaced only by a better validated
-        result.<br />
+        order: place all parts, minimise sheet count, maximise the primary
+        offcut value (area balanced with proportions), then the second, third
+        and so on. Small fragments cannot compensate for a worse primary offcut
+        value. Equivalent sequences are decided by compactness. A background
+        compaction pass searches contour contact positions inside concave gaps
+        and tries moving pairs together while checking clearances. Pair search
+        uses a bounded candidate beam and time budget. Existing results are
+        replaced only by a better validated result.<br />
         上限：5 MB、80 件零件及 3,000 個圖元。每次最多改善 20
         秒，有結果即顯示；可隨時停止或承接結果繼續。
-        依次優先放齊零件、減少板材張數，再由最大塊起逐塊比較第二、第三塊……；
-        細餘料唔能夠抵銷最大塊縮細，序列相同時再收緊零件。
+        依次優先放齊零件、減少板材張數，再按面積與比例嘅綜合價值逐塊比較餘料；
+        細碎餘料唔能夠抵銷主要餘料價值下降，序列相同時再收緊零件。
         背景按真實輪廓搜尋凹位，亦會嘗試兩件一齊重排；雙件搜尋有候選數及時間限制。
         每步核對間距，只保留完整而且更好嘅有效結果。
       </p>
@@ -116,14 +116,14 @@
         strips are measured directly; other rectangles use a grid with at most
         256 cells along the longest sheet edge. Curved and concave boundaries
         can make this estimate smaller than the true available rectangle. Holes
-        are excluded. Repeatedly reserve the largest clear rectangle until none
-        meets the minimum short edge. There is no fixed count. Equal-area
+        are excluded. Repeatedly reserve the highest-value clear rectangle until
+        none meets the minimum short edge. There is no fixed count. Equal-value
         positions are compared using subsequent offcuts, retaining up to 32
         spatially spread candidates and eight tied continuations. These search
         limits do not limit the number of offcuts. Both sides must meet the
         selected minimum short edge (default 20 mm; 0 removes this size filter).
-        No percentage threshold applies.<br />逐塊找最大長方形，直到冇符合最短邊尺寸嘅餘料，冇固定塊數上限。
-        同面積位置會比較後續餘料；搜尋最多保留 32
+        No percentage threshold applies.<br />逐塊找面積與比例綜合最佳嘅長方形，直到冇符合最短邊尺寸嘅餘料，冇固定塊數上限。
+        同分位置會比較後續餘料；搜尋最多保留 32
         個分散候選及八條同分延續路徑，並非限制餘料數目。
         兩邊均需達到所選最短邊尺寸（預設 20 mm，0
         不限），排料、顯示及匯出使用相同設定。 不使用面積百分比門檻，孔洞不計。
@@ -141,6 +141,27 @@
         若原圖已有同名 layer，新 layer 會加編號，保留原圖設定。
         匯出前會核對切割框同零件及其他已選餘料嘅間距。
       </p>
+      <h2>Offcut proportions / 餘料比例</h2>
+      <p>
+        Offcut proportions balances area with shape. At the default 0.35, narrow
+        strips receive a bounded area discount; a slightly smaller, broader
+        rectangle may win. Zero restores area-only ranking. Sheet count and
+        placing every part still come first. The same preference is used to find
+        the green rectangles and to rank layouts; displayed areas remain real
+        square millimetres.<br />「餘料長寬比例偏好」預設
+        0.35，同時考慮面積及比例；幼長餘料會扣分，令稍細而闊身嘅長方形可以勝出。設為
+        0
+        回復純面積排序。放齊零件及減少板數仍然優先。綠框提取及排位評分用同一偏好，顯示面積仍係真實面積。
+      </p>
+      <p>
+        Existing clusters can dock along additional original straight edges,
+        including diagonal edges, while keeping their internal layout. A
+        connected network may exceed the four-part new-assembly limit. All
+        contacts are validated again; common junctions need locally connected,
+        validated shared edges. Unrelated boundaries retain normal spacing.<br />已有
+        cluster
+        可以沿其他原始直邊（包括斜邊）接合，內部排位保持不變；整個連接網絡可以超過四件新組合上限。每次重新驗證接觸，共用交點必須有局部合法共邊連接，其他邊保持正常間距。
+      </p>
       <h2>Common edges &amp; clusters / 共邊及多件組合</h2>
       <p>
         Common-edge nesting permits designated straight boundaries at zero gap;
@@ -148,9 +169,9 @@
         the required contact angle, except when rotation is locked. Multi-part
         search keeps alternative pairs and expands them to three or four
         original parts. Every accepted move must improve the full sheet score:
-        largest reusable rectangle first, then smaller rectangles, occupied
-        extent and cutting cost.<br />指定直邊可零間距，其他外邊維持正常間距。斜邊按所需角度貼合，鎖定旋轉除外。多件搜尋保留不同
-        pair，再探索三至四件；每次接受移動都要改善全板評分，依次優先考慮最大餘料、較小餘料、佔用範圍及切線成本。
+        highest-value reusable rectangle first (area and proportions), then
+        smaller rectangles, occupied extent and cutting cost.<br />指定直邊可零間距，其他外邊維持正常間距。斜邊按所需角度貼合，鎖定旋轉除外。多件搜尋保留不同
+        pair，再探索三至四件；每次接受移動都要改善全板評分，依次優先考慮面積與比例綜合最佳嘅餘料、較小餘料、佔用範圍及切線成本。
       </p>
       <p>
         The search is bounded and cannot guarantee the global optimum. Cluster

@@ -1,11 +1,15 @@
-import { preservedRemnants } from "./remnant-policy.js?v=0.10.0";
+import { preservedRemnants } from "./remnant-policy.js?v=0.11.0";
 import {
   cached,
   objectKey,
   poseKey,
   count,
-} from "./nesting-profile.js?v=0.10.0";
-import { commonContactClearance } from "./common-contact.js?v=0.10.0";
+} from "./nesting-profile.js?v=0.11.0";
+import {
+  commonContactClearance,
+  sharedJunctions,
+  junctionClearance,
+} from "./common-contact.js?v=0.11.0";
 // Geometry is expressed in millimetres, with screen Y pointing down.
 export const TOL = 0.02;
 export const near = (a, b, e = 1e-5) => Math.hypot(a.x - b.x, a.y - b.y) <= e;
@@ -207,6 +211,8 @@ export function validateLayout(parts, placements, settings) {
       )
         errors.push(`${p.t.id}: preserved-remnant / 已保留餘料`);
   }
+  const failures = [],
+    sharedPairs = [];
   for (let i = 0; i < polygons.length; i++)
     for (let j = i + 1; j < polygons.length; j++) {
       const a = polygons[i],
@@ -219,14 +225,37 @@ export function validateLayout(parts, placements, settings) {
                 valid: clearance(a.poly, b.poly, settings.gap),
                 reason: "clearance",
               };
-        if (!result.valid)
-          errors.push(
-            settings.commonEdgeMode === true
-              ? `${a.p.name} / ${b.p.name}: ${result.reason} / 接觸或間距無效`
-              : `${a.p.name} / ${b.p.name}: clearance / 間距不足`,
-          );
+        if (!result.valid) failures.push({ a, b, result });
+        else if (
+          settings.multiPartClusteringEnabled === true &&
+          result.shared?.length
+        )
+          sharedPairs.push({
+            a: a.t.id,
+            b: b.t.id,
+            sheet: a.t.sheet,
+            shared: result.shared,
+          });
       }
     }
+  for (const { a, b, result } of failures) {
+    const authorisedJunction =
+      settings.commonEdgeMode === true &&
+      settings.multiPartClusteringEnabled === true &&
+      result.reason === "unapproved-touch" &&
+      junctionClearance(
+        a.poly,
+        b.poly,
+        settings.gap,
+        sharedJunctions(sharedPairs, a.t.id, b.t.id, a.t.sheet),
+      );
+    if (!authorisedJunction)
+      errors.push(
+        settings.commonEdgeMode === true
+          ? `${a.p.name} / ${b.p.name}: ${result.reason} / 接觸或間距無效`
+          : `${a.p.name} / ${b.p.name}: clearance / 間距不足`,
+      );
+  }
   if (settings.commonEdgeMode === true)
     for (const { t } of polygons) {
       if (t.sharedEdges !== undefined && !Array.isArray(t.sharedEdges)) {
