@@ -373,3 +373,14 @@ AutoCAD 2027's native reader rejected the previous file with `Error in APPID
 Table`; native testing also identified missing layer PlotStyleName (390).
 The repaired sample and common-line/offcut exports open with 0 audit errors,
 0 fixes and 0 erased entities. Illustrator GUI verification remains outstanding.
+
+
+## Manual workspace
+
+Setup, Auto Nest, Manual Edit and Export have separate panels. Collapse Settings or maximise the canvas for more working space; use wheel zoom, Fit, and Space-drag to pan.
+
+After nesting, Manual Edit supports drag, Shift-selection, custom rotation, magnetic straight/diagonal partial-edge snapping, grouping, detaching, locks and 100-step undo/redo. Snapping projects onto the shared line while preserving movement along it. Invalid positions remain previews and are rejected on release. Rotate & Snap requires an explicit click.
+
+Manual placements become the export source. Export rebuilds common lines from final geometry. Lock a selection before Re-optimise unlocked to preserve its exact transforms. This refinement uses the existing compaction search; it is not a guarantee of a globally optimal re-nest.
+
+Area percentage measures part footprint divided by sheet area, so moving the same parts on the same sheet does not change that percentage; bounding extent, reusable offcuts and shared cutting length show layout improvements. Editing history is session-only and is reset by a new import or a fresh Auto Nest.

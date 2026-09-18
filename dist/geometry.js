@@ -1,15 +1,15 @@
-import { preservedRemnants } from "./remnant-policy.js?v=0.11.0";
+import { preservedRemnants } from "./remnant-policy.js?v=0.12.0";
 import {
   cached,
   objectKey,
   poseKey,
   count,
-} from "./nesting-profile.js?v=0.11.0";
+} from "./nesting-profile.js?v=0.12.0";
 import {
   commonContactClearance,
   sharedJunctions,
   junctionClearance,
-} from "./common-contact.js?v=0.11.0";
+} from "./common-contact.js?v=0.12.0";
 // Geometry is expressed in millimetres, with screen Y pointing down.
 export const TOL = 0.02;
 export const near = (a, b, e = 1e-5) => Math.hypot(a.x - b.x, a.y - b.y) <= e;
@@ -157,6 +157,18 @@ export function validateLayout(parts, placements, settings) {
     ids = new Set();
   const byId = new Map(parts.map((p) => [p.id, p]));
   const polygons = [];
+  for (const locked of settings.lockedPlacements || []) {
+    const current = placements.find((t) => t.id === locked.id);
+    if (
+      !current ||
+      ["x", "y", "angle", "sheet"].some(
+        (k) => Math.abs(current[k] - locked[k]) > 1e-8,
+      ) ||
+      (current.scale ?? 1) !== (locked.scale ?? 1) ||
+      !!current.mirrored !== !!locked.mirrored
+    )
+      errors.push(`${locked.id}: locked position / 已鎖定位置`);
+  }
   for (const t of placements) {
     const p = byId.get(t.id);
     if (!p || ids.has(t.id)) {

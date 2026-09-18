@@ -846,3 +846,327 @@ footer > span:first-child {
 .offcut-export-toggle {
   margin: 12px 0 8px;
 }
+
+/* Canvas-first workspace: only the active settings stage scrolls. */
+body {
+  height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.topbar {
+  height: 50px;
+  min-height: 50px;
+  padding: 0 18px;
+}
+.topbar .version,
+.topbar .local {
+  font-size: 10px;
+}
+.stage-nav {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  padding: 6px 12px;
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+  min-height: 44px;
+  flex-wrap: wrap;
+}
+.stage-nav button,
+.canvas-tools button,
+.manual-buttons button,
+.inline-field button {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #fff;
+  padding: 7px 10px;
+  font-size: 12px;
+  color: #243653;
+}
+.stage-nav [aria-pressed="true"] {
+  background: #e7eeff;
+  color: #164dcc;
+  border-color: #a5bdf8;
+}
+.workspace {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  overflow: hidden;
+  position: relative;
+}
+.controls {
+  padding: 16px;
+  overflow: auto;
+  min-height: 0;
+  grid-column: 1;
+  grid-row: 1;
+  width: auto;
+}
+.controls details {
+  margin: 14px 0;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.controls summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+.controls [data-panel] > label {
+  display: block;
+  margin: 12px 0;
+  font-size: 13px;
+}
+.controls [data-panel] .manual-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin: 10px 0;
+}
+.inline-field {
+  display: flex;
+  gap: 6px;
+}
+.inline-field input {
+  width: 100px;
+  min-width: 0;
+}
+#refine-unlocked {
+  margin-top: 14px;
+  font-size: 13px;
+}
+.drawing-area {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.drawing-toolbar {
+  padding: 10px 14px;
+  min-height: 48px;
+  flex: none;
+}
+.drawing-toolbar h1 {
+  font-size: 15px;
+}
+.drawing-toolbar p {
+  font-size: 11px;
+  margin: 3px 0;
+}
+.workspace .canvas-wrap {
+  margin: 0 10px;
+  min-height: 0;
+  flex: 1;
+  padding: 38px 8px 28px;
+  overflow: hidden;
+}
+.workspace .canvas-wrap #canvas {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+}
+.canvas-tools {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  display: flex;
+  gap: 3px;
+  z-index: 2;
+}
+.canvas-tools button {
+  padding: 4px 8px;
+  font-size: 11px;
+}
+.canvas-label {
+  top: 12px;
+  left: 10px;
+  max-width: 28%;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 9px;
+}
+.canvas-caption {
+  display: none;
+}
+#edit-status {
+  position: absolute;
+  bottom: 5px;
+  left: 10px;
+  right: 10px;
+  font-size: 12px;
+  background: #f6f9fbdc;
+  border-radius: 4px;
+  padding: 4px;
+  pointer-events: none;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+.result-strip {
+  padding: 7px 16px;
+  gap: 18px;
+  flex: none;
+  margin: 0;
+  font-size: 11px;
+}
+.result-strip strong {
+  font-size: 14px;
+}
+.result-strip .stat-label {
+  font-size: 9px;
+}
+#manual-metrics {
+  padding: 3px 16px 7px;
+  font-size: 11px;
+  color: #46566d;
+  min-height: 20px;
+}
+#cut-summary {
+  display: none !important;
+}
+.sheet-navigation {
+  margin: 2px;
+  padding: 2px;
+}
+.progress-track {
+  margin: 0;
+  height: 3px;
+}
+.message {
+  max-height: 65px;
+  overflow: auto;
+  margin: 4px 10px;
+  flex: none;
+}
+footer {
+  padding: 5px 14px;
+  min-height: 24px;
+  font-size: 9px;
+}
+footer span:nth-child(2) {
+  display: none;
+}
+.settings-hidden .workspace,
+.canvas-max .workspace {
+  grid-template-columns: minmax(0, 1fr);
+}
+.settings-hidden .controls,
+.canvas-max .controls {
+  display: none;
+}
+.settings-hidden .drawing-area,
+.canvas-max .drawing-area {
+  grid-column: 1;
+}
+.canvas-max .topbar,
+.canvas-max .stage-nav,
+.canvas-max footer {
+  display: none;
+}
+.drawing-part.selected .part-hit {
+  stroke: #2154e9;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  fill: #dce7ff;
+}
+.locked-part .part-hit {
+  stroke: #9856ba;
+  stroke-dasharray: 3 2;
+  vector-effect: non-scaling-stroke;
+}
+.invalid-preview .drawing-part.selected .part-hit {
+  stroke: #c5263b;
+  fill: #ffe2e6;
+}
+.snap-preview {
+  stroke-width: 4;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+#offcut-summary {
+  display: block;
+  font-size: 12px;
+  padding: 10px 0;
+}
+#offcut-summary small {
+  display: none;
+}
+#offcut-list {
+  display: flex;
+  flex-direction: column;
+  max-height: none;
+  overflow: visible;
+  margin: 0;
+}
+.export-area {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+@media (max-width: 800px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .drawing-area {
+    grid-column: 1;
+  }
+  .controls {
+    position: absolute;
+    z-index: 4;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(280px, 85vw);
+    box-shadow: 3px 0 16px #1829452b;
+  }
+  .topbar .local,
+  .topbar .version,
+  .brand small {
+    display: none;
+  }
+  .stage-nav {
+    gap: 3px;
+    padding: 5px;
+  }
+  .stage-nav button {
+    font-size: 10px;
+    padding: 6px;
+  }
+  .drawing-toolbar .view-tabs small {
+    display: none;
+  }
+  .canvas-label {
+    display: none;
+  }
+  .canvas-tools button {
+    font-size: 10px;
+    padding: 4px;
+  }
+  .result-strip {
+    gap: 12px;
+  }
+  .workspace .canvas-wrap {
+    margin: 0 4px;
+  }
+}
+
+.workspace .controls,
+.controls .arrange-section {
+  display: block;
+}
+.canvas-max .workspace .controls,
+.settings-hidden .workspace .controls {
+  display: none;
+}

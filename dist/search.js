@@ -3,10 +3,10 @@ import {
   objectKey,
   poseKey,
   count,
-} from "./nesting-profile.js?v=0.11.0";
-import { cuttingMetrics } from "./cut-metrics.js?v=0.11.0";
-import { transformed } from "./geometry.js?v=0.11.0";
-import "./engine/util/offcut.js?v=0.11.0";
+} from "./nesting-profile.js?v=0.12.0";
+import { cuttingMetrics } from "./cut-metrics.js?v=0.12.0";
+import { transformed } from "./geometry.js?v=0.12.0";
+import "./engine/util/offcut.js?v=0.12.0";
 const offcut = globalThis.PaperOffcut;
 export const ROTATIONS = [1, 4, 12, 24, 72, 360];
 export function searchSettings(rotations) {

@@ -1,25 +1,27 @@
-import { SHEET_PRESETS } from "./sheet-presets.js?v=0.11.0";
+import { installWorkspace } from "./workspace-ui.js?v=0.12.0";
+let workspaceUI = null;
+import { SHEET_PRESETS } from "./sheet-presets.js?v=0.12.0";
 import {
   remnantPlan,
   visibleRemnantRectangles,
-} from "./remnant-policy.js?v=0.11.0";
-import { extractPartEdges } from "./common-edge.js?v=0.11.0";
+} from "./remnant-policy.js?v=0.12.0";
+import { extractPartEdges } from "./common-edge.js?v=0.12.0";
 import {
   sampleParts,
   partSVG,
   pathPoints,
   esc,
   validateLayout,
-} from "./geometry.js?v=0.11.0";
-import { parseDXF, parseSVG } from "./importers.js?v=0.11.0";
-import { exportSVG, exportDXF } from "./exporters.js?v=0.11.0";
+} from "./geometry.js?v=0.12.0";
+import { parseDXF, parseSVG } from "./importers.js?v=0.12.0";
+import { exportSVG, exportDXF } from "./exporters.js?v=0.12.0";
 import {
   ROTATIONS,
   searchSettings,
   evaluateLayout,
   improves,
   searchSeed,
-} from "./search.js?v=0.11.0";
+} from "./search.js?v=0.12.0";
 const $ = (id) => document.getElementById(id);
 const state = {
   parts: sampleParts(),
@@ -73,6 +75,7 @@ const readSettings = () => ({
     ? state.preservedRemnants
     : [],
   debugCommonEdges: $("debug-common-edges").checked,
+  lockedPlacements: workspaceUI?.locked() || [],
 });
 function checkSettings(s) {
   if (
@@ -305,6 +308,7 @@ function render() {
     `Sheet ${state.sheet + 1} of ${sheetCount()} · 第 ${state.sheet + 1} / ${sheetCount()} 張`;
   $("previous").disabled = state.sheet === 0;
   $("next").disabled = state.sheet >= sheetCount() - 1;
+  workspaceUI?.afterRender();
 }
 function stop() {
   state.running = false;
@@ -329,6 +333,7 @@ function stop() {
   render();
 }
 function invalidate() {
+  workspaceUI?.reset();
   stop();
   state.placements = [];
   state.view = "review";
@@ -347,6 +352,10 @@ function invalidate() {
 }
 function beginNest(continuing = false) {
   if (state.running || state.invalid || !$("confirmed").checked) return;
+  if (!continuing) {
+    workspaceUI?.reset();
+    state.refineOnly = false;
+  }
   let settings;
   try {
     settings = checkSettings(readSettings());
@@ -394,7 +403,7 @@ function updateSearchStatus() {
 function startEngine() {
   const run = ++state.run;
   compactor = new Worker(
-    new URL("./compaction-worker.js?v=0.11.0", import.meta.url),
+    new URL("./compaction-worker.js?v=0.12.0", import.meta.url),
     { type: "module" },
   );
   compactor.onmessage = ({ data }) => {
@@ -426,6 +435,11 @@ function startEngine() {
     compacting = false;
   };
   scheduleCompaction();
+  if (state.refineOnly || runSettings.lockedPlacements?.length) {
+    stopTimer = setTimeout(stop, budgetSeconds * 1000);
+    updateSearchStatus();
+    return;
+  }
   const frame = document.createElement("iframe");
   engine = frame;
   frame.hidden = true;
@@ -449,7 +463,7 @@ function startEngine() {
       location.origin,
     );
   };
-  frame.src = "engine/index.html?v=0.11.0";
+  frame.src = "engine/index.html?v=0.12.0";
   document.body.append(frame);
   stopTimer = setTimeout(() => {
     stop();
@@ -529,6 +543,7 @@ function considerLayout(placements) {
       placements.length === state.parts.length
     )
       state.firstResultSeconds = (performance.now() - started) / 1000;
+    workspaceUI?.autoAccepted(placements);
     state.placements = placements;
     state.view = "layout";
     state.sheet = Math.min(state.sheet, sheetCount() - 1);
@@ -590,6 +605,7 @@ function loadDemo() {
   render();
 }
 function download() {
+  workspaceUI?.prepareExport();
   const settings = checkSettings(readSettings());
   const errors = validateLayout(state.parts, state.placements, settings);
   if (errors.length || state.placements.length !== state.parts.length) {
@@ -775,6 +791,14 @@ $("next").onclick = () => {
   state.sheet++;
   render();
 };
+workspaceUI = installWorkspace({
+  state,
+  readSettings,
+  render,
+  stop,
+  beginNest,
+  message,
+});
 render();
 if (document.modelContext?.registerTool) {
   const lifecycle = new AbortController();

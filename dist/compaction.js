@@ -1,24 +1,24 @@
-import { compactMultiPartClusters } from "./multi-cluster.js?v=0.11.0";
+import { compactMultiPartClusters } from "./multi-cluster.js?v=0.12.0";
 import {
   createNestingDiagnostics,
   scoreDecision,
-} from "./nesting-debug.js?v=0.11.0";
-import { compactPairClusters } from "./pair-cluster.js?v=0.11.0";
-import { profiled, count } from "./nesting-profile.js?v=0.11.0";
+} from "./nesting-debug.js?v=0.12.0";
+import { compactPairClusters } from "./pair-cluster.js?v=0.12.0";
+import { profiled, count } from "./nesting-profile.js?v=0.12.0";
 import {
   contactFromCandidate,
   replacePlacement,
   contactsAtPlacement,
-} from "./common-contact.js?v=0.11.0";
-import { commonEdgeCandidates } from "./common-edge.js?v=0.11.0";
-import { pocketTranslations } from "./pocket-search.js?v=0.11.0";
+} from "./common-contact.js?v=0.12.0";
+import { commonEdgeCandidates } from "./common-edge.js?v=0.12.0";
+import { pocketTranslations } from "./pocket-search.js?v=0.12.0";
 import {
   bounds,
   transformed,
   clearance,
   validateLayout,
-} from "./geometry.js?v=0.11.0";
-import { evaluateLayout, improves } from "./search.js?v=0.11.0";
+} from "./geometry.js?v=0.12.0";
+import { evaluateLayout, improves } from "./search.js?v=0.12.0";
 
 // Remove two parts together, keep several alternatives for the first, and
 // reinsert the second. Only complete, improved layouts leave this function.
@@ -279,6 +279,8 @@ function compactLayoutImpl(parts, initial, settings, options) {
     for (const index of order) {
       if (now() >= deadline) break;
       visited++;
+      if (settings.lockedPlacements?.some((t) => t.id === placements[index].id))
+        continue;
       const current = placements[index],
         source = byId.get(current.id).outer;
       const pp = polys(),
@@ -381,6 +383,11 @@ function compactLayoutImpl(parts, initial, settings, options) {
         } else {
           if (!known && !valid(poly, b)) return;
           trial[index] = t;
+          if (
+            settings.lockedPlacements?.length &&
+            validateLayout(parts, trial, settings).length
+          )
+            return;
           if (
             settings.preserveRemnantSplitLines !== false &&
             settings.preservedRemnants?.length &&
