@@ -379,7 +379,7 @@ The repaired sample and common-line/offcut exports open with 0 audit errors,
 
 Setup, Auto Nest, Manual Edit and Export have separate panels. Collapse Settings or maximise the canvas for more working space; use wheel zoom, Fit, and Space-drag to pan.
 
-After nesting, Manual Edit supports drag, Shift-selection, custom rotation, magnetic straight/diagonal partial-edge snapping, grouping, detaching, locks and 100-step undo/redo. Snapping projects onto the shared line while preserving movement along it. Invalid positions remain previews and are rejected on release. Rotate & Snap requires an explicit click.
+After nesting, Manual Edit supports drag, Shift-selection, custom rotation, magnetic straight/diagonal partial-edge snapping, grouping, detaching, locks and 100-step undo/redo. Snapping projects onto the shared line while preserving movement along it. Within the 10-screen-pixel capture range, edge endpoints align along that line; away from endpoints, sliding remains free. Sheet-margin snapping uses the actual rotated exterior of the selection and honours the configured margin (including zero). Every candidate retains normal collision, clearance and lock validation. Invalid positions remain previews and are rejected on release. Rotate & Snap requires an explicit click.
 
 Manual placements become the export source. Export rebuilds common lines from final geometry. Lock a selection before Re-optimise unlocked to preserve its exact transforms. This refinement uses the existing compaction search; it is not a guarantee of a globally optimal re-nest.
 

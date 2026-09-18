@@ -187,3 +187,92 @@ test("M: refinement respects locks with common-edge mode disabled", () => {
   for (const k of ["x", "y", "angle", "sheet"])
     assert.equal(r.placements[0][k], ps[0][k]);
 });
+
+test("endpoint snapping aligns outer tops without imposing a 5 mm part gap", () => {
+  const p = [box("a", 40, 60), box("b", 20, 40)];
+  const r = magneticSnap(
+    p,
+    [pose("a", 10, 10), pose("b", 52, 12)],
+    ["b"],
+    { ...settings, margin: 5 },
+    3,
+  );
+  assert.ok(r.valid);
+  assert.equal(r.kind, "aligned-edge");
+  assert.equal(r.placements[1].x, 50);
+  assert.equal(r.placements[1].y, 10);
+  assert.equal(r.sharedLength, 40);
+});
+test("aligned diagonal edges use the same tangent projection", () => {
+  const p = [box("a", 40, 60), box("b", 20, 40)];
+  const ps = [pose("a", 10, 10), pose("b", 52, 12)].map((t) => ({
+    ...t,
+    ...transform(t, { x: 90, y: 20, angle: 37 }),
+    angle: 37,
+  }));
+  const r = magneticSnap(p, ps, ["b"], settings, 3),
+    expected = transform({ x: 50, y: 10 }, { x: 90, y: 20, angle: 37 });
+  assert.ok(r.valid);
+  assert.ok(
+    Math.hypot(r.placements[1].x - expected.x, r.placements[1].y - expected.y) <
+      1e-6,
+  );
+});
+test("sheet snap respects margin, zero margin, rotation and whole groups", () => {
+  for (const margin of [0, 5]) {
+    const p = [box("a", 20, 10), box("b", 20, 10)],
+      ps = [
+        pose("a", margin + 2, margin + 2),
+        pose("b", margin + 30, margin + 2),
+      ];
+    const r = magneticSnap(
+      p,
+      ps,
+      ["a", "b"],
+      { ...settings, margin, commonEdgeMode: false },
+      3,
+    );
+    assert.ok(r.valid);
+    assert.equal(r.kind, "sheet");
+    assert.equal(r.placements[0].x, margin);
+    assert.equal(r.placements[0].y, margin);
+    assert.equal(r.placements[1].x - r.placements[0].x, 28);
+  }
+  const p = [box("a", 20, 10)],
+    r = magneticSnap(
+      p,
+      [pose("a", 17, 7, 90)],
+      ["a"],
+      { ...settings, margin: 5 },
+      3,
+    );
+  assert.ok(r.valid);
+  assert.equal(r.placements[0].x, 15);
+  assert.equal(r.placements[0].y, 5);
+});
+test("illegal endpoint alignment falls back to valid sliding contact", () => {
+  const p = [box("a", 40, 60), box("b", 20, 40), box("c", 20, 4)];
+  p[2].outer = [
+    { x: 0, y: 0 },
+    { x: 20, y: 0 },
+    { x: 0, y: 4 },
+  ];
+  p[2].entities[0].vertices = p[2].outer;
+  const ps = [pose("a", 10, 10), pose("b", 52, 12), pose("c", 55, 5)];
+  const r = magneticSnap(p, ps, ["b"], settings, 3);
+  assert.ok(r.valid);
+  assert.equal(r.placements[1].x, 50);
+  assert.equal(r.placements[1].y, 12);
+});
+test("sheet snaps never bypass locks or collision validation", () => {
+  const p = [box("a", 20, 10)],
+    ps = [pose("a", 7, 7)];
+  const r = magneticSnap(
+    p,
+    ps,
+    ["a"],
+    { ...settings, margin: 5, lockedPlacements: ps },
+    3,
+  );
+  assert.equal(r.valid, false);
+});

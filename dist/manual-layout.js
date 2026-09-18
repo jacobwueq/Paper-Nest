@@ -50,58 +50,145 @@ export function rotateSelection(parts, poses, ids, angle) {
     return { ...t, ...p, angle: (((t.angle + angle) % 360) + 360) % 360 };
   });
 }
-// Project onto the supporting line, retaining the pointer's tangential position.
-// No endpoint snapping: a 40 mm edge can slide anywhere along a 100 mm edge.
+// Supporting-line projection preserves sliding. Nearby geometric events add
+// tangential alignment without sampling or changing any collision exemptions.
 export function magneticSnap(parts, poses, ids, settings, radius = 3) {
   const map = new Map(parts.map((p) => [p.id, p])),
     candidates = [];
-  if (!settings.commonEdgeMode) return null;
-  for (const moving of poses.filter((t) => ids.includes(t.id)))
-    for (const fixed of poses.filter(
-      (t) => !ids.includes(t.id) && t.sheet === moving.sheet,
-    )) {
-      for (const a of extractPartEdges(map.get(fixed.id)).map((e) =>
-        transformEdge(e, fixed),
+  const selected = poses.filter((t) => ids.includes(t.id));
+  if (!selected.length || new Set(selected.map((t) => t.sheet)).size !== 1)
+    return null;
+  const box = bounds(
+    selected.flatMap((t) => transformed(map.get(t.id).outer, t)),
+  );
+  const limits = {
+    x: [settings.margin, settings.width - settings.margin],
+    y: [settings.margin, settings.height - settings.margin],
+  };
+  function add(dx, dy, info, priority) {
+    const trial = rebuildContacts(
+      parts,
+      translateSelection(poses, ids, dx, dy),
+      settings,
+    );
+    const errors = validateLayout(parts, trial, settings);
+    candidates.push({
+      ...info,
+      placements: trial,
+      errors,
+      valid: !errors.length,
+      distance: Math.hypot(dx, dy),
+      priority,
+    });
+  }
+  const worldEdges = new Map(
+    poses.map((t) => [
+      t.id,
+      extractPartEdges(map.get(t.id)).map((e) => transformEdge(e, t)),
+    ]),
+  );
+  if (settings.commonEdgeMode)
+    for (const moving of selected)
+      for (const fixed of poses.filter(
+        (t) => !ids.includes(t.id) && t.sheet === moving.sheet,
       ))
-        for (const b of extractPartEdges(map.get(moving.id)).map((e) =>
-          transformEdge(e, moving),
-        )) {
-          if (
-            !edgeCompatibility(a, b, { angleTolerance: 1e-6, minOverlap: 0.01 })
-              .compatible
-          )
-            continue;
-          const n = a.outwardNormal,
-            d = (b.start.x - a.start.x) * n.x + (b.start.y - a.start.y) * n.y;
-          if (Math.abs(d) > radius) continue;
-          const shifted = {
-            ...b,
-            start: { x: b.start.x - d * n.x, y: b.start.y - d * n.y },
-            end: { x: b.end.x - d * n.x, y: b.end.y - d * n.y },
-          };
-          const section = sharedSection(a, shifted);
-          if (!section) continue;
-          const trial = rebuildContacts(
-              parts,
-              translateSelection(poses, ids, -d * n.x, -d * n.y),
-              settings,
-            ),
-            errors = validateLayout(parts, trial, settings);
-          candidates.push({
-            placements: trial,
-            section,
-            sharedLength: section.length,
-            errors,
-            valid: !errors.length,
-            distance: Math.abs(d),
-            movingId: moving.id,
-            fixedId: fixed.id,
-          });
-        }
+        for (const a of worldEdges.get(fixed.id))
+          for (const b of worldEdges.get(moving.id)) {
+            if (
+              !edgeCompatibility(a, b, {
+                angleTolerance: 1e-6,
+                minOverlap: 0.01,
+              }).compatible
+            )
+              continue;
+            const n = a.outwardNormal,
+              d = (b.start.x - a.start.x) * n.x + (b.start.y - a.start.y) * n.y;
+            if (Math.abs(d) > radius) continue;
+            const dx = -d * n.x,
+              dy = -d * n.y;
+            const length = Math.hypot(a.end.x - a.start.x, a.end.y - a.start.y);
+            const u = {
+              x: (a.end.x - a.start.x) / length,
+              y: (a.end.y - a.start.y) / length,
+            };
+            const events = [{ t: 0, aligned: false }];
+            for (const v of [a.start, a.end])
+              for (const w of [b.start, b.end]) {
+                const t = (v.x - w.x - dx) * u.x + (v.y - w.y - dy) * u.y;
+                if (Math.abs(t) <= radius) events.push({ t, aligned: true });
+              }
+            // Sheet alignment along the tangent must not undo the common line.
+            for (const axis of ["x", "y"])
+              if (Math.abs(u[axis]) > 1e-8) {
+                const offset = axis === "x" ? dx : dy,
+                  extent = axis === "x" ? box.w : box.h;
+                for (const [edge, target] of [
+                  [box[axis], limits[axis][0]],
+                  [box[axis] + extent, limits[axis][1]],
+                ]) {
+                  const t = (target - edge - offset) / u[axis];
+                  if (Math.abs(t) <= radius) events.push({ t, aligned: true });
+                }
+              }
+            const seen = new Set();
+            for (const event of events.sort(
+              (a, b) => Number(b.aligned) - Number(a.aligned),
+            )) {
+              const key = event.t.toFixed(7);
+              if (seen.has(key)) continue;
+              seen.add(key);
+              const x = dx + event.t * u.x,
+                y = dy + event.t * u.y;
+              const shifted = {
+                ...b,
+                start: { x: b.start.x + x, y: b.start.y + y },
+                end: { x: b.end.x + x, y: b.end.y + y },
+              };
+              const section = sharedSection(a, shifted);
+              if (!section) continue;
+              add(
+                x,
+                y,
+                {
+                  section,
+                  sharedLength: section.length,
+                  movingId: moving.id,
+                  fixedId: fixed.id,
+                  kind: event.aligned ? "aligned-edge" : "edge",
+                },
+                event.aligned ? 4 : 3,
+              );
+            }
+          }
+  // Sheet margin snapping is independent of common-edge mode and uses actual
+  // transformed exterior bounds, including rotation and the entire selection.
+  const xs = [0],
+    ys = [0];
+  for (const d of [limits.x[0] - box.x, limits.x[1] - box.x - box.w])
+    if (Math.abs(d) <= radius) xs.push(d);
+  for (const d of [limits.y[0] - box.y, limits.y[1] - box.y - box.h])
+    if (Math.abs(d) <= radius) ys.push(d);
+  for (let i = 0; i < xs.length; i++)
+    for (let j = 0; j < ys.length; j++) {
+      if (!i && !j) continue;
+      const x = box.x + xs[i],
+        y = box.y + ys[j];
+      const edgeX = Math.abs(x - limits.x[0]) < 1e-6 ? x : x + box.w;
+      const edgeY = Math.abs(y - limits.y[0]) < 1e-6 ? y : y + box.h;
+      const section = i
+        ? { start: { x: edgeX, y }, end: { x: edgeX, y: y + box.h } }
+        : { start: { x, y: edgeY }, end: { x: x + box.w, y: edgeY } };
+      add(
+        xs[i],
+        ys[j],
+        { kind: "sheet", section, sharedLength: 0 },
+        i && j ? 2 : 1,
+      );
     }
   candidates.sort(
     (a, b) =>
       Number(b.valid) - Number(a.valid) ||
+      b.priority - a.priority ||
       a.distance - b.distance ||
       b.sharedLength - a.sharedLength,
   );

@@ -5,7 +5,7 @@ import {
   magneticSnap,
   rotationSuggestion,
   rebuildContacts,
-} from "./manual-layout.js?v=0.12.0";
+} from "./manual-layout.js?v=0.12.1";
 import { cuttingMetrics } from "./cut-metrics.js?v=0.12.0";
 import { evaluateLayout } from "./search.js?v=0.12.0";
 import {
@@ -319,7 +319,9 @@ export function installWorkspace({
       errors.length
         ? "Invalid · 無效: " + errors[0]
         : snap
-          ? `Shared edge / 共邊 ${snap.sharedLength.toFixed(1)} mm · release to apply / 放手套用`
+          ? snap.kind === "sheet"
+            ? "Sheet margin snap / 板材留邊吸附 · 放手套用"
+            : `${snap.kind === "aligned-edge" ? "Aligned / 已齊口 · " : ""}Shared edge / 共邊 ${snap.sharedLength.toFixed(1)} mm · release to apply / 放手套用`
           : "Valid move · 合法移動",
     );
   }

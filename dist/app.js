@@ -1,4 +1,4 @@
-import { installWorkspace } from "./workspace-ui.js?v=0.12.0";
+import { installWorkspace } from "./workspace-ui.js?v=0.12.1";
 let workspaceUI = null;
 import { SHEET_PRESETS } from "./sheet-presets.js?v=0.12.0";
 import {
