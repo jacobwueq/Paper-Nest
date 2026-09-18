@@ -4,20 +4,21 @@ import {
   poseKey,
   count,
   measured,
-} from "./nesting-profile.js?v=0.9.2";
+} from "./nesting-profile.js?v=0.10.0";
 // Explicit shared-boundary validation. Ordinary clearance remains untouched.
-import * as vendor from "./engine/util/clipper.js?v=0.9.2";
+import * as vendor from "./engine/util/clipper.js?v=0.10.0";
 import {
   transformed,
   segmentDistance,
   clearance,
   bounds,
-} from "./geometry.js?v=0.9.2";
+} from "./geometry.js?v=0.10.0";
 import {
   extractPartEdges,
   transformEdge,
   edgeCompatibility,
-} from "./common-edge.js?v=0.9.2";
+  sharedSection,
+} from "./common-edge.js?v=0.10.0";
 const C = globalThis.ClipperLib || vendor.default;
 const EPS = 1e-6,
   SCALE = 1e6;
@@ -305,9 +306,78 @@ export function replacePlacement(placements, t, contact) {
       old.id === t.id
         ? []
         : (old.sharedEdges || []).filter((d) => d.otherPartId !== t.id);
-    if (old.id === t.id && contact) kept.push(contact);
+    if (old.id === t.id && contact)
+      kept.push(...(Array.isArray(contact) ? contact : [contact]));
     if (kept.length) next.sharedEdges = kept;
     else delete next.sharedEdges;
     return next;
   });
+}
+
+// Discover every genuine straight-edge contact at a proposed pose. This does
+// not authorise overlap: commonContactClearance still validates every pair.
+export function contactsAtPlacement(
+  part,
+  placement,
+  parts,
+  placements,
+  minOverlap = 0.01,
+) {
+  const byId = new Map(parts.map((p) => [p.id, p])),
+    result = [];
+  // Contact discovery depends only on source geometry and exact poses, not on
+  // existing contact claims. Per-job caching never rounds coordinates.
+  const geometryPose = (t) =>
+    JSON.stringify([t.x, t.y, t.angle, t.scale ?? 1, !!t.mirrored]);
+  for (const t of placements) {
+    if (t.id === part.id || t.sheet !== placement.sheet) continue;
+    const other = byId.get(t.id);
+    const key = JSON.stringify([
+      objectKey(part),
+      geometryPose(placement),
+      objectKey(other),
+      geometryPose(t),
+      minOverlap,
+    ]);
+    const contacts = cached("contactDiscovery", key, () => {
+      const found = [],
+        own = extractPartEdges(part).map((e) => [
+          e,
+          transformEdge(e, placement),
+        ]);
+      for (const local of extractPartEdges(other)) {
+        const world = transformEdge(local, t);
+        for (const [edge, ownWorld] of own) {
+          count("contactDiscoveryEdgePairs");
+          // Disjoint segment bounds cannot overlap, even within linear tolerance.
+          const a = world,
+            b = ownWorld;
+          if (
+            Math.max(a.start.x, a.end.x) + EPS < Math.min(b.start.x, b.end.x) ||
+            Math.max(b.start.x, b.end.x) + EPS < Math.min(a.start.x, a.end.x) ||
+            Math.max(a.start.y, a.end.y) + EPS < Math.min(b.start.y, b.end.y) ||
+            Math.max(b.start.y, b.end.y) + EPS < Math.min(a.start.y, a.end.y)
+          ) {
+            count("contactDiscoveryBoundsRejected");
+            continue;
+          }
+          const section = sharedSection(world, ownWorld, { minOverlap });
+          if (section)
+            found.push(
+              contactFromCandidate({
+                placement,
+                fixedPlacement: t,
+                fixedPartId: t.id,
+                movingEdge: edge,
+                fixedEdge: local,
+                sharedSection: section,
+              }),
+            );
+        }
+      }
+      return found;
+    });
+    result.push(...contacts);
+  }
+  return result;
 }

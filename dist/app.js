@@ -1,20 +1,24 @@
-import { extractPartEdges } from "./common-edge.js?v=0.9.2";
+import {
+  remnantPlan,
+  visibleRemnantRectangles,
+} from "./remnant-policy.js?v=0.10.0";
+import { extractPartEdges } from "./common-edge.js?v=0.10.0";
 import {
   sampleParts,
   partSVG,
   pathPoints,
   esc,
   validateLayout,
-} from "./geometry.js?v=0.9.2";
-import { parseDXF, parseSVG } from "./importers.js?v=0.9.2";
-import { exportSVG, exportDXF } from "./exporters.js?v=0.9.2";
+} from "./geometry.js?v=0.10.0";
+import { parseDXF, parseSVG } from "./importers.js?v=0.10.0";
+import { exportSVG, exportDXF } from "./exporters.js?v=0.10.0";
 import {
   ROTATIONS,
   searchSettings,
   evaluateLayout,
   improves,
   searchSeed,
-} from "./search.js?v=0.9.2";
+} from "./search.js?v=0.10.0";
 const $ = (id) => document.getElementById(id);
 const state = {
   parts: sampleParts(),
@@ -31,6 +35,8 @@ const state = {
   metrics: null,
   firstResultSeconds: null,
   accepted: 0,
+  preservedRemnants: [],
+  diagnostics: [],
   excludedOffcuts: new Set(),
 };
 let engine = null,
@@ -55,6 +61,16 @@ const readSettings = () => ({
   commonEdgeMode: $("common-edge").checked,
   pairClusters: $("common-edge").checked && $("pair-clusters").checked,
   commonEdgeWeight: Number($("common-edge-weight").value),
+  multiPartClusteringEnabled:
+    $("common-edge").checked && $("multi-part-clusters").checked,
+  maxClusterParts: Number($("max-cluster-parts").value),
+  clusterBeamWidth: Number($("cluster-beam-width").value),
+  diagonalCommonEdgesEnabled: $("diagonal-common-edges").checked,
+  preserveRemnantSplitLines: $("preserve-remnant-splits").checked,
+  preservedRemnants: $("preserve-remnant-splits").checked
+    ? state.preservedRemnants
+    : [],
+  debugCommonEdges: $("debug-common-edges").checked,
 });
 function checkSettings(s) {
   if (
@@ -68,6 +84,12 @@ function checkSettings(s) {
       s.minOffcutSide,
       s.commonEdgeWeight,
     ].every(Number.isFinite) ||
+    !Number.isInteger(s.maxClusterParts) ||
+    s.maxClusterParts < 2 ||
+    s.maxClusterParts > 4 ||
+    !Number.isInteger(s.clusterBeamWidth) ||
+    s.clusterBeamWidth < 2 ||
+    s.clusterBeamWidth > 32 ||
     s.commonEdgeWeight < 0 ||
     s.commonEdgeWeight > 100 ||
     s.minOffcutSide < 0 ||
@@ -105,8 +127,16 @@ function sheetCount() {
 const offcutId = (sheet, r) =>
   [sheet, r.x, r.y, r.w, r.h].map((n) => Number(n).toFixed(5)).join(":");
 function sheetOffcuts(sheet) {
-  return (
-    state.metrics?.sheets.find((r) => r.sheet === sheet)?.rectangles || []
+  const current =
+    state.metrics?.sheets.find((r) => r.sheet === sheet)?.rectangles || [];
+  const plans = $("preserve-remnant-splits").checked
+    ? state.preservedRemnants
+    : [];
+  return visibleRemnantRectangles(
+    current,
+    plans,
+    sheet,
+    Number($("gap").value),
   ).map((r, i) => ({ ...r, id: offcutId(sheet, r), number: i + 1 }));
 }
 function exportOptions(sheet, include = $("include-offcuts").checked) {
@@ -147,7 +177,7 @@ function render() {
   const cutting = state.metrics?.cutting;
   $("cut-summary").hidden = !layout || !cutting;
   $("cut-summary").textContent = cutting
-    ? `Shared / 共邊 ${cutting.sharedLength.toFixed(1)} mm · Estimated cutting / 預計切線 ${cutting.estimatedCutLength.toFixed(1)} mm · Pair moves / 成對移動 ${state.clusterMoves || 0}`
+    ? `Shared / 共邊 ${cutting.sharedLength.toFixed(1)} mm · Estimated cutting / 預計切線 ${cutting.estimatedCutLength.toFixed(1)} mm · Cluster moves / 組合移動 ${state.clusterMoves || 0}`
     : "";
   const remaining = layout ? sheetOffcuts(state.sheet) : [];
   $("offcut-summary").hidden = !layout;
@@ -245,6 +275,15 @@ function render() {
     "common-edge",
   ])
     $(id).disabled = state.running;
+  for (const id of [
+    "multi-part-clusters",
+    "max-cluster-parts",
+    "cluster-beam-width",
+    "diagonal-common-edges",
+  ])
+    $(id).disabled = state.running || !$("common-edge").checked;
+  $("debug-common-edges").disabled = state.running;
+  $("download-diagnostics").disabled = !state.diagnostics.length;
   $("pair-clusters").disabled = state.running || !$("common-edge").checked;
   $("common-edge-weight").disabled = state.running || !$("common-edge").checked;
   $("export").disabled =
@@ -292,6 +331,8 @@ function invalidate() {
   state.metrics = null;
   state.clusterMoves = 0;
   state.excludedOffcuts.clear();
+  state.preservedRemnants = [];
+  state.diagnostics = [];
   state.firstResultSeconds = null;
   state.accepted = 0;
   message();
@@ -308,8 +349,15 @@ function beginNest(continuing = false) {
     return;
   }
   if (continuing && !state.placements.length) return;
+  if (continuing) {
+    captureRemnants();
+    settings.preservedRemnants = state.preservedRemnants;
+  }
   stop();
   if (!continuing) {
+    state.preservedRemnants = [];
+    settings.preservedRemnants = [];
+    state.diagnostics = [];
     state.placements = [];
     state.sheet = 0;
     state.accepted = 0;
@@ -340,10 +388,19 @@ function updateSearchStatus() {
 function startEngine() {
   const run = ++state.run;
   compactor = new Worker(
-    new URL("./compaction-worker.js?v=0.9.2", import.meta.url),
+    new URL("./compaction-worker.js?v=0.10.0", import.meta.url),
     { type: "module" },
   );
   compactor.onmessage = ({ data }) => {
+    if (data.run === state.run && data.diagnostics) {
+      state.diagnostics.push({
+        ...data.diagnostics,
+        maxClusterSize: data.maxClusterSize,
+        finalScore: data.report?.score,
+      });
+      if (state.diagnostics.length > 12) state.diagnostics.shift();
+      $("download-diagnostics").disabled = false;
+    }
     if (
       data.run === state.run &&
       data.type === "complete" &&
@@ -386,7 +443,7 @@ function startEngine() {
       location.origin,
     );
   };
-  frame.src = "engine/index.html?v=0.9.2";
+  frame.src = "engine/index.html?v=0.10.0";
   document.body.append(frame);
   stopTimer = setTimeout(() => {
     stop();
@@ -576,8 +633,46 @@ document.addEventListener("click", (e) => {
   }
 });
 $("confirmed").addEventListener("change", render);
+function captureRemnants() {
+  state.preservedRemnants =
+    $("include-offcuts").checked && $("preserve-remnant-splits").checked
+      ? (state.metrics?.sheets || []).flatMap((s) =>
+          remnantPlan(
+            sheetOffcuts(s.sheet).filter(
+              (r) => !state.excludedOffcuts.has(r.id),
+            ),
+            s.sheet,
+          ),
+        )
+      : [];
+}
+$("download-diagnostics").onclick = () => {
+  const a = document.createElement("a"),
+    url = URL.createObjectURL(
+      new Blob(
+        [
+          JSON.stringify(
+            { settings: readSettings(), jobs: state.diagnostics },
+            null,
+            2,
+          ),
+        ],
+        { type: "application/json" },
+      ),
+    );
+  a.href = url;
+  a.download = "paper-nest-diagnostics.json";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+};
+$("preserve-remnant-splits").addEventListener("change", () => {
+  if (state.running) stop();
+  captureRemnants();
+  render();
+});
 $("include-offcuts").addEventListener("change", () => {
   if (state.running) stop();
+  captureRemnants();
   render();
 });
 $("offcut-list").addEventListener("change", (e) => {
@@ -587,6 +682,7 @@ $("offcut-list").addEventListener("change", (e) => {
   if (state.running) stop();
   if (checked) state.excludedOffcuts.delete(id);
   else state.excludedOffcuts.add(id);
+  captureRemnants();
   render();
 });
 $("demo").onclick = loadDemo;
@@ -627,6 +723,10 @@ for (const id of [
   "min-offcut-side",
   "common-edge",
   "pair-clusters",
+  "multi-part-clusters",
+  "max-cluster-parts",
+  "cluster-beam-width",
+  "diagonal-common-edges",
   "common-edge-weight",
 ])
   $(id).addEventListener("change", () => {

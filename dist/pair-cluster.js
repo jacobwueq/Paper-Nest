@@ -1,4 +1,4 @@
-import * as vendor from "./engine/util/clipper.js?v=0.9.2";
+import * as vendor from "./engine/util/clipper.js?v=0.10.0";
 import {
   transformed,
   transform,
@@ -6,11 +6,11 @@ import {
   area,
   clearance,
   validateLayout,
-} from "./geometry.js?v=0.9.2";
-import { commonContactClearance } from "./common-contact.js?v=0.9.2";
-import { pocketTranslations } from "./pocket-search.js?v=0.9.2";
-import { evaluateLayout, improves } from "./search.js?v=0.9.2";
-import { count, measured } from "./nesting-profile.js?v=0.9.2";
+} from "./geometry.js?v=0.10.0";
+import { commonContactClearance } from "./common-contact.js?v=0.10.0";
+import { pocketTranslations } from "./pocket-search.js?v=0.10.0";
+import { evaluateLayout, improves } from "./search.js?v=0.10.0";
+import { count, measured } from "./nesting-profile.js?v=0.10.0";
 const C = globalThis.ClipperLib || vendor.default,
   S = 1e6;
 
@@ -20,7 +20,49 @@ export function createPairCluster(a, ta, b, tb, gap) {
     return null;
   const contact = commonContactClearance(a, ta, b, tb, gap);
   if (!contact.valid || !contact.shared?.length) return null;
-  const polygons = [transformed(a.outer, ta), transformed(b.outer, tb)];
+  return createPartCluster([a, b], [ta, tb], gap);
+}
+// Flat original children, 2–4 parts; no nested replacement geometry.
+export function createPartCluster(parts, placements, gap) {
+  if (
+    parts.length < 2 ||
+    parts.length > 4 ||
+    parts.some((p) => p.children) ||
+    new Set(parts.map((p) => p.id)).size !== parts.length ||
+    placements.length !== parts.length ||
+    new Set(placements.map((t) => t.id)).size !== parts.length ||
+    new Set(placements.map((t) => t.sheet)).size !== 1
+  )
+    return null;
+  const byId = new Map(parts.map((p) => [p.id, p]));
+  if (placements.some((t) => !byId.has(t.id))) return null;
+  const graph = new Map(parts.map((p) => [p.id, new Set()]));
+  for (let i = 0; i < placements.length; i++)
+    for (let j = i + 1; j < placements.length; j++) {
+      const a = placements[i],
+        b = placements[j],
+        result = commonContactClearance(
+          byId.get(a.id),
+          a,
+          byId.get(b.id),
+          b,
+          gap,
+        );
+      if (!result.valid) return null;
+      if (result.shared?.length) {
+        graph.get(a.id).add(b.id);
+        graph.get(b.id).add(a.id);
+      }
+    }
+  const reached = new Set(),
+    visit = (id) => {
+      if (reached.has(id)) return;
+      reached.add(id);
+      for (const other of graph.get(id)) visit(other);
+    };
+  visit(parts[0].id);
+  if (reached.size !== parts.length) return null;
+  const polygons = placements.map((t) => transformed(byId.get(t.id).outer, t));
   const clip = new C.Clipper(),
     tree = new C.PolyTree();
   for (const p of polygons) {
@@ -45,12 +87,9 @@ export function createPairCluster(a, ta, b, tb, gap) {
   if (contours.length !== 1 || contours[0].Childs().length) return null;
   const world = contours[0].Contour().map((v) => ({ x: v.X / S, y: v.Y / S }));
   const box = bounds(world),
-    ids = new Set([a.id, b.id]);
-  const children = [
-    [a, ta],
-    [b, tb],
-  ].map(([part, t]) => ({
-    part,
+    ids = new Set(parts.map((p) => p.id));
+  const children = placements.map((t) => ({
+    part: byId.get(t.id),
     placement: {
       ...t,
       x: t.x - box.x,
@@ -59,26 +98,30 @@ export function createPairCluster(a, ta, b, tb, gap) {
     },
   }));
   return {
-    id: "pair:" + JSON.stringify([a.id, b.id]),
-    name: a.name + " + " + b.name,
+    id: "cluster:" + JSON.stringify(parts.map((p) => p.id).sort()),
+    name: parts.map((p) => p.name || p.id).join(" + "),
     outer: world.map((p) => ({ x: p.x - box.x, y: p.y - box.y })),
     origin: { x: 0, y: 0 },
     size: { x: 0, y: 0, w: box.w, h: box.h },
     children, // actual original part references, never replacement drawing entities
     placement: {
-      id: "pair:" + JSON.stringify([a.id, b.id]),
+      id: "cluster:" + JSON.stringify(parts.map((p) => p.id).sort()),
       x: box.x,
       y: box.y,
       angle: 0,
       scale: 1,
       mirrored: false,
-      sheet: ta.sheet,
+      sheet: placements[0].sheet,
     },
   };
 }
 export function expandPairCluster(cluster, placement = cluster.placement) {
-  if (cluster.children?.length !== 2)
-    throw new Error("Expected a pair cluster");
+  if (
+    !cluster.children ||
+    cluster.children.length < 2 ||
+    cluster.children.length > 4
+  )
+    throw new Error("Expected a 2–4 part cluster");
   return cluster.children.map(({ part, placement: t }) => {
     const origin = transform({ x: t.x, y: t.y }, placement);
     return {

@@ -207,28 +207,58 @@ within their own operation. Kerf compensation and cutting order are not changed.
 舊 SVG 資料若缺少 command metadata，需要重新匯入。未改 kerf 或切割順序。
 
 
-## Pair clusters / 成對組件
+## Multi-part clusters / 多件共邊組合
 
-`dist/pair-cluster.js` is a non-recursive prototype. `createPairCluster` accepts
-two valid declared sharing parts, unions their transformed outlines with Clipper,
-and returns a macro `outer`, an initial pose, and two original `children`
-references plus relative placements. It rejects disconnected unions, unions with
-holes, recursive children and pairs linked to a third part. It never substitutes a
-convex hull for the union. Interior zero-clearance is checked before construction.
+`dist/multi-cluster.js` builds a bounded compatibility graph, retains alternative
+pair memberships, and expands selected candidates to three and four parts.
+`clusterBeamWidth` defaults to 8, `maxClusterParts` to 4, and minimum shared
+length to 1 mm. Per-node neighbours, contact events and phase time budgets are
+bounded; a worker continuation resumes the seed-pair queue. This is a heuristic,
+not an exhaustive optimal solver.
 
-`compactPairClusters` feeds that exterior to the existing `pocketTranslations`
-configuration-space placement source with the normal gap. It expands each trial
-through `expandPairCluster`, validates the original children against the complete
-layout, and applies the unchanged global scoring priorities. Only improvements
-are accepted. Jobs inspect existing shared pairs before ordinary single-part
-search; newly formed pairs are available on the next continuation job. The macro
-is temporary; final UI placements and exporters receive original child IDs,
-entities, local shared-edge references and composed transforms. The helper
-`expandClusterLayout` also exposes this conversion directly.
+`createPartCluster` in `dist/pair-cluster.js` validates every child pair and unions
+real exterior polygons with Clipper. It accepts 2–4 original children, rejecting
+disconnected and holed unions. `expandPairCluster` retains its legacy name but
+restores every original child, its source entities and composed transform.
+Normal external clearance and final full-layout validation still apply.
+The old `compactPairClusters` path remains when multi-part search is disabled.
 
-第一版只做 pair，使用兩件 union 嘅真實外輪廓。內部指定共邊零間距，外部維持一般 gap；
-候選還原原始零件後再做完整驗證及評分。拒絕含孔、多區域、遞迴及連到第三件嘅組合。
-新形成嘅共邊 pair 會喺下一次延續計算參與整體移動，匯出一直使用原本 child geometry。
+Local beam ranking considers bbox utilisation, an explicitly approximate narrow
+void measure, cutting length, connected-contour pierce lower bound and perimeter.
+The ordinary search branch remains available until the end of the job, when its
+full layout is compared with the cluster alternative. Acceptance uses the unchanged
+full-sheet lexicographic score: unplaced count,
+sheet count, largest-first reusable rectangles, bounding area, cutting cost and
+compactness. More sharing cannot override a worse material score. Limited search
+time can nevertheless produce a different result than the legacy search.
+
+Exact diagonal contact rotations are enabled independently of the ordinary angle
+grid, except with rotation locked. New options are `multiPartClusteringEnabled`,
+`maxClusterParts`, `clusterBeamWidth`, `diagonalCommonEdgesEnabled` and
+`preserveRemnantSplitLines`. The UI enables the first, fourth and fifth by default;
+common-edge nesting itself remains opt-in.
+
+`remnant-policy.js` separates source part boundaries, common cuts, remnant
+boundaries and generated split lines. Selected offcut cutting rectangles can be
+reserved during continuation; turning preservation off releases them. Unselected
+green display rectangles never become obstacles. Exported shared segments record
+all source owners; partial straight overlaps work at arbitrary angles.
+
+Enable **Record nesting diagnostics** before arranging, then download the JSON.
+Each worker job includes bounded detailed events, aggregate counts, recent
+selection decisions and final placements/score. Limits and deadlines are reported;
+not every candidate is guaranteed to be visited or retained in the trace.
+
+多件搜尋保留不同 pair 組合，再擴展至三、四件，並按真實 union 外輪廓參與現有排位。
+候選數量及時間均有上限，唔保證全局最佳。每個接受結果仍要通過全板驗證及原有物料優先評分。
+斜邊用精確接觸角度；內部指定共邊零間距，其他外邊保持正常 gap。原始 child geometry 保留。
+已選餘料切割框可喺繼續排位時保留或釋放；單純顯示綠框唔會成為障礙。
+診斷下載包含生成、拒絕、評分、剪枝及時間上限資料；詳細事件有數量上限。
+
+Regression tests: `node --test tests/*.test.mjs`.
+Benchmark: `node scripts/benchmark-multipart.mjs` (three isolated runs per case,
+8/24/100 parts, original v0.9.2 source versus new features disabled/enabled).
+Full report: `outputs/multipart-review.md`; raw results: `outputs/multipart-benchmark.json`.
 
 ## Profiling and repeatable benchmarks / 效能量度
 

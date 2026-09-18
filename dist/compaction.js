@@ -1,18 +1,24 @@
-import { compactPairClusters } from "./pair-cluster.js?v=0.9.2";
-import { profiled, count } from "./nesting-profile.js?v=0.9.2";
+import { compactMultiPartClusters } from "./multi-cluster.js?v=0.10.0";
+import {
+  createNestingDiagnostics,
+  scoreDecision,
+} from "./nesting-debug.js?v=0.10.0";
+import { compactPairClusters } from "./pair-cluster.js?v=0.10.0";
+import { profiled, count } from "./nesting-profile.js?v=0.10.0";
 import {
   contactFromCandidate,
   replacePlacement,
-} from "./common-contact.js?v=0.9.2";
-import { commonEdgeCandidates } from "./common-edge.js?v=0.9.2";
-import { pocketTranslations } from "./pocket-search.js?v=0.9.2";
+  contactsAtPlacement,
+} from "./common-contact.js?v=0.10.0";
+import { commonEdgeCandidates } from "./common-edge.js?v=0.10.0";
+import { pocketTranslations } from "./pocket-search.js?v=0.10.0";
 import {
   bounds,
   transformed,
   clearance,
   validateLayout,
-} from "./geometry.js?v=0.9.2";
-import { evaluateLayout, improves } from "./search.js?v=0.9.2";
+} from "./geometry.js?v=0.10.0";
+import { evaluateLayout, improves } from "./search.js?v=0.10.0";
 
 // Remove two parts together, keep several alternatives for the first, and
 // reinsert the second. Only complete, improved layouts leave this function.
@@ -182,12 +188,30 @@ function repairPairs(parts, initial, settings, options) {
 // Coordinate descent in drawing coordinates. All moves are collision checked
 // against the retained contours; no simplified or re-created drawing is exported.
 export function compactLayout(parts, initial, settings, options = {}) {
-  return profiled(options, () =>
-    compactLayoutImpl(parts, initial, settings, options),
+  const debug = createNestingDiagnostics(
+    options.debug || settings.debugCommonEdges,
+    options.debugLimit,
   );
+  const result = profiled(options, () =>
+    compactLayoutImpl(parts, initial, settings, {
+      ...options,
+      onDebug: debug.record || options.onDebug,
+    }),
+  );
+  if (debug.snapshot())
+    result.diagnostics = {
+      ...debug.snapshot(),
+      finalScore: result.report?.score,
+      finalPlacements: result.placements,
+    };
+  return result;
 }
 function compactLayoutImpl(parts, initial, settings, options) {
   const now = options.now || (() => performance.now());
+  const enhancedCommon =
+    settings.commonEdgeMode === true &&
+    (settings.multiPartClusteringEnabled === true ||
+      settings.diagonalCommonEdgesEnabled === true);
   const deadline = now() + (options.milliseconds ?? 1800);
   const byId = new Map(parts.map((p) => [p.id, p]));
   let placements = initial.map((t) => ({ ...t }));
@@ -196,13 +220,27 @@ function compactLayoutImpl(parts, initial, settings, options) {
   let report = evaluateLayout(parts, placements, settings),
     changed = false;
   let clusterResult = null;
-  if (settings.commonEdgeMode === true && settings.pairClusters === true) {
-    clusterResult = compactPairClusters(parts, placements, settings, {
+  if (
+    settings.commonEdgeMode === true &&
+    (settings.pairClusters === true ||
+      settings.multiPartClusteringEnabled === true)
+  ) {
+    clusterResult = (
+      settings.multiPartClusteringEnabled === true
+        ? compactMultiPartClusters
+        : compactPairClusters
+    )(parts, placements, settings, {
       ...options,
       now,
-      deadline: Math.min(deadline, now() + 450),
+      deadline: Math.min(
+        deadline,
+        now() + (settings.multiPartClusteringEnabled ? 700 : 450),
+      ),
+      startOffset: options.clusterOffset || 0,
     });
-    if (clusterResult.changed) {
+    // Keep the ordinary search branch alive instead of committing early to a
+    // locally attractive multi-part assembly. Compare both full layouts below.
+    if (clusterResult.changed && settings.multiPartClusteringEnabled !== true) {
       placements = clusterResult.placements;
       report = clusterResult.report;
       changed = true;
@@ -274,6 +312,44 @@ function compactLayoutImpl(parts, initial, settings, options) {
       }
       function consider(t, known = false, contact = null) {
         count("generatedCandidates");
+        const detail = contact
+          ? {
+              candidateKey: JSON.stringify([
+                t.id,
+                t.x,
+                t.y,
+                t.angle,
+                !!t.mirrored,
+              ]),
+              partId: t.id,
+              placement: t,
+              contacts: contact,
+              sharedLength: 0,
+            }
+          : null;
+        if (contact && enhancedCommon) {
+          contact = contactsAtPlacement(byId.get(t.id), t, parts, placements);
+          detail.contacts = contact;
+          detail.sharedLength = contact.reduce(
+            (sum, d) =>
+              sum +
+              Math.hypot(
+                d.ownSection[1].x - d.ownSection[0].x,
+                d.ownSection[1].y - d.ownSection[0].y,
+              ) *
+                (t.scale ?? 1),
+            0,
+          );
+        }
+        const log = (reason, extra = {}) => {
+          if (detail)
+            options.onDebug?.({
+              stage: "candidate",
+              ...detail,
+              reason,
+              ...extra,
+            });
+        };
         const exactKey = JSON.stringify([
           t.x,
           t.y,
@@ -286,6 +362,7 @@ function compactLayoutImpl(parts, initial, settings, options) {
         ]);
         if (options.optimise !== false && exactSeen.has(exactKey)) {
           count("earlyDuplicateCandidates");
+          log("exact-duplicate");
           return;
         }
         exactSeen.add(exactKey);
@@ -296,23 +373,49 @@ function compactLayoutImpl(parts, initial, settings, options) {
             ? replacePlacement(placements, t, contact)
             : placements.slice();
         if (settings.commonEdgeMode === true) {
-          if (validateLayout(parts, trial, settings).length) return;
+          const errors = validateLayout(parts, trial, settings);
+          if (errors.length) {
+            log("validation", { errors });
+            return;
+          }
         } else {
           if (!known && !valid(poly, b)) return;
           trial[index] = t;
+          if (
+            settings.preserveRemnantSplitLines !== false &&
+            settings.preservedRemnants?.length &&
+            validateLayout(parts, trial, settings).length
+          )
+            return;
         }
-        if (now() >= deadline) return;
-        const key = [t.x, t.y, t.angle, !!t.mirrored]
-          .map((v) => (typeof v === "number" ? v.toFixed(4) : v))
-          .join(":");
+        if (now() >= deadline) {
+          log("deadline-before-score");
+          return;
+        }
+        const key =
+          settings.commonEdgeMode === true && enhancedCommon
+            ? JSON.stringify([t.x, t.y, t.angle, !!t.mirrored, contact])
+            : [t.x, t.y, t.angle, !!t.mirrored]
+                .map((v) => (typeof v === "number" ? v.toFixed(4) : v))
+                .join(":");
         if (seen.has(key)) {
           count("duplicateCandidates");
+          log("duplicate-pose-and-contacts");
           return;
         }
         seen.add(key);
         const metrics = evaluateLayout(parts, trial, settings);
-        if (improves(metrics.score, (best?.report || report).score))
-          best = { placements: trial, report: metrics };
+        const better = improves(metrics.score, (best?.report || report).score);
+        log(better ? "best-so-far" : "not-better", {
+          score: metrics.score,
+          cutting: metrics.cutting,
+          incumbentScore: (best?.report || report).score,
+          decidingCriterion: scoreDecision(
+            metrics.score,
+            (best?.report || report).score,
+          ),
+        });
+        if (better) best = { placements: trial, report: metrics };
       }
       // Explicit contacts use the common-boundary validator only when enabled.
       // Disabled mode retains its original geometry gate and scoring path.
@@ -325,6 +428,11 @@ function compactLayoutImpl(parts, initial, settings, options) {
           fixed,
           {
             rotations: settings.rotations,
+            diagonalCommonEdgesEnabled:
+              settings.commonEdgeMode === true &&
+              settings.diagonalCommonEdgesEnabled === true,
+            preserveContactAlternatives: enhancedCommon,
+            onDebug: options.onDebug,
             shouldStop: () => now() >= deadline,
           },
         )) {
@@ -477,6 +585,12 @@ function compactLayoutImpl(parts, initial, settings, options) {
         placements = best.placements;
         report = best.report;
         changed = moved = true;
+        options.onDebug?.({
+          stage: "selected",
+          partId: current.id,
+          placement: placements[index],
+          score: report.score,
+        });
         options.onImprove?.({ placements, report });
       }
     }
@@ -496,6 +610,21 @@ function compactLayoutImpl(parts, initial, settings, options) {
     }
     nextPairOffset = repaired.nextPairOffset;
   }
+  let selectedMultiCluster = false;
+  if (settings.multiPartClusteringEnabled === true && clusterResult?.changed) {
+    selectedMultiCluster = improves(clusterResult.report.score, report.score);
+    options.onDebug?.({
+      stage: "cluster-portfolio",
+      reason: selectedMultiCluster ? "selected" : "ordinary-layout-better",
+      clusterScore: clusterResult.report.score,
+      ordinaryScore: report.score,
+    });
+    if (selectedMultiCluster) {
+      placements = clusterResult.placements;
+      report = clusterResult.report;
+      changed = true;
+    }
+  }
   return {
     placements,
     report,
@@ -504,7 +633,15 @@ function compactLayoutImpl(parts, initial, settings, options) {
     nextPairOffset,
     commonEdgeCandidateCount,
     clusterCount: clusterResult?.clusterCount || 0,
-    clustersMoved: clusterResult?.clustersMoved || 0,
+    nextClusterOffset: clusterResult?.nextClusterOffset || 0,
+    maxClusterSize: clusterResult?.maxClusterSize || 0,
+    clusterAssemblyCount: clusterResult?.clusterAssemblyCount || 0,
+    clustersMoved:
+      settings.multiPartClusteringEnabled === true
+        ? selectedMultiCluster
+          ? clusterResult.clustersMoved
+          : 0
+        : clusterResult?.clustersMoved || 0,
     clusterCandidateCount: clusterResult?.clusterCandidateCount || 0,
     nextOffset: (startOffset + visited) % Math.max(1, placements.length),
   };

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Paper Nest — Support / 支援範圍</title>
     <link rel="icon" href="favicon.svg" />
-    <link rel="stylesheet" href="style.css?v=0.9.2" />
+    <link rel="stylesheet" href="style.css?v=0.10.0" />
   </head>
   <body>
     <header class="topbar">
@@ -141,16 +141,32 @@
         若原圖已有同名 layer，新 layer 會加編號，保留原圖設定。
         匯出前會核對切割框同零件及其他已選餘料嘅間距。
       </p>
-      <h2>Common edges &amp; pair clusters / 共邊及成對排位</h2>
+      <h2>Common edges &amp; clusters / 共邊及多件組合</h2>
       <p>
-        Enable Common-edge nesting to allow designated straight shared
-        boundaries at zero gap. All other boundaries retain normal spacing.
-        Material and offcut priorities stay ahead of cutting-length benefits.
-        Pair clusters temporarily move two already connected parts by their
-        union exterior, then restore the original child placements. The
-        prototype does not build recursive clusters or use unions with holes.<br />開啟共邊排料後，指定直邊可零間距；其他邊維持正常間距。物料及餘料優先於切線收益。Pair
-        cluster 用兩件零件嘅 union
-        外輪廓一齊移動，再還原原有零件；第一版不做遞迴合併或含內孔嘅 union。
+        Common-edge nesting permits designated straight boundaries at zero gap;
+        all other boundaries retain normal spacing. Exact diagonal sharing uses
+        the required contact angle, except when rotation is locked. Multi-part
+        search keeps alternative pairs and expands them to three or four
+        original parts. Every accepted move must improve the full sheet score:
+        largest reusable rectangle first, then smaller rectangles, occupied
+        extent and cutting cost.<br />指定直邊可零間距，其他外邊維持正常間距。斜邊按所需角度貼合，鎖定旋轉除外。多件搜尋保留不同
+        pair，再探索三至四件；每次接受移動都要改善全板評分，依次優先考慮最大餘料、較小餘料、佔用範圍及切線成本。
+      </p>
+      <p>
+        The search is bounded and cannot guarantee the global optimum. Cluster
+        unions must have one connected exterior without holes; original child
+        geometry and internal holes remain intact. Pierces are a
+        connected-contour lower bound, not a machine cutting schedule.<br />搜尋有時間及候選數量上限，不保證全局最佳解。組合
+        union
+        要係單一連接、冇環形空隙嘅外輪廓；原始零件及內孔保留。穿孔估算只係連接輪廓下限，並非機器切割次序。
+      </p>
+      <p>
+        Preserve selected remnant split lines protects selected offcut cutting
+        rectangles when tightening an existing layout. Turning it off releases
+        these reservations. Green display rectangles alone are never physical
+        parts. Enable diagnostics before arranging to download candidate
+        generation, rejection and scoring information; detailed events are
+        capped, with aggregate counts retained.<br />保留分割線會喺繼續收緊排位時保護已選餘料切割框；關閉可釋放呢啲區域。單純顯示嘅綠色框唔會變成實體零件。排料前開啟診斷可下載候選、拒絕原因及評分；詳細事件設上限，總計數保留。
       </p>
       <p>
         Cut shared sections once is an independent export option. It splits

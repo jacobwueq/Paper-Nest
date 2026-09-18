@@ -1,0 +1,157 @@
+[
+  {
+    "enabled": false,
+    "placements": [
+      {
+        "id": "0",
+        "x": 56.11,
+        "y": 2.0250000000000004,
+        "angle": 0,
+        "sheet": 0,
+        "scale": 1,
+        "mirrored": false
+      },
+      {
+        "id": "1",
+        "x": 34.06,
+        "y": 2.025,
+        "angle": 0,
+        "sheet": 0,
+        "scale": 1
+      }
+    ],
+    "report": {
+      "score": [
+        0,
+        1,
+        [
+          8058.719999999999
+        ],
+        520.5,
+        1522.7024999999999
+      ],
+      "sheets": [
+        {
+          "sheet": 0,
+          "rectangle": {
+            "x": 2,
+            "y": 14.055,
+            "w": 96,
+            "h": 83.945,
+            "area": 8058.719999999999
+          },
+          "occupiedArea": 520.5,
+          "compactness": 1522.7024999999999,
+          "rectangles": [
+            {
+              "x": 2,
+              "y": 14.055,
+              "w": 96,
+              "h": 83.945,
+              "area": 8058.719999999999
+            }
+          ],
+          "recoveredArea": 8058.719999999999
+        }
+      ]
+    },
+    "candidates": 469
+  },
+  {
+    "enabled": true,
+    "placements": [
+      {
+        "id": "0",
+        "x": 82,
+        "y": 11.999999999999995,
+        "angle": 180,
+        "sheet": 0,
+        "scale": 1,
+        "sharedEdges": [
+          {
+            "otherPartId": "1",
+            "ownEdge": {
+              "contourId": "outer",
+              "edgeIndex": 1
+            },
+            "otherEdge": {
+              "contourId": "outer",
+              "edgeIndex": 3
+            },
+            "ownSection": [
+              {
+                "x": 30,
+                "y": 10
+              },
+              {
+                "x": 30,
+                "y": 1.2122671864155904e-16
+              }
+            ],
+            "otherSection": [
+              {
+                "x": -1.2246467991473533e-15,
+                "y": 10
+              },
+              {
+                "x": 0,
+                "y": 0
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "1",
+        "x": 52,
+        "y": 11.999999999999998,
+        "angle": 180,
+        "sheet": 0,
+        "scale": 1
+      }
+    ],
+    "report": {
+      "score": [
+        0,
+        1,
+        [
+          8061.12
+        ],
+        500.0000000000003,
+        120,
+        1375
+      ],
+      "sheets": [
+        {
+          "sheet": 0,
+          "rectangle": {
+            "x": 2,
+            "y": 14.03,
+            "w": 96,
+            "h": 83.97,
+            "area": 8061.12
+          },
+          "occupiedArea": 500.0000000000003,
+          "compactness": 1375,
+          "rectangles": [
+            {
+              "x": 2,
+              "y": 14.03,
+              "w": 96,
+              "h": 83.97,
+              "area": 8061.12
+            }
+          ],
+          "recoveredArea": 8061.12
+        }
+      ],
+      "cutting": {
+        "rawCutLength": 140,
+        "sharedLength": 10,
+        "estimatedCutLength": 130,
+        "pierceCount": null
+      }
+    },
+    "candidates": 431
+  }
+]

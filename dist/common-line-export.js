@@ -1,5 +1,5 @@
-import { transform, esc } from "./geometry.js?v=0.9.2";
-import { mergeCommonLines, lineOperationKey } from "./common-line.js?v=0.9.2";
+import { transform, esc } from "./geometry.js?v=0.10.0";
+import { mergeCommonLines, lineOperationKey } from "./common-line.js?v=0.10.0";
 
 // Make an export-only copy. Geometry stays in each owner's source coordinates;
 // detection happens after the complete placement transform, in physical mm.
@@ -35,6 +35,7 @@ export function prepareCommonLineExport(
         start: world(start),
         end: world(end),
         owner: p.id,
+        role: "part-boundary",
         inverse,
         entity: e,
         // Different fabrication operations must never be silently conflated.
@@ -95,14 +96,14 @@ export function prepareCommonLineExport(
     }
   }
   for (const s of mergeCommonLines(lines, options)) {
-    copies
-      .get(s.owner)
-      .entities.push({
-        ...s.entity,
-        kind: "poly",
-        closed: false,
-        vertices: [s.inverse(s.start), s.inverse(s.end)],
-      });
+    copies.get(s.owner).entities.push({
+      ...s.entity,
+      kind: "poly",
+      closed: false,
+      vertices: [s.inverse(s.start), s.inverse(s.end)],
+      segmentOwners: s.owners,
+      geometryRole: s.role,
+    });
   }
   return parts.map((p) => copies.get(p.id) || p);
 }

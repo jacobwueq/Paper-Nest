@@ -1,10 +1,11 @@
+import { preservedRemnants } from "./remnant-policy.js?v=0.10.0";
 import {
   cached,
   objectKey,
   poseKey,
   count,
-} from "./nesting-profile.js?v=0.9.2";
-import { commonContactClearance } from "./common-contact.js?v=0.9.2";
+} from "./nesting-profile.js?v=0.10.0";
+import { commonContactClearance } from "./common-contact.js?v=0.10.0";
 // Geometry is expressed in millimetres, with screen Y pointing down.
 export const TOL = 0.02;
 export const near = (a, b, e = 1e-5) => Math.hypot(a.x - b.x, a.y - b.y) <= e;
@@ -180,6 +181,31 @@ export function validateLayout(parts, placements, settings) {
     )
       errors.push(`${p.name}: outside sheet / 超出板材`);
     polygons.push({ t, p, poly });
+  }
+  for (const remnant of preservedRemnants(settings)) {
+    const r = remnant.rectangle;
+    if (
+      remnant.role !== "remnant-boundary" ||
+      !r ||
+      ![r.x, r.y, r.w, r.h].every(Number.isFinite) ||
+      r.w <= 0 ||
+      r.h <= 0
+    ) {
+      errors.push("Invalid preserved remnant");
+      continue;
+    }
+    const outline = [
+      { x: r.x, y: r.y },
+      { x: r.x + r.w, y: r.y },
+      { x: r.x + r.w, y: r.y + r.h },
+      { x: r.x, y: r.y + r.h },
+    ];
+    for (const p of polygons)
+      if (
+        p.t.sheet === remnant.sheet &&
+        !clearance(p.poly, outline, settings.gap)
+      )
+        errors.push(`${p.t.id}: preserved-remnant / 已保留餘料`);
   }
   for (let i = 0; i < polygons.length; i++)
     for (let j = i + 1; j < polygons.length; j++) {

@@ -6,16 +6,17 @@ import {
   DXF_LAYER_TABLE,
   DXF_PLOT_STYLE,
   DXF_MATERIAL,
-} from "./dxf-document.js?v=0.9.2";
-import { mergeCommonLines } from "./common-line.js?v=0.9.2";
-import { prepareCommonLineExport } from "./common-line-export.js?v=0.9.2";
-import { partSVG, transform, fmt, esc } from "./geometry.js?v=0.9.2";
-import { checkedOffcuts } from "./offcut-export.js?v=0.9.2";
+} from "./dxf-document.js?v=0.10.0";
+import { mergeCommonLines } from "./common-line.js?v=0.10.0";
+import { prepareCommonLineExport } from "./common-line-export.js?v=0.10.0";
+import { partSVG, transform, fmt, esc } from "./geometry.js?v=0.10.0";
+import { checkedOffcuts } from "./offcut-export.js?v=0.10.0";
 function offcutLines(cuts, options) {
   return mergeCommonLines(
     cuts.flatMap((points) =>
       points.map((start, i) => ({
         start,
+        role: "generated-split-line",
         end: points[(i + 1) % points.length],
       })),
     ),

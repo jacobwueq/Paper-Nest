@@ -77,6 +77,19 @@ export function mergeCommonLines(lines, { tolerance = 1e-6 } = {}) {
         start: point(lo),
         end: point(hi),
         sources: owners.map((o) => o.line),
+        owners: [
+          ...new Set(
+            owners.flatMap(
+              (o) =>
+                o.line.owners ||
+                (o.line.owner === undefined ? [] : [o.line.owner]),
+            ),
+          ),
+        ],
+        role:
+          owners.length > 1
+            ? "common-cut"
+            : owners[0].line.role || "part-boundary",
         shared: owners.length > 1,
       });
     }

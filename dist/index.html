@@ -9,9 +9,9 @@
       content="Arrange DXF and SVG paper-cutting parts on full-size sheets. Review geometry, nest and export locally in your browser."
     />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="style.css?v=0.9.2" />
+    <link rel="stylesheet" href="style.css?v=0.10.0" />
     <script src="vendor/path-data-polyfill.js"></script>
-    <script type="module" src="app.js?v=0.9.2"></script>
+    <script type="module" src="app.js?v=0.10.0"></script>
   </head>
   <body>
     <header class="topbar">
@@ -22,7 +22,7 @@
             fill="currentColor"
           /></svg
         ><span>Paper Nest <small>紙材排料</small></span></a
-      ><span class="version">WORKING PROTOTYPE · 0.9.2</span
+      ><span class="version">WORKING PROTOTYPE · 0.10.0</span
       ><span class="local"
         >Files stay in your browser <span>檔案於本機處理</span></span
       >
@@ -193,11 +193,87 @@
           >
           <label class="review-check"
             ><input id="pair-clusters" type="checkbox" checked disabled /><span
-              >Move shared pairs together<br /><small
-                >成對移動 · Pair cluster prototype</small
+              >Move existing pairs<br /><small
+                >舊式成對移動（關閉多件組合時使用）</small
               ></span
             ></label
           >
+          <label class="review-check"
+            ><input
+              id="multi-part-clusters"
+              type="checkbox"
+              checked
+              disabled
+            /><span
+              >Explore multi-part clusters<br /><small
+                >探索 3–4 件共邊組合</small
+              ></span
+            ></label
+          >
+          <div class="field">
+            <label for="max-cluster-parts"
+              >Maximum cluster parts · 每組最多件數</label
+            ><input
+              id="max-cluster-parts"
+              type="number"
+              min="2"
+              max="4"
+              step="1"
+              value="4"
+              disabled
+            />
+          </div>
+          <div class="field">
+            <label for="cluster-beam-width"
+              >Cluster alternatives · 保留組合數</label
+            ><input
+              id="cluster-beam-width"
+              type="number"
+              min="2"
+              max="32"
+              step="1"
+              value="8"
+              disabled
+            />
+          </div>
+          <label class="review-check"
+            ><input
+              id="diagonal-common-edges"
+              type="checkbox"
+              checked
+              disabled
+            /><span
+              >Exact diagonal sharing<br /><small
+                >斜邊按實際接觸角度貼合；鎖定旋轉除外</small
+              ></span
+            ></label
+          >
+          <label class="review-check"
+            ><input id="preserve-remnant-splits" type="checkbox" checked /><span
+              >Preserve selected remnant split lines<br /><small
+                >保留已選餘料分割線</small
+              ></span
+            ></label
+          >
+          <p class="help">
+            Applies to selected offcut cuts when tightening a layout. Off allows
+            those areas to be reused and recalculated.<br />收緊排位時保護已選餘料切割區；關閉可重新使用該位置並計算餘料。
+          </p>
+          <label class="review-check"
+            ><input id="debug-common-edges" type="checkbox" /><span
+              >Record nesting diagnostics<br /><small
+                >記錄共邊候選、拒絕原因及評分</small
+              ></span
+            ></label
+          >
+          <button
+            id="download-diagnostics"
+            class="secondary"
+            type="button"
+            disabled
+          >
+            Download diagnostics · 下載診斷
+          </button>
           <div class="field">
             <label for="common-edge-weight">Shared-edge weight · 共邊權重</label
             ><input

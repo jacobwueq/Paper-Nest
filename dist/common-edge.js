@@ -3,9 +3,9 @@ import {
   objectKey,
   count,
   poseKey,
-} from "./nesting-profile.js?v=0.9.2";
+} from "./nesting-profile.js?v=0.10.0";
 // Candidate geometry only: does not authorise contact, change scoring or merge cuts.
-import { area, transform, segmentDistance, TOL } from "./geometry.js?v=0.9.2";
+import { area, transform, segmentDistance, TOL } from "./geometry.js?v=0.10.0";
 const dot = (a, b) => a.x * b.x + a.y * b.y;
 const cross = (a, b) => a.x * b.y - a.y * b.x;
 const sub = (a, b) => ({ x: a.x - b.x, y: a.y - b.y });
@@ -250,7 +250,14 @@ export function* commonEdgeCandidates(
   movingPlacement,
   fixed,
   fixedPlacement,
-  { rotations = 360, minOverlap = 0.01, shouldStop = () => false } = {},
+  {
+    rotations = 360,
+    minOverlap = 0.01,
+    shouldStop = () => false,
+    diagonalCommonEdgesEnabled = false,
+    preserveContactAlternatives = diagonalCommonEdgesEnabled,
+    onDebug,
+  } = {},
 ) {
   if (moving.id === fixed.id || movingPlacement.sheet !== fixedPlacement.sheet)
     return;
@@ -280,8 +287,21 @@ export function* commonEdgeCandidates(
       const angle =
         rotations === 1
           ? norm(movingPlacement.angle)
-          : norm(Math.round(required / step) * step);
-      if (angleDifference(angle, required) > 1e-7) continue; // honour the existing rotation grid
+          : diagonalCommonEdgesEnabled
+            ? required
+            : norm(Math.round(required / step) * step);
+      if (angleDifference(angle, required) > 1e-7) {
+        onDebug?.({
+          stage: "edge-pair",
+          movingPartId: moving.id,
+          fixedPartId: fixed.id,
+          movingEdge: localB.edgeIndex,
+          fixedEdge: localA.edgeIndex,
+          reason: "rotation-grid",
+          requiredAngle: required,
+        });
+        continue;
+      } // Locked rotations remain locked; enabled diagonal matching uses exact contact angles.
       const base = { ...movingPlacement, x: 0, y: 0, angle };
       const b = transformEdge(localB, base);
       const compatible = edgeCompatibility(a, b, {
@@ -289,6 +309,16 @@ export function* commonEdgeCandidates(
         minOverlap,
       });
       if (!compatible.compatible) continue;
+      onDebug?.({
+        stage: "edge-pair",
+        movingPartId: moving.id,
+        fixedPartId: fixed.id,
+        movingEdge: localB.edgeIndex,
+        fixedEdge: localA.edgeIndex,
+        status: "compatible",
+        maxOverlap: compatible.maxOverlap,
+        angle,
+      });
       for (const [af, bf] of [
         ["start", "start"],
         ["start", "end"],
@@ -305,6 +335,14 @@ export function* commonEdgeCandidates(
           placement.y,
           placement.angle,
           placement.mirrored,
+          ...(preserveContactAlternatives
+            ? [
+                localA.edgeIndex,
+                localB.edgeIndex,
+                localA.entityIndex,
+                localB.entityIndex,
+              ]
+            : []),
         ].join(",");
         if (seen.has(key)) continue;
         const section = sharedSection(a, transformEdge(localB, placement), {
@@ -312,6 +350,22 @@ export function* commonEdgeCandidates(
         });
         if (!section) continue;
         seen.add(key);
+        onDebug?.({
+          stage: "generated",
+          candidateKey: JSON.stringify([
+            moving.id,
+            placement.x,
+            placement.y,
+            placement.angle,
+            !!placement.mirrored,
+          ]),
+          movingPartId: moving.id,
+          fixedPartId: fixed.id,
+          sharedLength: section.length,
+          placement,
+          movingEdge: localB.edgeIndex,
+          fixedEdge: localA.edgeIndex,
+        });
         yield {
           source: "common-edge",
           placement,
