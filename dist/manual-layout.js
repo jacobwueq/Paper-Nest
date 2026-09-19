@@ -4,18 +4,18 @@ import {
   edgeCompatibility,
   sharedSection,
   commonEdgeCandidates,
-} from "./common-edge.js?v=0.12.0";
-import { contactsAtPlacement } from "./common-contact.js?v=0.12.0";
+} from "./common-edge.js?v=0.12.2";
+import { contactsAtPlacement } from "./common-contact.js?v=0.12.2";
 import {
   contactComponents,
   moveRigidComponent,
-} from "./cluster-docking.js?v=0.12.0";
+} from "./cluster-docking.js?v=0.12.2";
 import {
   validateLayout,
   transform,
   bounds,
   transformed,
-} from "./geometry.js?v=0.12.0";
+} from "./geometry.js?v=0.12.2";
 const clone = (x) => structuredClone(x);
 export function rebuildContacts(parts, poses, settings) {
   const clean = poses.map(({ sharedEdges, ...t }) => t);
@@ -53,11 +53,21 @@ export function rotateSelection(parts, poses, ids, angle) {
 // Supporting-line projection preserves sliding. Nearby geometric events add
 // tangential alignment without sampling or changing any collision exemptions.
 export function magneticSnap(parts, poses, ids, settings, radius = 3) {
+  return magneticSnapCandidates(parts, poses, ids, settings, radius)[0] || null;
+}
+export function magneticSnapCandidates(
+  parts,
+  poses,
+  ids,
+  settings,
+  radius = 3,
+  shouldStop = () => false,
+) {
   const map = new Map(parts.map((p) => [p.id, p])),
     candidates = [];
   const selected = poses.filter((t) => ids.includes(t.id));
   if (!selected.length || new Set(selected.map((t) => t.sheet)).size !== 1)
-    return null;
+    return [];
   const box = bounds(
     selected.flatMap((t) => transformed(map.get(t.id).outer, t)),
   );
@@ -66,6 +76,7 @@ export function magneticSnap(parts, poses, ids, settings, radius = 3) {
     y: [settings.margin, settings.height - settings.margin],
   };
   function add(dx, dy, info, priority) {
+    if (shouldStop()) return;
     const trial = rebuildContacts(
       parts,
       translateSelection(poses, ids, dx, dy),
@@ -94,6 +105,13 @@ export function magneticSnap(parts, poses, ids, settings, radius = 3) {
       ))
         for (const a of worldEdges.get(fixed.id))
           for (const b of worldEdges.get(moving.id)) {
+            if (shouldStop())
+              return candidates.sort(
+                (a, b) =>
+                  Number(b.valid) - Number(a.valid) ||
+                  b.priority - a.priority ||
+                  a.distance - b.distance,
+              );
             if (
               !edgeCompatibility(a, b, {
                 angleTolerance: 1e-6,
@@ -192,7 +210,7 @@ export function magneticSnap(parts, poses, ids, settings, radius = 3) {
       a.distance - b.distance ||
       b.sharedLength - a.sharedLength,
   );
-  return candidates[0] || null;
+  return candidates;
 }
 export function rotationSuggestion(parts, poses, ids, settings, radius = 15) {
   if (!settings.commonEdgeMode) return null;

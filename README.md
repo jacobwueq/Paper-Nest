@@ -384,3 +384,8 @@ After nesting, Manual Edit supports drag, Shift-selection, custom rotation, magn
 Manual placements become the export source. Export rebuilds common lines from final geometry. Lock a selection before Re-optimise unlocked to preserve its exact transforms. This refinement uses the existing compaction search; it is not a guarantee of a globally optimal re-nest.
 
 Area percentage measures part footprint divided by sheet area, so moving the same parts on the same sheet does not change that percentage; bounding extent, reusable offcuts and shared cutting length show layout improvements. Editing history is session-only and is reset by a new import or a fresh Auto Nest.
+
+
+### Automatic alignment
+
+With enhanced common-edge nesting enabled, each compaction job first checks nearby shared edges and endpoint alignments for individual parts and existing contact groups. This pass has a bounded share of the search budget and only accepts improvements under the existing global score; it does not increase common-edge weight or relax spacing. Manual rejection messages retain the actual validator reason after release. Clearance simplification deduplicates consecutive vertices before removing collinear points, preserving genuine corners in imported and sample contours.

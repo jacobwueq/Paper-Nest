@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { compactLayout } from "../dist/compaction.js";
-import { profiled } from "../dist/nesting-profile.js?v=0.12.0";
+import { profiled } from "../dist/nesting-profile.js?v=0.12.2";
 import { evaluateLayout } from "../dist/search.js";
 import { transformed, sampleParts } from "../dist/geometry.js";
 import "../dist/engine/util/offcut.js";

@@ -4,21 +4,21 @@ import {
   poseKey,
   count,
   measured,
-} from "./nesting-profile.js?v=0.12.0";
+} from "./nesting-profile.js?v=0.12.2";
 // Explicit shared-boundary validation. Ordinary clearance remains untouched.
-import * as vendor from "./engine/util/clipper.js?v=0.12.0";
+import * as vendor from "./engine/util/clipper.js?v=0.12.2";
 import {
   transformed,
   segmentDistance,
   clearance,
   bounds,
-} from "./geometry.js?v=0.12.0";
+} from "./geometry.js?v=0.12.2";
 import {
   extractPartEdges,
   transformEdge,
   edgeCompatibility,
   sharedSection,
-} from "./common-edge.js?v=0.12.0";
+} from "./common-edge.js?v=0.12.2";
 const C = globalThis.ClipperLib || vendor.default;
 const EPS = 1e-6,
   SCALE = 1e6;
@@ -159,9 +159,13 @@ function authorised(contact, shared) {
 // Remove redundant straight-line vertices only for distance checking. Source
 // edge IDs and contact declarations keep their original indexing.
 function straightBoundary(polygon) {
-  return polygon.filter((p, i) => {
-    const prev = polygon[(i + polygon.length - 1) % polygon.length],
-      next = polygon[(i + 1) % polygon.length];
+  // Deduplicate first: filtering both copies of a vertex simultaneously can
+  // erase a genuine corner and invent a diagonal boundary for clearance.
+  const clean = polygon.filter((p, i) => !i || !near(p, polygon[i - 1]));
+  if (clean.length > 1 && near(clean[0], clean[clean.length - 1])) clean.pop();
+  return clean.filter((p, i) => {
+    const prev = clean[(i + clean.length - 1) % clean.length],
+      next = clean[(i + 1) % clean.length];
     return segmentDistance(p, prev, next) > 1e-9;
   });
 }

@@ -1,24 +1,25 @@
-import { compactMultiPartClusters } from "./multi-cluster.js?v=0.12.0";
+import { alignNearby } from "./auto-align.js?v=0.12.2";
+import { compactMultiPartClusters } from "./multi-cluster.js?v=0.12.2";
 import {
   createNestingDiagnostics,
   scoreDecision,
-} from "./nesting-debug.js?v=0.12.0";
-import { compactPairClusters } from "./pair-cluster.js?v=0.12.0";
-import { profiled, count } from "./nesting-profile.js?v=0.12.0";
+} from "./nesting-debug.js?v=0.12.2";
+import { compactPairClusters } from "./pair-cluster.js?v=0.12.2";
+import { profiled, count } from "./nesting-profile.js?v=0.12.2";
 import {
   contactFromCandidate,
   replacePlacement,
   contactsAtPlacement,
-} from "./common-contact.js?v=0.12.0";
-import { commonEdgeCandidates } from "./common-edge.js?v=0.12.0";
-import { pocketTranslations } from "./pocket-search.js?v=0.12.0";
+} from "./common-contact.js?v=0.12.2";
+import { commonEdgeCandidates } from "./common-edge.js?v=0.12.2";
+import { pocketTranslations } from "./pocket-search.js?v=0.12.2";
 import {
   bounds,
   transformed,
   clearance,
   validateLayout,
-} from "./geometry.js?v=0.12.0";
-import { evaluateLayout, improves } from "./search.js?v=0.12.0";
+} from "./geometry.js?v=0.12.2";
+import { evaluateLayout, improves } from "./search.js?v=0.12.2";
 
 // Remove two parts together, keep several alternatives for the first, and
 // reinsert the second. Only complete, improved layouts leave this function.
@@ -219,6 +220,19 @@ function compactLayoutImpl(parts, initial, settings, options) {
     return { placements, changed: false };
   let report = evaluateLayout(parts, placements, settings),
     changed = false;
+  if (enhancedCommon) {
+    const aligned = alignNearby(parts, placements, settings, {
+      ...options,
+      now,
+      deadline: Math.min(
+        deadline,
+        now() + Math.min(350, (options.milliseconds ?? 1800) * 0.25),
+      ),
+    });
+    placements = aligned.placements;
+    report = aligned.report;
+    changed = aligned.changed;
+  }
   let clusterResult = null;
   if (
     settings.commonEdgeMode === true &&

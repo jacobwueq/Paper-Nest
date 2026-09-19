@@ -5,16 +5,16 @@ import {
   magneticSnap,
   rotationSuggestion,
   rebuildContacts,
-} from "./manual-layout.js?v=0.12.1";
-import { cuttingMetrics } from "./cut-metrics.js?v=0.12.0";
-import { evaluateLayout } from "./search.js?v=0.12.0";
+} from "./manual-layout.js?v=0.12.2";
+import { cuttingMetrics } from "./cut-metrics.js?v=0.12.2";
+import { evaluateLayout } from "./search.js?v=0.12.2";
 import {
   validateLayout,
   bounds,
   transformed,
   esc,
   area,
-} from "./geometry.js?v=0.12.0";
+} from "./geometry.js?v=0.12.2";
 export function installWorkspace({
   state,
   readSettings,
@@ -393,7 +393,7 @@ export function installWorkspace({
     const errors = snap
       ? snap.errors
       : validateLayout(state.parts, poses, settings());
-    draft = { placements: poses, valid: !errors.length, snap };
+    draft = { placements: poses, valid: !errors.length, snap, errors };
     preview(poses, snap, errors);
   });
   canvas.addEventListener("pointerup", (e) => {
@@ -412,7 +412,11 @@ export function installWorkspace({
       else render();
     } else render();
     if (last && !last.valid)
-      notice("Move rejected; previous layout kept / 移動無效，保留原位");
+      notice(
+        "Move rejected / 移動無效: " +
+          (last.errors?.[0] || "位置不合法") +
+          " · previous layout kept / 保留原位",
+      );
     suggestion = rotationSuggestion(
       state.parts,
       model.placements,

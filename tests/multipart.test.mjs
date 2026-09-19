@@ -406,7 +406,7 @@ test("J: all new features disabled match frozen v0.9.2 placements, scoring and c
 });
 
 import { clusterPierceLowerBound } from "../dist/cluster-pierces.js";
-import { profiled } from "../dist/nesting-profile.js?v=0.12.0";
+import { profiled } from "../dist/nesting-profile.js?v=0.12.2";
 test("pierce lower bound retains separate holes after joining outer contours", () => {
   const parts = [box("a"), box("b")];
   parts[0].entities.push({ kind: "circle", cx: 8, cy: 5, r: 1, layer: "CUT" });
