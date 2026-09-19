@@ -9,9 +9,9 @@
       content="Arrange DXF and SVG paper-cutting parts on full-size sheets. Review geometry, nest and export locally in your browser."
     />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="style.css?v=0.14.1" />
+    <link rel="stylesheet" href="style.css?v=0.14.2" />
     <script src="vendor/path-data-polyfill.js"></script>
-    <script type="module" src="app.js?v=0.14.1"></script>
+    <script type="module" src="app.js?v=0.14.2"></script>
   </head>
   <body>
     <header class="topbar">
@@ -22,7 +22,7 @@
             fill="currentColor"
           /></svg
         ><span>Paper Nest <small>紙材排料</small></span></a
-      ><span class="version">WORKING PROTOTYPE · 0.14.1</span
+      ><span class="version">WORKING PROTOTYPE · 0.14.2</span
       ><span class="local"
         >Files stay in your browser <span>檔案於本機處理</span></span
       >
@@ -439,8 +439,9 @@
               ></span
             ></label
           >
-          <button id="export" class="secondary" disabled>
-            Download sheet · 下載板材圖 ↓
+          <div class="export-final-label">Final step · 最後一步</div>
+          <button id="export" class="secondary export-final" disabled>
+            <span>Download sheet ↓</span><span>下載板材圖</span>
           </button>
           <p class="help">
             Sheet border is a preview guide only.<br />板邊框只供預覽，不會輸出。

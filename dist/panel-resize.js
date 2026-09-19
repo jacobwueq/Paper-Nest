@@ -34,6 +34,12 @@ export function installPanelResize() {
       );
     } catch {}
   };
+  const physicalSide = (side) =>
+    document.body.dataset.stage === "export"
+      ? side === "left"
+        ? "right"
+        : "left"
+      : side;
   function update() {
     const desktop = window.innerWidth >= 1100,
       body = document.body;
@@ -44,6 +50,11 @@ export function installPanelResize() {
       body.dataset.stage === "export" &&
       !body.classList.contains("review-collapsed") &&
       !body.classList.contains("canvas-max");
+    const controls = workspace.querySelector(".controls"),
+      drawing = workspace.querySelector(".drawing-area"),
+      review = workspace.querySelector(".review-panel");
+    for (const el of [controls, drawing, review])
+      el.style.removeProperty("grid-column");
     if (!desktop) {
       workspace.style.removeProperty("grid-template-columns");
       Object.values(handles).forEach((h) => (h.hidden = true));
@@ -56,15 +67,25 @@ export function installPanelResize() {
       left,
       right,
     );
-    workspace.style.gridTemplateColumns = [
+    const exportStage = body.dataset.stage === "export";
+    const columns = [
       ...(left ? [`${widths.left}px`] : []),
       "minmax(0,1fr)",
       ...(right ? [`${widths.right}px`] : []),
-    ].join(" ");
+    ];
+    workspace.style.gridTemplateColumns = (
+      exportStage ? columns.reverse() : columns
+    ).join(" ");
+    if (exportStage) {
+      review.style.gridColumn = "1";
+      drawing.style.gridColumn = right ? "2" : "1";
+      controls.style.gridColumn = String((right ? 1 : 0) + 2);
+    }
     for (const side of ["left", "right"]) {
       const h = handles[side];
       h.hidden = side === "left" ? !left : !right;
-      h.style[side] = `${widths[side] - 4}px`;
+      h.style.left = h.style.right = "";
+      h.style[physicalSide(side)] = `${widths[side] - 4}px`;
       h.setAttribute("aria-valuenow", String(Math.round(widths[side])));
     }
   }
@@ -97,7 +118,8 @@ export function installPanelResize() {
         side === "left" ? 220 : 280,
         Math.min(
           side === "left" ? 440 : 520,
-          drag.width + (e.clientX - drag.x) * (side === "left" ? 1 : -1),
+          drag.width +
+            (e.clientX - drag.x) * (physicalSide(side) === "left" ? 1 : -1),
         ),
       );
       update();
@@ -124,7 +146,8 @@ export function installPanelResize() {
             ? 280
             : 340
           : Number(h.getAttribute("aria-valuenow")) +
-            (e.key === "ArrowRight" ? 10 : -10) * (side === "left" ? 1 : -1);
+            (e.key === "ArrowRight" ? 10 : -10) *
+              (physicalSide(side) === "left" ? 1 : -1);
       persist();
       update();
     };

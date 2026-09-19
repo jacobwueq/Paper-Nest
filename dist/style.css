@@ -1504,3 +1504,68 @@ body:not([data-stage="export"]) #toggle-review {
     bottom: 0;
   }
 }
+/* Review flows left-to-right: select cuts, inspect sheet, download. */
+body[data-stage="export"] .review-panel {
+  border-left: 0;
+  border-right: 1px solid var(--line);
+  grid-row: 1;
+}
+body[data-stage="export"] .controls {
+  border-left: 1px solid var(--line);
+}
+.export-final-label {
+  margin: 20px 0 8px;
+  color: #16704b;
+  font-size: 12px;
+  font-weight: 700;
+}
+#export.export-final {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-height: 58px;
+  background: #16704b;
+  border-color: #16704b;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 650;
+}
+#export.export-final:hover:enabled {
+  background: #10583b;
+  border-color: #10583b;
+  filter: none;
+}
+#export.export-final:active:enabled {
+  background: #0d4931;
+}
+#export.export-final:focus-visible {
+  outline-color: #16704b;
+}
+@media (min-width: 801px) and (max-width: 1099px) {
+  body[data-stage="export"] .workspace {
+    grid-template-columns: minmax(0, 1fr) 280px !important;
+  }
+  body[data-stage="export"] .controls {
+    grid-column: 2;
+  }
+  body[data-stage="export"] .drawing-area {
+    grid-column: 1;
+  }
+  body[data-stage="export"].settings-hidden .workspace,
+  body[data-stage="export"].canvas-max .workspace {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+@media (max-width: 1099px) {
+  body[data-stage="export"] .review-panel {
+    left: 0;
+    right: auto;
+  }
+}
+@media (max-width: 800px) {
+  body[data-stage="export"] .controls {
+    left: auto;
+    right: 0;
+  }
+}

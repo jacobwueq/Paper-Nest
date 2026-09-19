@@ -1,4 +1,4 @@
-import { installPanelResize } from "./panel-resize.js?v=0.14.1";
+import { installPanelResize } from "./panel-resize.js?v=0.14.2";
 import { proposeSeparations } from "./separation.js?v=0.13.0";
 import { cuttingMetrics } from "./cut-metrics.js?v=0.13.0";
 import { recoveryLines } from "./exporters.js?v=0.14.0";
