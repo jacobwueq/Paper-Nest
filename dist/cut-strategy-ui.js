@@ -1,6 +1,7 @@
 import { proposeSeparations } from "./separation.js?v=0.13.0";
 import { cuttingMetrics } from "./cut-metrics.js?v=0.13.0";
-import { fmt } from "./geometry.js?v=0.13.0";
+import { recoveryLines } from "./exporters.js?v=0.14.0";
+import { lineLength } from "./common-line.js?v=0.13.0";
 export function installCutStrategy({
   state,
   readSettings,
@@ -8,111 +9,159 @@ export function installCutStrategy({
   sheetOffcuts,
 }) {
   const $ = (id) => document.getElementById(id),
-    excluded = new Set();
-  const panel = document.createElement("section");
-  panel.className = "cut-strategy";
-  panel.innerHTML = `<h3>Recovery strategy · 餘料切割方案</h3><label for="cut-strategy">Choose strategy · 選擇方案</label><select id="cut-strategy"><option value="full">A · Preserve full remnant / 完整餘料框</option><option value="quick">B · Quick separation / 快速分離</option></select><label id="separation-toggle"><input id="separation-enabled" type="checkbox" checked> Include purple cuts · 輸出紫色分離線</label><div id="separation-choices"></div><div id="strategy-comparison" class="help"></div><p class="help">Purple lines reach the physical sheet edge. Green areas remain reference remnants; quick cuts do not trace their frames.<br>紫線延伸至實際板邊；快速分離不會沿綠色餘料框切割。先切零件，最後執行分離線。</p>`;
-  document.querySelector(".export-area").prepend(panel);
-  for (const id of ["cut-strategy", "separation-enabled", "separation-kerf"])
-    $(id).addEventListener("change", render);
+    selected = new Set();
+  const panel = document.createElement("aside");
+  panel.className = "review-panel";
+  panel.id = "review-panel";
+  panel.innerHTML = `<header><h2>Review cuts · 切線清單</h2><button id="close-review" aria-label="Collapse review / 收起清單">×</button></header><div id="remnant-review"></div><section class="cut-strategy"><h3>Quick Separation Cuts<br>快速分離切線</h3><label><input id="separation-visible" type="checkbox" checked> Show suggestions · 顯示建議</label><p class="help">Preview only until selected. Cut parts first, separation last.<br>勾選才會輸出。先切零件，最後分離板材。</p><div id="separation-choices"></div></section><div id="strategy-comparison" class="help" aria-live="polite"></div>`;
+  document.querySelector(".workspace").append(panel);
+  const offcutHelp = $("include-offcuts").closest("label").nextElementSibling;
+  if (offcutHelp?.classList.contains("help")) offcutHelp.remove();
+  $("remnant-review").append(
+    $("offcut-summary"),
+    $("include-offcuts").closest("label"),
+    $("offcut-list"),
+  );
+  const toggle = document.createElement("button");
+  toggle.id = "toggle-review";
+  toggle.textContent = "Review cuts · 切線清單";
+  toggle.setAttribute("aria-controls", "review-panel");
+  document.querySelector(".stage-nav").append(toggle);
+  let collapsed = window.innerWidth < 1100;
+  function collapse(value) {
+    collapsed = value;
+    document.body.classList.toggle("review-collapsed", value);
+    toggle.setAttribute("aria-expanded", String(!value));
+  }
+  collapse(collapsed);
+  toggle.onclick = () => collapse(!collapsed);
+  $("close-review").onclick = () => collapse(true);
+  $("separation-visible").onchange = render;
+  $("separation-kerf").addEventListener("change", render);
   panel.addEventListener("change", (e) => {
     const id = e.target.dataset.separation;
     if (id) {
-      e.target.checked ? excluded.delete(id) : excluded.add(id);
+      e.target.checked ? selected.add(id) : selected.delete(id);
       render();
     }
   });
-  function plan() {
-    return proposeSeparations(
+  function highlight(e, on) {
+    const row = e.target.closest("label");
+    if (!row) return;
+    const input = row.querySelector(
+      "input[data-separation], input[data-offcut]",
+    );
+    if (!input) return;
+    const quick = input.dataset.separation;
+    document
+      .querySelectorAll(quick ? "[data-cut-preview]" : "[data-offcut-preview]")
+      .forEach((el) => {
+        if (
+          (quick ? el.dataset.cutPreview : el.dataset.offcutPreview) ===
+          (quick || input.dataset.offcut)
+        )
+          el.classList.toggle("review-highlight", on);
+      });
+  }
+  for (const [event, on] of [
+    ["mouseover", true],
+    ["mouseout", false],
+    ["focusin", true],
+    ["focusout", false],
+  ])
+    panel.addEventListener(event, (e) => highlight(e, on));
+  function options(sheet) {
+    return {
+      separationCuts: proposeSeparations(
+        state.parts,
+        state.placements,
+        sheet,
+        readSettings(),
+      ).filter((l) => selected.has(l.id)),
+    };
+  }
+  function update() {
+    const lines = proposeSeparations(
       state.parts,
       state.placements,
       state.sheet,
       readSettings(),
     );
-  }
-  function options(sheet) {
-    if ($("cut-strategy").value !== "quick") return null;
-    const lines = $("separation-enabled").checked
-      ? proposeSeparations(
-          state.parts,
-          state.placements,
-          sheet,
-          readSettings(),
-        ).filter((l) => !excluded.has(l.id))
-      : [];
-    return { offcuts: [], separationCuts: lines };
-  }
-  function update() {
-    const quick = $("cut-strategy").value === "quick";
-    $("include-offcuts").disabled = quick;
-    $("separation-toggle").hidden = !quick;
-    let lines = [];
-    try {
-      lines = plan();
-    } catch (e) {
-      $("strategy-comparison").textContent = e.message;
-      return;
-    }
-    $("separation-choices").hidden = !quick;
-    $("separation-choices").innerHTML = lines.length
-      ? lines
-          .map(
-            (l) =>
-              `<label><input type="checkbox" data-separation="${l.id}" ${excluded.has(l.id) ? "" : "checked"}>${l.axis === "x" ? "Vertical / 垂直" : "Horizontal / 水平"} · ${l.length.toFixed(1)} mm</label>`,
-          )
-          .join("")
-      : "No safe full-sheet cut / 無安全嘅全板分離線";
-    const selected = lines.filter((l) => !excluded.has(l.id)),
-      rects = sheetOffcuts(state.sheet).filter(
-        (r) => !state.excludedOffcuts.has(r.id),
-      );
-    const full = rects.reduce((n, r) => n + 2 * (r.w + r.h), 0),
-      short = selected.reduce((n, l) => n + l.length, 0);
-    const base = state.placements.length
+    $("separation-choices").innerHTML =
+      lines
+        .map(
+          (l, i) =>
+            `<label class="offcut-choice"><input type="checkbox" data-separation="${l.id}" ${selected.has(l.id) ? "checked" : ""}><span>Cut ${String.fromCharCode(65 + i)} · ${l.axis === "x" ? "Vertical / 垂直" : "Horizontal / 水平"}<br>${l.length.toFixed(1)} mm</span></label>`,
+        )
+        .join("") || "No safe full-sheet cut / 無安全全板分離線";
+    const all = sheetOffcuts(state.sheet),
+      rects = $("include-offcuts").checked
+        ? all.filter((r) => !state.excludedOffcuts.has(r.id))
+        : [];
+    const cuts = rects.map((r) => [
+      { x: r.x, y: r.y },
+      { x: r.x + r.w, y: r.y },
+      { x: r.x + r.w, y: r.y + r.h },
+      { x: r.x, y: r.y + r.h },
+    ]);
+    const recovery = recoveryLines(
+      cuts,
+      lines.filter((l) => selected.has(l.id)),
+    );
+    const quick = recovery.quick.reduce((n, l) => n + lineLength(l), 0),
+      remnant =
+        !$("merge-common-lines").checked && !quick
+          ? rects.reduce((n, r) => n + 2 * (r.w + r.h), 0)
+          : recovery.remnant.reduce((n, l) => n + lineLength(l), 0);
+    const metrics = state.placements.length
       ? cuttingMetrics(
           state.parts,
           state.placements.filter((t) => t.sheet === state.sheet),
           readSettings(),
-        )[
-          $("merge-common-lines").checked
-            ? "estimatedCutLength"
-            : "rawCutLength"
-        ]
-      : 0;
+        )
+      : { rawCutLength: 0, estimatedCutLength: 0, sharedLength: 0 };
+    const savings = $("merge-common-lines").checked ? metrics.sharedLength : 0,
+      base = metrics.rawCutLength - savings;
     $("strategy-comparison").innerHTML =
-      `<table class="strategy-table"><caption>Recovery cuts / 回收切線比較</caption><thead><tr><th></th><th>A · Full<br>完整框</th><th>B · Quick<br>分離線</th></tr></thead><tbody><tr><th>Extra length<br>額外長度</th><td>${full.toFixed(1)} mm</td><td>${short.toFixed(1)} mm</td></tr><tr><th>Segments<br>線段</th><td>${rects.length * 4}</td><td>${selected.length}</td></tr><tr><th>Total est.<br>預計總長</th><td>${(base + full).toFixed(1)} mm</td><td>${(base + short).toFixed(1)} mm</td></tr><tr><th>Remnant<br>餘料</th><td>Full frame<br>完整框</td><td>Partial<br>部分</td></tr></tbody></table><p>Selected export / 目前輸出: ${(base + (quick ? ($("separation-enabled").checked ? short : 0) : $("include-offcuts").checked ? full : 0)).toFixed(1)} mm${short >= full && lines.length ? " · Quick is not shorter / 快速方案並非較短" : ""}</p>`;
-    if (state.view !== "layout") return;
-    const all = sheetOffcuts(state.sheet);
+      `<h3>Selected export · 目前輸出</h3><dl><dt>Part cuts · 零件原切線</dt><dd>${metrics.rawCutLength.toFixed(1)} mm</dd><dt>Shared savings · 共線節省</dt><dd>−${savings.toFixed(1)} mm</dd><dt>Quick cuts · 分離線</dt><dd>${quick.toFixed(1)} mm</dd><dt>Remnant cuts · 餘料線</dt><dd>${remnant.toFixed(1)} mm</dd><dt><strong>Total · 總長</strong></dt><dd><strong>${(base + quick + remnant).toFixed(1)} mm</strong></dd></dl>`;
     document
       .querySelectorAll(".offcut-preview")
-      .forEach((r, i) =>
-        r.classList.toggle(
+      .forEach((el, i) =>
+        el.classList.toggle(
           "offcut-cut-preview",
-          !quick &&
-            $("include-offcuts").checked &&
+          $("include-offcuts").checked &&
             !state.excludedOffcuts.has(all[i]?.id),
         ),
       );
-    if (quick && $("separation-enabled").checked)
-      for (const l of selected) {
-        const line = document.createElementNS(
-          "http://www.w3.org/2000/svg",
-          "line",
-        );
-        line.setAttribute("class", "separation-preview");
-        for (const [k, v] of Object.entries({
-          x1: l.start.x,
-          y1: l.start.y,
-          x2: l.end.x,
-          y2: l.end.y,
-        }))
-          line.setAttribute(k, fmt(v));
-        line.innerHTML = "<title>Separation cut / 分離切線</title>";
-        $("canvas").append(line);
+    document
+      .querySelectorAll(".quick-preview-group")
+      .forEach((el) => el.remove());
+    if (
+      state.view !== "layout" ||
+      document.body.dataset.stage !== "export" ||
+      !$("separation-visible").checked
+    )
+      return;
+    const svgNS = "http://www.w3.org/2000/svg",
+      s = readSettings(),
+      extension = Math.max(s.width, s.height) * 0.018;
+    for (const [i, l] of lines.entries()) {
+      const group = document.createElementNS(svgNS, "g");
+      group.setAttribute("class", "quick-preview-group");
+      group.dataset.cutPreview = l.id;
+      const vertical = l.axis === "x",
+        start = { ...l.start },
+        end = { ...l.end };
+      if (vertical) {
+        start.y -= extension;
+        end.y += extension;
+      } else {
+        start.x -= extension;
+        end.x += extension;
       }
-    $("canvas-caption").textContent = quick
-      ? "Quick separation / 快速分離 · 紫線為新增切割路徑"
-      : $("canvas-caption").textContent;
+      group.innerHTML = `<title>Cut ${String.fromCharCode(65 + i)} · ${l.length.toFixed(1)} mm</title><line class="separation-preview ${selected.has(l.id) ? "export-selected" : ""}" x1="${start.x}" y1="${start.y}" x2="${end.x}" y2="${end.y}"/><g class="scissors" transform="translate(${end.x + (vertical ? extension / 2 : 0)} ${end.y + (vertical ? 0 : extension / 2)}) scale(${extension / 14})"><circle cx="-4" cy="-4" r="2.5"/><circle cx="4" cy="-4" r="2.5"/><path d="M-2 -2 L5 7 M2 -2 L-5 7"/></g>`;
+      $("canvas").append(group);
+    }
   }
   return { render: update, options };
 }

@@ -83,9 +83,9 @@ test("duplicate separation lines output once; SVG and DXF include real purple cu
   assert.match(dxf, /AcDbLine/);
   assert.doesNotMatch(exportSVG(parts, poses, 0, s), /SEPARATION_CUT/);
 });
-test("full remnant and separation are mutually exclusive at export; proposals revalidate after movement", () => {
+test("full remnant and separation can export together; proposals revalidate after movement", () => {
   const lines = proposeSeparations(parts, poses, 0, s);
-  assert.throws(() =>
+  assert.doesNotThrow(() =>
     exportSVG(parts, poses, 0, s, {
       offcuts: [{ x: 80, y: 50, w: 80, h: 40 }],
       separationCuts: lines,
@@ -95,4 +95,32 @@ test("full remnant and separation are mutually exclusive at export; proposals re
     exportDXF(parts, [{ ...poses[0], x: 45 }], 0, s, { separationCuts: lines }),
   );
   assert.throws(() => proposeSeparations(parts, poses, 0, { ...s, kerf: NaN }));
+});
+
+test("mixed recovery removes only coincident portions, leaving full physical quick cut", async () => {
+  const { recoveryLines } = await import("../dist/exporters.js");
+  const q = { start: { x: 80, y: 0 }, end: { x: 80, y: 100 } };
+  const frame = [
+    [
+      { x: 80, y: 50 },
+      { x: 160, y: 50 },
+      { x: 160, y: 90 },
+      { x: 80, y: 90 },
+    ],
+  ];
+  const r = recoveryLines(frame, [q]);
+  const length = (lines) =>
+    lines.reduce(
+      (n, l) => n + Math.hypot(l.end.x - l.start.x, l.end.y - l.start.y),
+      0,
+    );
+  assert.equal(length(r.quick), 100);
+  assert.equal(length(r.remnant), 200);
+  const svg = exportSVG(parts, poses, 0, s, {
+    offcuts: [{ x: 80, y: 50, w: 80, h: 40 }],
+    separationCuts: [q],
+  });
+  assert.match(svg, /id="OFFCUT_CUT"/);
+  assert.match(svg, /id="SEPARATION_CUT"/);
+  assert.doesNotMatch(svg, /scissors|stroke-dasharray|preview/);
 });

@@ -12,6 +12,22 @@ import { mergeCommonLines } from "./common-line.js?v=0.13.0";
 import { prepareCommonLineExport } from "./common-line-export.js?v=0.13.0";
 import { partSVG, transform, fmt, esc } from "./geometry.js?v=0.13.0";
 import { checkedOffcuts } from "./offcut-export.js?v=0.13.0";
+export function recoveryLines(cuts, separation, options = {}) {
+  const merged = mergeCommonLines(
+    [
+      ...separation.map((s) => ({ ...s, recoveryKind: "quick" })),
+      ...offcutLines(cuts, options).map((s) => ({
+        ...s,
+        recoveryKind: "remnant",
+      })),
+    ],
+    { tolerance: options.lineTolerance ?? 1e-6 },
+  );
+  return {
+    remnant: merged.filter((s) => s.recoveryKind === "remnant"),
+    quick: merged.filter((s) => s.recoveryKind === "quick"),
+  };
+}
 function offcutLines(cuts, options) {
   return mergeCommonLines(
     cuts.flatMap((points) =>
@@ -33,8 +49,7 @@ export function exportSVG(parts, placements, sheet, settings, options = {}) {
     settings,
     options.separationCuts || [],
   );
-  if (cuts.length && separation.length)
-    throw Error("Choose one remnant cutting strategy / 請選一種餘料切割方案");
+  const recovery = recoveryLines(cuts, separation, options);
   const cleanup =
     (options.mergeCommonLines ?? settings.commonEdgeMode) === true;
   const exportParts = cleanup
@@ -52,8 +67,8 @@ export function exportSVG(parts, placements, sheet, settings, options = {}) {
     .join("\n")}${
     cuts.length
       ? `\n<g id="OFFCUT_CUT" fill="none" stroke="#008000" stroke-width="0.1">${
-          cleanup
-            ? offcutLines(cuts, options)
+          cleanup || separation.length
+            ? recovery.remnant
                 .map(
                   (s) =>
                     `<path d="M${fmt(s.start.x)} ${fmt(s.start.y)} L${fmt(s.end.x)} ${fmt(s.end.y)}"/>`,
@@ -78,8 +93,7 @@ export function exportDXF(parts, placements, sheet, settings, options = {}) {
     settings,
     options.separationCuts || [],
   );
-  if (cuts.length && separation.length)
-    throw Error("Choose one remnant cutting strategy / 請選一種餘料切割方案");
+  const recovery = recoveryLines(cuts, separation, options);
   const cleanup =
     (options.mergeCommonLines ?? settings.commonEdgeMode) === true;
   const exportParts = cleanup
@@ -241,8 +255,8 @@ export function exportDXF(parts, placements, sheet, settings, options = {}) {
       suffix = 2;
     while (layerSet.has(layer)) layer = `OFFCUT_CUT_${suffix++}`;
     layerSet.set(layer, { aci: 3, trueColor: null });
-    if (cleanup) {
-      for (const s of offcutLines(cuts, options))
+    if (cleanup || separation.length) {
+      for (const s of recovery.remnant)
         entities.push(
           tags(
             0,
@@ -274,7 +288,7 @@ export function exportDXF(parts, placements, sheet, settings, options = {}) {
           ),
         );
     }
-    for (const points of cleanup ? [] : cuts) {
+    for (const points of cleanup || separation.length ? [] : cuts) {
       entities.push(
         tags(
           0,

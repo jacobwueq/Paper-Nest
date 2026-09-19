@@ -1,6 +1,6 @@
-import { installCutStrategy } from "./cut-strategy-ui.js?v=0.13.0-final";
+import { installCutStrategy } from "./cut-strategy-ui.js?v=0.14.0";
 let cutStrategyUI = null;
-import { installWorkspace } from "./workspace-ui.js?v=0.13.0-final";
+import { installWorkspace } from "./workspace-ui.js?v=0.14.0";
 let workspaceUI = null;
 import { SHEET_PRESETS } from "./sheet-presets.js?v=0.13.0";
 import {
@@ -16,7 +16,7 @@ import {
   validateLayout,
 } from "./geometry.js?v=0.13.0";
 import { parseDXF, parseSVG } from "./importers.js?v=0.13.0";
-import { exportSVG, exportDXF } from "./exporters.js?v=0.13.0";
+import { exportSVG, exportDXF } from "./exporters.js?v=0.14.0";
 import {
   ROTATIONS,
   searchSettings,
@@ -202,7 +202,7 @@ function render() {
   $("offcut-list").innerHTML = remaining
     .map(
       (r) =>
-        `<label class="offcut-choice"><input type="checkbox" data-offcut="${r.id}" ${state.excludedOffcuts.has(r.id) ? "" : "checked"}/><span><strong>${r.number.toString().padStart(2, "0")} · ${displayMm(r.w)} × ${displayMm(r.h)} mm</strong><small>${Math.floor(r.area / 100)} cm² · ${(Math.max(r.w, r.h) / Math.min(r.w, r.h)).toFixed(1)}:1 · ${((r.area / (s.width * s.height)) * 100).toFixed(1)}% of sheet / 原板</small></span></label>`,
+        `<label class="offcut-choice"><input type="checkbox" data-offcut="${r.id}" ${$("include-offcuts").checked && !state.excludedOffcuts.has(r.id) ? "checked" : ""}/><span><strong>${r.number.toString().padStart(2, "0")} · ${displayMm(r.w)} × ${displayMm(r.h)} mm</strong><small>${Math.floor(r.area / 100)} cm² · ${(Math.max(r.w, r.h) / Math.min(r.w, r.h)).toFixed(1)}:1 · ${((r.area / (s.width * s.height)) * 100).toFixed(1)}% of sheet / 原板</small></span></label>`,
     )
     .join("");
   const pad = Math.max(w, h) * 0.035;
@@ -217,7 +217,7 @@ function render() {
     remaining
       .map(
         (r) =>
-          `<rect class="offcut-preview ${state.excludedOffcuts.has(r.id) ? "offcut-excluded" : ""}" x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}"><title>Offcut ${r.number} / 餘料 ${r.number}</title></rect><text class="offcut-number" x="${r.x + r.w / 2}" y="${r.y + r.h / 2}">${r.number.toString().padStart(2, "0")}</text>`,
+          `<rect data-offcut-preview="${r.id}" class="offcut-preview ${state.excludedOffcuts.has(r.id) ? "offcut-excluded" : ""}" x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}"><title>Offcut ${r.number} / 餘料 ${r.number}</title></rect><text class="offcut-number" x="${r.x + r.w / 2}" y="${r.y + r.h / 2}">${r.number.toString().padStart(2, "0")}</text>`,
       )
       .join("") +
     draws
@@ -708,6 +708,10 @@ $("offcut-list").addEventListener("change", (e) => {
   if (!id) return;
   const checked = e.target.checked;
   if (state.running) stop();
+  if (checked && !$("include-offcuts").checked) {
+    for (const r of sheetOffcuts(state.sheet)) state.excludedOffcuts.add(r.id);
+    $("include-offcuts").checked = true;
+  }
   if (checked) state.excludedOffcuts.delete(id);
   else state.excludedOffcuts.add(id);
   captureRemnants();

@@ -610,13 +610,20 @@ export function installWorkspace({
     ];
     if (next) {
       const b = document.createElement("button");
-      b.className = "step-next";
+      b.className = "step-next primary";
       b.dataset.next = next;
       b.textContent = {
         optimise: "Next: Auto Nest → 下一步排料",
         manual: "Next: Manual Adjust → 下一步微調",
         export: "Next: Review & Export → 下一步匯出",
       }[next];
+      const [en, zh] = b.textContent.split(" → ");
+      b.replaceChildren();
+      for (const text of [en, zh + " →"]) {
+        const span = document.createElement("span");
+        span.textContent = text;
+        b.append(span);
+      }
       b.onclick = () => activate(next);
       p.append(b);
     }
