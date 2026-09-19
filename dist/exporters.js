@@ -1,3 +1,7 @@
+import {
+  checkedCutSets,
+  remainingOffcutFrames,
+} from "./separation-sets.js?v=0.15.0";
 import { checkedSeparations } from "./separation.js?v=0.13.0";
 import {
   dxfDocument,
@@ -41,14 +45,29 @@ function offcutLines(cuts, options) {
   );
 }
 export function exportSVG(parts, placements, sheet, settings, options = {}) {
-  const cuts = checkedOffcuts(parts, placements, sheet, settings, options);
-  const separation = checkedSeparations(
-    parts,
-    placements,
-    sheet,
-    settings,
-    options.separationCuts || [],
-  );
+  const cuts = checkedOffcuts(parts, placements, sheet, settings, {
+    ...options,
+    offcuts: remainingOffcutFrames(
+      options.offcuts || [],
+      options.cutSets || [],
+    ),
+  });
+  const separation = mergeCommonLines([
+    ...checkedSeparations(
+      parts,
+      placements,
+      sheet,
+      settings,
+      options.separationCuts || [],
+    ),
+    ...checkedCutSets(
+      parts,
+      placements,
+      sheet,
+      settings,
+      options.cutSets || [],
+    ),
+  ]);
   const recovery = recoveryLines(cuts, separation, options);
   const cleanup =
     (options.mergeCommonLines ?? settings.commonEdgeMode) === true;
@@ -85,14 +104,29 @@ export function exportSVG(parts, placements, sheet, settings, options = {}) {
   }${separation.length ? `\n<g id="SEPARATION_CUT" fill="none" stroke="#8b3fd6" stroke-width="0.1">${separation.map((l) => `<path d="M${fmt(l.start.x)} ${fmt(l.start.y)} L${fmt(l.end.x)} ${fmt(l.end.y)}"/>`).join("")}</g>` : ""}\n</svg>`;
 }
 export function exportDXF(parts, placements, sheet, settings, options = {}) {
-  const cuts = checkedOffcuts(parts, placements, sheet, settings, options);
-  const separation = checkedSeparations(
-    parts,
-    placements,
-    sheet,
-    settings,
-    options.separationCuts || [],
-  );
+  const cuts = checkedOffcuts(parts, placements, sheet, settings, {
+    ...options,
+    offcuts: remainingOffcutFrames(
+      options.offcuts || [],
+      options.cutSets || [],
+    ),
+  });
+  const separation = mergeCommonLines([
+    ...checkedSeparations(
+      parts,
+      placements,
+      sheet,
+      settings,
+      options.separationCuts || [],
+    ),
+    ...checkedCutSets(
+      parts,
+      placements,
+      sheet,
+      settings,
+      options.cutSets || [],
+    ),
+  ]);
   const recovery = recoveryLines(cuts, separation, options);
   const cleanup =
     (options.mergeCommonLines ?? settings.commonEdgeMode) === true;

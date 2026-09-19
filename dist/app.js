@@ -1,4 +1,4 @@
-import { installCutStrategy } from "./cut-strategy-ui.js?v=0.14.2";
+import { installCutStrategy } from "./cut-strategy-ui.js?v=0.15.0";
 let cutStrategyUI = null;
 import { installWorkspace } from "./workspace-ui.js?v=0.14.2";
 let workspaceUI = null;
@@ -16,7 +16,7 @@ import {
   validateLayout,
 } from "./geometry.js?v=0.13.0";
 import { parseDXF, parseSVG } from "./importers.js?v=0.13.0";
-import { exportSVG, exportDXF } from "./exporters.js?v=0.14.0";
+import { exportSVG, exportDXF } from "./exporters.js?v=0.15.0";
 import {
   ROTATIONS,
   searchSettings,
