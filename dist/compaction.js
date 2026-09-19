@@ -1,25 +1,25 @@
-import { alignNearby } from "./auto-align.js?v=0.12.2";
-import { compactMultiPartClusters } from "./multi-cluster.js?v=0.12.2";
+import { alignNearby } from "./auto-align.js?v=0.13.0";
+import { compactMultiPartClusters } from "./multi-cluster.js?v=0.13.0";
 import {
   createNestingDiagnostics,
   scoreDecision,
-} from "./nesting-debug.js?v=0.12.2";
-import { compactPairClusters } from "./pair-cluster.js?v=0.12.2";
-import { profiled, count } from "./nesting-profile.js?v=0.12.2";
+} from "./nesting-debug.js?v=0.13.0";
+import { compactPairClusters } from "./pair-cluster.js?v=0.13.0";
+import { profiled, count } from "./nesting-profile.js?v=0.13.0";
 import {
   contactFromCandidate,
   replacePlacement,
   contactsAtPlacement,
-} from "./common-contact.js?v=0.12.2";
-import { commonEdgeCandidates } from "./common-edge.js?v=0.12.2";
-import { pocketTranslations } from "./pocket-search.js?v=0.12.2";
+} from "./common-contact.js?v=0.13.0";
+import { commonEdgeCandidates } from "./common-edge.js?v=0.13.0";
+import { pocketTranslations } from "./pocket-search.js?v=0.13.0";
 import {
   bounds,
   transformed,
   clearance,
   validateLayout,
-} from "./geometry.js?v=0.12.2";
-import { evaluateLayout, improves } from "./search.js?v=0.12.2";
+} from "./geometry.js?v=0.13.0";
+import { evaluateLayout, improves } from "./search.js?v=0.13.0";
 
 // Remove two parts together, keep several alternatives for the first, and
 // reinsert the second. Only complete, improved layouts leave this function.

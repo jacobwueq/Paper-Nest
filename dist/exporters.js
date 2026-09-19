@@ -1,3 +1,4 @@
+import { checkedSeparations } from "./separation.js?v=0.13.0";
 import {
   dxfDocument,
   dxfTags,
@@ -6,11 +7,11 @@ import {
   DXF_LAYER_TABLE,
   DXF_PLOT_STYLE,
   DXF_MATERIAL,
-} from "./dxf-document.js?v=0.12.2";
-import { mergeCommonLines } from "./common-line.js?v=0.12.2";
-import { prepareCommonLineExport } from "./common-line-export.js?v=0.12.2";
-import { partSVG, transform, fmt, esc } from "./geometry.js?v=0.12.2";
-import { checkedOffcuts } from "./offcut-export.js?v=0.12.2";
+} from "./dxf-document.js?v=0.13.0";
+import { mergeCommonLines } from "./common-line.js?v=0.13.0";
+import { prepareCommonLineExport } from "./common-line-export.js?v=0.13.0";
+import { partSVG, transform, fmt, esc } from "./geometry.js?v=0.13.0";
+import { checkedOffcuts } from "./offcut-export.js?v=0.13.0";
 function offcutLines(cuts, options) {
   return mergeCommonLines(
     cuts.flatMap((points) =>
@@ -25,6 +26,15 @@ function offcutLines(cuts, options) {
 }
 export function exportSVG(parts, placements, sheet, settings, options = {}) {
   const cuts = checkedOffcuts(parts, placements, sheet, settings, options);
+  const separation = checkedSeparations(
+    parts,
+    placements,
+    sheet,
+    settings,
+    options.separationCuts || [],
+  );
+  if (cuts.length && separation.length)
+    throw Error("Choose one remnant cutting strategy / 請選一種餘料切割方案");
   const cleanup =
     (options.mergeCommonLines ?? settings.commonEdgeMode) === true;
   const exportParts = cleanup
@@ -57,10 +67,19 @@ export function exportSVG(parts, placements, sheet, settings, options = {}) {
                 .join("\n")
         }</g>`
       : ""
-  }\n</svg>`;
+  }${separation.length ? `\n<g id="SEPARATION_CUT" fill="none" stroke="#8b3fd6" stroke-width="0.1">${separation.map((l) => `<path d="M${fmt(l.start.x)} ${fmt(l.start.y)} L${fmt(l.end.x)} ${fmt(l.end.y)}"/>`).join("")}</g>` : ""}\n</svg>`;
 }
 export function exportDXF(parts, placements, sheet, settings, options = {}) {
   const cuts = checkedOffcuts(parts, placements, sheet, settings, options);
+  const separation = checkedSeparations(
+    parts,
+    placements,
+    sheet,
+    settings,
+    options.separationCuts || [],
+  );
+  if (cuts.length && separation.length)
+    throw Error("Choose one remnant cutting strategy / 請選一種餘料切割方案");
   const cleanup =
     (options.mergeCommonLines ?? settings.commonEdgeMode) === true;
   const exportParts = cleanup
@@ -282,6 +301,43 @@ export function exportDXF(parts, placements, sheet, settings, options = {}) {
             .join(""),
       );
     }
+  }
+  if (separation.length) {
+    let layer = "SEPARATION_CUT",
+      suffix = 2;
+    while (layerSet.has(layer)) layer = `SEPARATION_CUT_${suffix++}`;
+    layerSet.set(layer, { aci: 6, trueColor: 0x8b3fd6 });
+    for (const l of separation)
+      entities.push(
+        tags(
+          0,
+          "LINE",
+          5,
+          (handle++).toString(16),
+          330,
+          DXF_MODEL_SPACE,
+          100,
+          "AcDbEntity",
+          8,
+          layer,
+          62,
+          256,
+          100,
+          "AcDbLine",
+          10,
+          fmt(l.start.x),
+          20,
+          fmt(settings.height - l.start.y),
+          30,
+          0,
+          11,
+          fmt(l.end.x),
+          21,
+          fmt(settings.height - l.end.y),
+          31,
+          0,
+        ),
+      );
   }
   const layers = [...layerSet]
     .map(([name, color], i) =>

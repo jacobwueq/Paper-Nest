@@ -389,3 +389,13 @@ Area percentage measures part footprint divided by sheet area, so moving the sam
 ### Automatic alignment
 
 With enhanced common-edge nesting enabled, each compaction job first checks nearby shared edges and endpoint alignments for individual parts and existing contact groups. This pass has a bounded share of the search budget and only accepts improvements under the existing global score; it does not increase common-edge weight or relax spacing. Manual rejection messages retain the actual validator reason after release. Clearance simplification deduplicates consecutive vertices before removing collinear points, preserving genuine corners in imported and sample contours.
+
+
+## Four-step workflow and separation strategy
+
+1. Setup: import/review groups, set sheet, spacing, margin, rotation and common-edge/remnant rules. Material is a descriptive choice, not a machine preset. Separation kerf only protects parts from added recovery cuts; it does not offset part outlines.
+2. Auto Nest: confirm groups and run nesting.
+3. Manual Adjust: optional move, snap, group and lock.
+4. Review & Export: choose full remnant frames or quick full-sheet separation, select cuts, compare additional and estimated total lengths, then export.
+
+Quick separation is post-processing only. At most one horizontal and one vertical cut are proposed, outside the occupied exterior envelope and at least half the configured kerf away from all parts, plus a 0.01 mm numerical guard. Candidates recover an outer strip meeting the minimum offcut-side setting. No safe outer strip means no proposal. Lines reach the physical sheet edges regardless of margin. This conservative first version rejects contact with existing part/common boundaries rather than merging into those boundaries. Duplicate selected separation lines are canonicalised. Both exporters revalidate final geometry and use a separate SEPARATION_CUT layer/group; they reject simultaneous full-frame and quick-cut output. Cut-order execution remains controlled by the laser software.

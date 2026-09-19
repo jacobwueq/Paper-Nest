@@ -1,27 +1,29 @@
-import { installWorkspace } from "./workspace-ui.js?v=0.12.2";
+import { installCutStrategy } from "./cut-strategy-ui.js?v=0.13.0-final";
+let cutStrategyUI = null;
+import { installWorkspace } from "./workspace-ui.js?v=0.13.0-final";
 let workspaceUI = null;
-import { SHEET_PRESETS } from "./sheet-presets.js?v=0.12.2";
+import { SHEET_PRESETS } from "./sheet-presets.js?v=0.13.0";
 import {
   remnantPlan,
   visibleRemnantRectangles,
-} from "./remnant-policy.js?v=0.12.2";
-import { extractPartEdges } from "./common-edge.js?v=0.12.2";
+} from "./remnant-policy.js?v=0.13.0";
+import { extractPartEdges } from "./common-edge.js?v=0.13.0";
 import {
   sampleParts,
   partSVG,
   pathPoints,
   esc,
   validateLayout,
-} from "./geometry.js?v=0.12.2";
-import { parseDXF, parseSVG } from "./importers.js?v=0.12.2";
-import { exportSVG, exportDXF } from "./exporters.js?v=0.12.2";
+} from "./geometry.js?v=0.13.0";
+import { parseDXF, parseSVG } from "./importers.js?v=0.13.0";
+import { exportSVG, exportDXF } from "./exporters.js?v=0.13.0";
 import {
   ROTATIONS,
   searchSettings,
   evaluateLayout,
   improves,
   searchSeed,
-} from "./search.js?v=0.12.2";
+} from "./search.js?v=0.13.0";
 const $ = (id) => document.getElementById(id);
 const state = {
   parts: sampleParts(),
@@ -54,6 +56,7 @@ let engine = null,
   lastFile = null;
 const readSettings = () => ({
   width: Number($("width").value),
+  kerf: Number($("separation-kerf")?.value ?? 0.15),
   height: Number($("height").value),
   gap: Number($("gap").value),
   minOffcutSide: Number($("min-offcut-side").value),
@@ -148,11 +151,13 @@ function sheetOffcuts(sheet) {
   ).map((r, i) => ({ ...r, id: offcutId(sheet, r), number: i + 1 }));
 }
 function exportOptions(sheet, include = $("include-offcuts").checked) {
+  const strategy = cutStrategyUI?.options(sheet);
   return {
     mergeCommonLines: $("merge-common-lines").checked,
     offcuts: include
       ? sheetOffcuts(sheet).filter((r) => !state.excludedOffcuts.has(r.id))
       : [],
+    ...strategy,
   };
 }
 function render() {
@@ -309,6 +314,7 @@ function render() {
   $("previous").disabled = state.sheet === 0;
   $("next").disabled = state.sheet >= sheetCount() - 1;
   workspaceUI?.afterRender();
+  cutStrategyUI?.render();
 }
 function stop() {
   state.running = false;
@@ -403,7 +409,7 @@ function updateSearchStatus() {
 function startEngine() {
   const run = ++state.run;
   compactor = new Worker(
-    new URL("./compaction-worker.js?v=0.12.2", import.meta.url),
+    new URL("./compaction-worker.js?v=0.13.0", import.meta.url),
     { type: "module" },
   );
   compactor.onmessage = ({ data }) => {
@@ -463,7 +469,7 @@ function startEngine() {
       location.origin,
     );
   };
-  frame.src = "engine/index.html?v=0.12.2";
+  frame.src = "engine/index.html?v=0.13.0";
   document.body.append(frame);
   stopTimer = setTimeout(() => {
     stop();
@@ -799,6 +805,13 @@ workspaceUI = installWorkspace({
   beginNest,
   message,
 });
+cutStrategyUI = installCutStrategy({
+  state,
+  readSettings,
+  render,
+  sheetOffcuts,
+});
+
 render();
 if (document.modelContext?.registerTool) {
   const lifecycle = new AbortController();

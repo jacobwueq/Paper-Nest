@@ -5,16 +5,16 @@ import {
   magneticSnap,
   rotationSuggestion,
   rebuildContacts,
-} from "./manual-layout.js?v=0.12.2";
-import { cuttingMetrics } from "./cut-metrics.js?v=0.12.2";
-import { evaluateLayout } from "./search.js?v=0.12.2";
+} from "./manual-layout.js?v=0.13.0";
+import { cuttingMetrics } from "./cut-metrics.js?v=0.13.0";
+import { evaluateLayout } from "./search.js?v=0.13.0";
 import {
   validateLayout,
   bounds,
   transformed,
   esc,
   area,
-} from "./geometry.js?v=0.12.2";
+} from "./geometry.js?v=0.13.0";
 export function installWorkspace({
   state,
   readSettings,
@@ -39,12 +39,12 @@ export function installWorkspace({
   nav.className = "stage-nav";
   nav.setAttribute("aria-label", "Workflow / 工作階段");
   nav.innerHTML =
-    '<button id="toggle-settings" aria-expanded="true">☰ Settings · 設定</button>' +
+    '<button id="toggle-settings" aria-expanded="true">☰ Panel · 面板</button>' +
     [
-      ["setup", "Setup · 設定"],
-      ["optimise", "Auto Nest · 排料"],
-      ["manual", "Manual Edit · 手動"],
-      ["export", "Export · 匯出"],
+      ["setup", "1 · Setup 設定"],
+      ["optimise", "2 · Auto Nest 排料"],
+      ["manual", "3 · Manual Adjust 微調"],
+      ["export", "4 · Review & Export 匯出"],
     ]
       .map(([id, label]) => `<button data-stage="${id}">${label}</button>`)
       .join("");
@@ -61,9 +61,9 @@ export function installWorkspace({
   panels.optimise.append(sections[2]);
   const advanced = document.createElement("details");
   advanced.innerHTML = "<summary>Advanced settings · 進階設定</summary>";
-  panels.optimise.append(advanced);
+  panels.setup.append(advanced);
   for (const id of ["common-edge", "multi-part-clusters"])
-    panels.optimise.prepend($(id).closest("label"));
+    panels.setup.append($(id).closest("label"));
   for (const id of [
     "offcut-shape-weight",
     "min-offcut-side",
@@ -82,6 +82,11 @@ export function installWorkspace({
   }
   for (const p of sections[1].querySelectorAll(".help"))
     if (/selected offcut|Material use/.test(p.textContent)) advanced.append(p);
+  const material = document.createElement("div");
+  material.className = "field";
+  material.innerHTML =
+    '<label for="material-label">Material · 材料（記錄用）</label><select id="material-label"><option>Paper / 紙</option><option>Card / 卡紙</option><option>Other / 其他</option></select><label for="separation-kerf">Separation kerf · 分離切線刀縫 (mm)</label><input id="separation-kerf" type="number" min="0" max="10" step="0.01" value="0.15"><p class="help">Kerf clearance for separation cuts only; part geometry stays unchanged.<br>只用於分離線避讓；不補償零件輪廓。</p>';
+  sections[1].prepend(material);
   const list = document.createElement("details");
   list.innerHTML = "<summary>Parts & details · 零件及詳情</summary>";
   list.append($("parts-list"), $("inspector"));
@@ -135,7 +140,19 @@ export function installWorkspace({
   }
   function activate(id) {
     if (id === "manual" && !ensure()) return;
+    if (id === "export" && !state.placements.length) {
+      message("Arrange parts first / 請先自動排料", true);
+      return;
+    }
+    if (id === "export") {
+      stop();
+      state.view = "layout";
+    }
+    document.body.classList.remove("settings-hidden");
+    $("toggle-settings").setAttribute("aria-expanded", "true");
     stage = id;
+    controls.scrollTop = 0;
+    if (id !== "manual") notice("");
     document.body.dataset.stage = id;
     for (const [key, p] of Object.entries(panels)) p.hidden = key !== id;
     nav
@@ -497,6 +514,22 @@ export function installWorkspace({
     if (e.code === "Space") space = false;
   });
   function afterRender() {
+    nav.querySelectorAll("[data-stage]").forEach((b) => {
+      b.setAttribute(
+        "aria-current",
+        b.dataset.stage === stage ? "step" : "false",
+      );
+      b.disabled =
+        ["manual", "export"].includes(b.dataset.stage) &&
+        !state.placements.length;
+    });
+    controls
+      .querySelectorAll("[data-next]")
+      .forEach(
+        (b) =>
+          (b.disabled =
+            b.dataset.next !== "optimise" && !state.placements.length),
+      );
     const key =
       state.view +
       ":" +
@@ -548,6 +581,45 @@ export function installWorkspace({
       : "";
     if (stage === "manual" && state.running)
       notice("Stop optimisation before editing / 請先停止運算再編輯");
+  }
+  const guidance = {
+    setup: [
+      "1 — Setup · 設定",
+      "Import, check groups and set sheet / nesting rules. 匯入、核對零件，再設定板材及排料規則。",
+    ],
+    optimise: [
+      "2 — Auto Nest · 自動排料",
+      "Confirm the groups, then run Arrange parts. 確認零件歸屬，再按自動排料。",
+    ],
+    manual: [
+      "3 — Manual Adjust · 手動微調",
+      "Optional: move, snap and lock good areas. 可選：移位、吸附及鎖定理想位置。",
+    ],
+    export: [
+      "4 — Review & Export · 檢查及匯出",
+      "Choose a cutting strategy, review the preview, then download. 選擇切割方案、核對預覽，再下載。",
+    ],
+  };
+  for (const [id, p] of Object.entries(panels)) {
+    const intro = document.createElement("div");
+    intro.className = "step-intro";
+    intro.innerHTML = `<h2>${guidance[id][0]}</h2><p>${guidance[id][1]}</p>`;
+    p.prepend(intro);
+    const next = { setup: "optimise", optimise: "manual", manual: "export" }[
+      id
+    ];
+    if (next) {
+      const b = document.createElement("button");
+      b.className = "step-next";
+      b.dataset.next = next;
+      b.textContent = {
+        optimise: "Next: Auto Nest → 下一步排料",
+        manual: "Next: Manual Adjust → 下一步微調",
+        export: "Next: Review & Export → 下一步匯出",
+      }[next];
+      b.onclick = () => activate(next);
+      p.append(b);
+    }
   }
   activate("setup");
   return {

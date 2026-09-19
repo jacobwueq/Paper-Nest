@@ -1170,3 +1170,64 @@ footer span:nth-child(2) {
 .settings-hidden .workspace .controls {
   display: none;
 }
+.stage-nav [aria-current="step"] {
+  background: #dfe8ff;
+  border-color: #7594d4;
+  font-weight: 700;
+}
+.step-intro {
+  border-bottom: 1px solid #dce2ed;
+  padding-bottom: 10px;
+  margin-bottom: 16px;
+}
+.step-intro p {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #58667c;
+}
+.step-next {
+  width: 100%;
+  margin-top: 18px;
+  background: #244bd6;
+  color: white;
+}
+.cut-strategy {
+  padding-bottom: 14px;
+  border-bottom: 1px solid #dce2ed;
+  margin-bottom: 14px;
+}
+.cut-strategy label {
+  display: block;
+  margin: 12px 0;
+}
+.cut-strategy input[type="checkbox"] {
+  width: auto;
+  margin-right: 6px;
+}
+.separation-preview {
+  stroke: #8b3fd6;
+  stroke-width: 2.5;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.controls .section-title .step {
+  display: none;
+}
+.strategy-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.strategy-table th,
+.strategy-table td {
+  padding: 7px 3px;
+  border-bottom: 1px solid #dce2ed;
+  text-align: left;
+}
+.offcut-cut-preview {
+  stroke: #008000;
+  stroke-dasharray: none;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
