@@ -1,6 +1,6 @@
-import { installCutStrategy } from "./cut-strategy-ui.js?v=0.14.0";
+import { installCutStrategy } from "./cut-strategy-ui.js?v=0.14.1";
 let cutStrategyUI = null;
-import { installWorkspace } from "./workspace-ui.js?v=0.14.0";
+import { installWorkspace } from "./workspace-ui.js?v=0.14.1";
 let workspaceUI = null;
 import { SHEET_PRESETS } from "./sheet-presets.js?v=0.13.0";
 import {

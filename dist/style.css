@@ -1415,3 +1415,92 @@ body:not([data-stage="export"]) #toggle-review {
 .review-panel .cut-strategy .help {
   margin: 6px 0;
 }
+/* Adjustable sidebars; only the entire review panel scrolls. */
+.review-panel #offcut-list {
+  max-height: none;
+  overflow: visible;
+}
+.review-panel .offcut-choice {
+  min-width: 0;
+}
+.review-panel .offcut-choice span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.review-panel .offcut-choice strong {
+  font-size: 12px;
+  white-space: normal;
+}
+.review-panel .offcut-choice small {
+  font-size: 11px;
+  line-height: 1.5;
+}
+.panel-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  z-index: 25;
+  cursor: col-resize;
+  touch-action: none;
+}
+.panel-divider::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 2px;
+  background: transparent;
+}
+.panel-divider:hover::after,
+.panel-divider:focus-visible::after {
+  background: #7594d4;
+}
+.panel-divider:focus-visible {
+  outline: 2px solid #7594d4;
+  outline-offset: -2px;
+}
+.resizing-panels,
+.resizing-panels * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+.manual-section {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  margin: 14px 0;
+}
+.manual-section h3 {
+  font-size: 12px;
+  color: #536581;
+  margin: 0 0 8px;
+}
+.manual-section .secondary {
+  margin: 4px 0;
+}
+.manual-section button:active:enabled {
+  background: #dfe8ff;
+  color: #243653;
+}
+.scissors {
+  stroke: #8b3fd6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+@media (max-width: 1099px) {
+  body[data-stage="export"] .review-panel {
+    width: min(340px, 85vw);
+  }
+}
+.manual-section > label {
+  display: block;
+  margin: 7px 0;
+  font-size: 12px;
+}
+@media (max-width: 1099px) {
+  body[data-stage="export"] .review-panel {
+    top: 0;
+    bottom: 0;
+  }
+}

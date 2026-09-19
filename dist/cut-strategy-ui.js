@@ -1,3 +1,4 @@
+import { installPanelResize } from "./panel-resize.js?v=0.14.1";
 import { proposeSeparations } from "./separation.js?v=0.13.0";
 import { cuttingMetrics } from "./cut-metrics.js?v=0.13.0";
 import { recoveryLines } from "./exporters.js?v=0.14.0";
@@ -34,6 +35,7 @@ export function installCutStrategy({
     toggle.setAttribute("aria-expanded", String(!value));
   }
   collapse(collapsed);
+  installPanelResize();
   toggle.onclick = () => collapse(!collapsed);
   $("close-review").onclick = () => collapse(true);
   $("separation-visible").onchange = render;
@@ -159,7 +161,7 @@ export function installCutStrategy({
         start.x -= extension;
         end.x += extension;
       }
-      group.innerHTML = `<title>Cut ${String.fromCharCode(65 + i)} · ${l.length.toFixed(1)} mm</title><line class="separation-preview ${selected.has(l.id) ? "export-selected" : ""}" x1="${start.x}" y1="${start.y}" x2="${end.x}" y2="${end.y}"/><g class="scissors" transform="translate(${end.x + (vertical ? extension / 2 : 0)} ${end.y + (vertical ? 0 : extension / 2)}) scale(${extension / 14})"><circle cx="-4" cy="-4" r="2.5"/><circle cx="4" cy="-4" r="2.5"/><path d="M-2 -2 L5 7 M2 -2 L-5 7"/></g>`;
+      group.innerHTML = `<title>Cut ${String.fromCharCode(65 + i)} · ${l.length.toFixed(1)} mm</title><line class="separation-preview ${selected.has(l.id) ? "export-selected" : ""}" x1="${start.x}" y1="${start.y}" x2="${end.x}" y2="${end.y}"/><g class="scissors" transform="translate(${(l.start.x + l.end.x) / 2} ${(l.start.y + l.end.y) / 2}) rotate(${vertical ? 0 : -90}) scale(${extension / 14})"><circle cx="-4" cy="-4" r="2.5"/><circle cx="4" cy="-4" r="2.5"/><path d="M-2 -2 L5 7 M2 -2 L-5 7"/></g>`;
       $("canvas").append(group);
     }
   }

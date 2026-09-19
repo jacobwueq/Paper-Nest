@@ -100,14 +100,16 @@ export function installWorkspace({
   panels.setup.append($("part-total"));
   $("part-total").hidden = true;
   document.querySelector(".parts-panel").remove();
-  panels.manual.innerHTML = `<h2>Manual Edit · 手動編輯</h2><p class="help">Drag to move. Shift-click to select more. Space-drag to pan.<br>拖動移位；Shift 多選；空白鍵拖動畫面。</p>
- <p id="manual-selection"></p><label><input id="select-cluster" type="checkbox"> Select cluster · 選整組</label>
- <label><input id="magnetic-snap" type="checkbox" checked> Magnetic edges · 磁力共邊</label>
- <div class="manual-buttons"><button id="edit-undo">Undo · 復原</button><button id="edit-redo">Redo · 重做</button><button id="rotate90">+90°</button><button id="rotate180">+180°</button></div>
- <label for="edit-angle">Rotate by degrees · 旋轉角度</label><div class="inline-field"><input id="edit-angle" type="number" value="1" step="0.1"><button id="rotate-custom">Rotate · 旋轉</button></div>
- <div class="manual-buttons"><button id="edit-group">Group · 組合</button><button id="edit-detach">Detach · 獨立移動</button><button id="edit-lock">Lock · 鎖定</button><button id="edit-unlock">Unlock · 解鎖</button><button id="edit-reset">Reset to auto · 還原</button></div>
- <button id="rotate-snap" hidden>Rotate & Snap · 旋轉並吸附</button><button id="refine-unlocked" class="primary">Re-optimise unlocked · 改善未鎖定零件</button>
- <p class="help">Invalid moves stay as a preview and are not committed. Detach then drag an individual part to break its shared contact.<br>無效移動只作預覽；放手唔會套用。獨立移動再拖開即可解除共邊。</p>`;
+  panels.manual.innerHTML = `<p class="help">Drag to move. Shift-click to select more. Space-drag to pan.<br>拖動移位；Shift 多選；空白鍵拖動畫面。</p>
+ <p id="manual-selection"></p>
+ <section class="manual-section"><h3>Selection · 選取</h3><label><input id="select-cluster" type="checkbox"> Select cluster · 選整組</label><label><input id="magnetic-snap" type="checkbox" checked> Magnetic edges · 磁力共邊</label></section>
+ <section class="manual-section"><h3>History · 復原記錄</h3><div class="manual-buttons"><button id="edit-undo">Undo · 復原</button><button id="edit-redo">Redo · 重做</button></div></section>
+ <section class="manual-section"><h3>Transform · 變換</h3><div class="manual-buttons"><button id="rotate90">+90°</button><button id="rotate180">+180°</button></div><label for="edit-angle">Rotate by degrees · 旋轉角度</label><div class="inline-field"><input id="edit-angle" type="number" value="1" step="0.1"><button id="rotate-custom">Rotate · 旋轉</button></div></section>
+ <section class="manual-section"><h3>Grouping · 組合</h3><div class="manual-buttons"><button id="edit-group">Group · 組合</button><button id="edit-detach">Detach · 獨立移動</button></div></section>
+ <section class="manual-section"><h3>Position · 位置</h3><div class="manual-buttons"><button id="edit-lock">Lock · 鎖定</button><button id="edit-unlock">Unlock · 解鎖</button><button id="edit-reset">Reset to auto · 還原</button></div></section>
+ <section id="suggested-match" class="manual-section" hidden><h3>Suggested edge match · 建議共邊</h3><p id="suggested-details" class="help"></p><p class="help">Preview is temporary. Apply moves the selected part(s).<br>預覽不會改位；套用後才移動所選零件。</p><div class="manual-buttons"><button id="preview-snap">Preview · 預覽</button><button id="cancel-snap-preview">Clear preview · 清除預覽</button></div><button id="rotate-snap" class="secondary">Use suggested edge match<br>使用建議共邊</button></section>
+ <section class="manual-section"><h3>Optimisation · 優化</h3><button id="refine-unlocked" class="primary">Re-optimise unlocked · 改善未鎖定零件</button></section>
+ <p class="help">Invalid moves are not committed. Detach then drag to break a shared contact.<br>無效移動不會套用；獨立移動再拖開即可解除共邊。</p>`;
   const tools = document.createElement("div");
   tools.className = "canvas-tools";
   tools.innerHTML =
@@ -187,6 +189,7 @@ export function installWorkspace({
     state.excludedOffcuts.clear();
     draft = null;
     suggestion = null;
+    $("suggested-match").hidden = true;
     render();
   }
   function action(fn) {
@@ -244,6 +247,13 @@ export function installWorkspace({
   $("edit-lock").onclick = () => action(() => model.lock(selected(), true));
   $("edit-unlock").onclick = () => action(() => model.lock(selected(), false));
   $("edit-reset").onclick = () => action(() => model.reset(selected()));
+  $("cancel-snap-preview").onclick = () => {
+    render();
+    notice("");
+  };
+  $("preview-snap").onclick = () => {
+    if (suggestion) preview(suggestion.placements, suggestion, []);
+  };
   $("rotate-snap").onclick = () => {
     if (suggestion) action(() => model.commit(suggestion.placements));
   };
@@ -441,10 +451,18 @@ export function installWorkspace({
       settings(),
       Math.min(30, 20 / Math.max(0.01, canvas.getScreenCTM().a)),
     );
-    $("rotate-snap").hidden = !suggestion;
-    if (suggestion)
-      $("rotate-snap").textContent =
-        `Rotate ${suggestion.angle.toFixed(1)}° & Snap · 旋轉並吸附`;
+    $("suggested-match").hidden = !suggestion;
+    if (suggestion) {
+      const angle = Math.abs(suggestion.angle),
+        direction =
+          angle === 180
+            ? ""
+            : suggestion.angle < 0
+              ? " · anticlockwise / 逆時針"
+              : " · clockwise / 順時針";
+      $("suggested-details").textContent =
+        `Rotation / 旋轉：${Number(angle.toFixed(1))}°${direction} · Shared edge / 共邊：${suggestion.sharedLength.toFixed(1)} mm`;
+    }
   });
   canvas.addEventListener("pointercancel", () => {
     gesture = null;
