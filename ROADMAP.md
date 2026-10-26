@@ -57,10 +57,12 @@ versions, benchmark baseline committed.
   fails if any two differ.
   Result: 43 files set to 0.26.0; `tests/versions.test.mjs` guards it; two tests that
   pinned 0.13.0 now read `VERSION`.
-- [ ] **0.2 Timber benchmark in the repo.**
+- [x] **0.2 Timber benchmark in the repo.**
   Done when: `scripts/benchmark-timber.mjs` runs the 7 survey lists × 3 saws and
   writes sheets, lower bound, steps and timings; `benchmarks/timber-baseline.json`
   holds today's numbers.
+  Result: lists in `benchmarks/timber-lists.mjs` (shared with tests); the script compares
+  sheets, steps, time ratio and exact plan signature with the baseline. Re-run: identical plans.
 - [ ] **0.3 Fixed-work laser test.**
   The concave-arch test runs for 6 s and fails here by 4 mm.
   Done when: compaction accepts a fixed step budget for tests, the test uses it,
@@ -130,3 +132,4 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
 | --- | --- | --- |
 | 2026-10-26 | Roadmap written | Baseline: 228/229 tests pass (concave-arch test fails by 4 mm); quick plan 2.9 s at 139 pieces |
 | 2026-10-26 | 0.1 One version | Five versions in use (0.13.0–0.25.8) → one (0.26.0); 229/230 tests pass |
+| 2026-10-26 | 0.2 Timber benchmark | Baseline saved: 21 runs; quick plan 2.6–2.7 s at 139 pieces on this machine |
