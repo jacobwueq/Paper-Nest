@@ -509,7 +509,7 @@ With enhanced common-edge nesting enabled, each compaction job first checks near
 ## Four-step workflow and separation strategy
 
 1. Setup: import/review groups, set sheet, spacing, margin, rotation and common-edge/remnant rules. Material is a descriptive choice, not a machine preset. Separation kerf only protects parts from added recovery cuts; it does not offset part outlines.
-2. Auto Nest: confirm groups and run nesting.
+2. Auto Nest: run nesting. There is no "I've checked the part groups" tick box any more (0.27.3): the import flags parts worth a second look — lines inside an inner outline (they fall out with the hole unless they are a separate part) and explicit groups without a closed loop around them (outline = group envelope). Flagged parts get a dashed amber outline and "check grouping" in Part review, and the Arrange panel names them with links. Arrange runs either way. / 不再需要剔選「已確認分組」：匯入時會標示值得再核對嘅零件（內輪廓入面有線、或群組外圍冇封閉輪廓），排料照樣可以進行。
 3. Manual Adjust: optional move, snap, group and lock.
 4. Review & Export: choose full remnant frames or quick full-sheet separation, select cuts, compare additional and estimated total lengths, then export.
 

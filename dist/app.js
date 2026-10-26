@@ -1,30 +1,31 @@
-import { saveFile } from './file-download.js?v=0.27.2';
-import { installCutStrategy } from "./cut-strategy-ui.js?v=0.27.2";
+import { saveFile } from './file-download.js?v=0.27.3';
+import { t as tr, onLanguageChange } from './locale.js?v=0.27.3';
+import { installCutStrategy } from "./cut-strategy-ui.js?v=0.27.3";
 let cutStrategyUI = null;
-import { installWorkspace } from "./workspace-ui.js?v=0.27.2";
+import { installWorkspace } from "./workspace-ui.js?v=0.27.3";
 let workspaceUI = null;
-import { SHEET_PRESETS } from "./sheet-presets.js?v=0.27.2";
+import { SHEET_PRESETS } from "./sheet-presets.js?v=0.27.3";
 import {
   remnantPlan,
   visibleRemnantRectangles,
-} from "./remnant-policy.js?v=0.27.2";
-import { extractPartEdges } from "./common-edge.js?v=0.27.2";
+} from "./remnant-policy.js?v=0.27.3";
+import { extractPartEdges } from "./common-edge.js?v=0.27.3";
 import {
   sampleParts,
   partSVG,
   pathPoints,
   esc,
   validateLayout,
-} from "./geometry.js?v=0.27.2";
-import { parseDXF, parseSVG } from "./importers.js?v=0.27.2";
-import { exportSVG, exportDXF } from "./exporters.js?v=0.27.2";
+} from "./geometry.js?v=0.27.3";
+import { parseDXF, parseSVG } from "./importers.js?v=0.27.3";
+import { exportSVG, exportDXF } from "./exporters.js?v=0.27.3";
 import {
   ROTATIONS,
   searchSettings,
   evaluateLayout,
   improves,
   searchSeed,
-} from "./search.js?v=0.27.2";
+} from "./search.js?v=0.27.3";
 const $ = (id) => document.getElementById(id);
 const state = {
   parts: sampleParts(),
@@ -161,6 +162,18 @@ function exportOptions(sheet, include = $("include-offcuts").checked) {
     ...strategy,
   };
 }
+// Import flags (importers.js groupingReview) replace the old "I've checked the part
+// groups" tick box: Arrange always runs; parts worth a second look are named instead.
+const needsCheck = (p) => !!p.review && (p.review.envelope || p.review.inside > 0);
+function reviewText(p) {
+  if (!needsCheck(p)) return "";
+  const notes = [];
+  if (p.review.inside)
+    notes.push(tr(`${p.review.inside} line${p.review.inside === 1 ? "" : "s"} inside an inner outline: if that outline is cut out they drop out with it. If they are a separate part, group them on their own.`, `${p.review.inside} 條線位於內輪廓入面：如內輪廓會切走，佢哋會一齊跌出；如屬另一件零件，請另行分組。`));
+  if (p.review.envelope)
+    notes.push(tr("No closed outline around the whole group; its outline is the group's outer envelope.", "群組外圍冇封閉輪廓，外形按群組外包線計算。"));
+  return `<br><span class="check-note">${notes.map(esc).join("<br>")}</span>`;
+}
 function render() {
   const parts = state.parts,
     s = readSettings();
@@ -224,7 +237,7 @@ function render() {
     draws
       .map(
         ({ p, t }) =>
-          `<g class="drawing-part ${state.selected === p.id ? "selected" : ""}" data-part="${p.id}" transform="translate(${t.x} ${t.y}) rotate(${t.angle}) scale(${(t.scale ?? 1) * (t.mirrored ? -1 : 1)} ${t.scale ?? 1})"><polygon class="part-hit" points="${pathPoints(p.outer)}"/><g class="part-detail">${partSVG(p)}</g>${!layout ? `<text class="part-label" x="0" y="${p.size.h + 11}">${esc(p.name)}</text>` : ""}</g>`,
+          `<g class="drawing-part ${state.selected === p.id ? "selected" : ""}${!layout && needsCheck(p) ? " needs-check" : ""}" data-part="${p.id}" transform="translate(${t.x} ${t.y}) rotate(${t.angle}) scale(${(t.scale ?? 1) * (t.mirrored ? -1 : 1)} ${t.scale ?? 1})"><polygon class="part-hit" points="${pathPoints(p.outer)}"/><g class="part-detail">${partSVG(p)}</g>${!layout ? `<text class="part-label" x="0" y="${p.size.h + 11}">${esc(p.name)}${needsCheck(p) ? ` · ${tr("check grouping", "核對分組")}` : ""}</text>` : ""}</g>`,
       )
       .join("");
   $("canvas-label").textContent = layout
@@ -236,7 +249,7 @@ function render() {
   $("parts-list").innerHTML = parts
     .map(
       (p) =>
-        `<button class="part-row ${state.selected === p.id ? "active" : ""}" data-part="${p.id}"><svg viewBox="-3 -3 ${p.size.w + 6} ${p.size.h + 6}"><polygon points="${pathPoints(p.outer)}" fill="#eef3fe" stroke="#859bc2" stroke-width="2"/></svg><span><strong>${esc(p.name)}</strong><small>${(p.size.w * s.scale).toFixed(1)} × ${(p.size.h * s.scale).toFixed(1)} mm</small></span></button>`,
+        `<button class="part-row ${state.selected === p.id ? "active" : ""}" data-part="${p.id}"><svg viewBox="-3 -3 ${p.size.w + 6} ${p.size.h + 6}"><polygon points="${pathPoints(p.outer)}" fill="#eef3fe" stroke="#859bc2" stroke-width="2"/></svg><span><strong>${esc(p.name)}</strong><small>${(p.size.w * s.scale).toFixed(1)} × ${(p.size.h * s.scale).toFixed(1)} mm</small>${needsCheck(p) ? `<em class="check-flag">${tr("Check grouping", "核對分組")}</em>` : ""}</span></button>`,
     )
     .join("");
   const p = parts.find((p) => p.id === state.selected),
@@ -245,7 +258,7 @@ function render() {
     ? [...new Set(p.entities.map((e) => e.layer || "0"))].map(esc).join(", ")
     : "";
   $("inspector").innerHTML = p
-    ? `<strong>${esc(p.name)}</strong>${p.entities.length} entities / 圖元<br>Layers: ${layers}<br>${esc(p.group)}${t ? `<br>Sheet ${t.sheet + 1} · ${Math.round(t.angle)}° / 第 ${t.sheet + 1} 張${t.mirrored ? " · Mirrored / 鏡像" : ""}` : ""}`
+    ? `<strong>${esc(p.name)}</strong>${p.entities.length} entities / 圖元<br>Layers: ${layers}<br>${esc(p.group)}${reviewText(p)}${t ? `<br>Sheet ${t.sheet + 1} · ${Math.round(t.angle)}° / 第 ${t.sheet + 1} 張${t.mirrored ? " · Mirrored / 鏡像" : ""}` : ""}`
     : "";
   $("count").textContent = parts.length;
   $("part-total").textContent = parts.length;
@@ -259,22 +272,27 @@ function render() {
   } catch {
     validSettings = false;
   }
-  $("nest").disabled =
-    !$("confirmed").checked || state.running || state.invalid || !validSettings;
+  $("nest").disabled = state.running || state.invalid || !validSettings;
   $("nest").hidden = state.running;
   $("stop").hidden = !state.running;
   $("continue").hidden = state.running || !state.placements.length;
-  $("continue").disabled =
-    state.invalid || !validSettings || !$("confirmed").checked;
+  $("continue").disabled = state.invalid || !validSettings;
   $("nest").className = state.placements.length ? "secondary" : "primary";
   $("nest").innerHTML = state.placements.length
     ? "Start again <span>重新排料 ↗</span>"
     : "Arrange parts <span>自動排料 ↗</span>";
+  const flagged = parts.filter(needsCheck);
+  $("review-flags").hidden = !flagged.length || state.running;
+  $("review-flags").innerHTML = flagged.length
+    ? (() => {
+        const links = flagged.map((p) => `<button type="button" class="link-button" data-part="${p.id}">${esc(p.name.split(" / ")[0])}</button>`).join(tr(", ", "、"));
+        return tr(`${flagged.length} part${flagged.length === 1 ? "" : "s"} to check before cutting: ${links}. Arrange works either way.`, `${flagged.length} 件零件建議切割前核對分組：${links}。照樣可以排料。`);
+      })()
+    : "";
   $("run-note").textContent =
     "Shows a layout immediately, then moves and turns parts to close gaps and consolidate free space. Stop whenever ready. / 有排位即顯示，再移近及轉動零件，收緊空隙、集中餘料；可隨時停止。";
   $("file").disabled = state.running;
   $("demo").disabled = state.running;
-  $("confirmed").disabled = state.running;
   for (const id of [
     "width",
     "height",
@@ -358,7 +376,7 @@ function invalidate() {
   render();
 }
 function beginNest(continuing = false) {
-  if (state.running || state.invalid || !$("confirmed").checked) return;
+  if (state.running || state.invalid) return;
   if (!continuing) {
     workspaceUI?.reset();
     state.refineOnly = false;
@@ -410,7 +428,7 @@ function updateSearchStatus() {
 function startEngine() {
   const run = ++state.run;
   compactor = new Worker(
-    new URL("./compaction-worker.js?v=0.27.2", import.meta.url),
+    new URL("./compaction-worker.js?v=0.27.3", import.meta.url),
     { type: "module" },
   );
   compactor.onmessage = ({ data }) => {
@@ -470,7 +488,7 @@ function startEngine() {
       location.origin,
     );
   };
-  frame.src = "engine/index.html?v=0.27.2";
+  frame.src = "engine/index.html?v=0.27.3";
   document.body.append(frame);
   stopTimer = setTimeout(() => {
     stop();
@@ -571,7 +589,6 @@ async function importFile(file) {
 }
 function loadText(name, text) {
   invalidate();
-  $("confirmed").checked = false;
   try {
     const result = /\.dxf$/i.test(name)
       ? parseDXF(text, $("units").value)
@@ -605,7 +622,6 @@ function loadDemo() {
   state.format = "dxf";
   state.name = "Sample · Scenic paper kit";
   state.meta = "示範圖檔 · 12 paper scenery parts / 紙材模型零件";
-  $("confirmed").checked = false;
   message(
     "Sample data: wall panels, braces, arches and bases. / 示範：牆板、撐架、拱片及底板。",
   );
@@ -651,7 +667,6 @@ document.addEventListener("click", (e) => {
     render();
   }
 });
-$("confirmed").addEventListener("change", render);
 function captureRemnants() {
   state.preservedRemnants =
     $("include-offcuts").checked && $("preserve-remnant-splits").checked
@@ -959,3 +974,4 @@ if (document.modelContext?.registerTool) {
     }
   window.addEventListener("pagehide", () => lifecycle.abort(), { once: true });
 }
+onLanguageChange(() => render());

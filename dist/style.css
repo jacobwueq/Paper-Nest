@@ -1631,3 +1631,46 @@ body[data-stage="export"] .controls {
   color: var(--muted);
   font-weight: 500;
 }
+/* Grouping flags from the importer (replace the old tick box before Arrange). */
+.review-flags {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--warn-line);
+  background: var(--warn-soft);
+  color: var(--ink);
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.review-flags .link-button {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--warn);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.part-row .check-flag {
+  display: block;
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--warn);
+  margin-top: 2px;
+}
+.check-note {
+  display: block;
+  margin-top: 6px;
+  color: var(--warn);
+  line-height: 1.6;
+}
+.drawing-part.needs-check:not(.selected) .part-hit {
+  stroke: var(--warn);
+  stroke-dasharray: 6 4;
+}
+.drawing-part.needs-check:not(.selected) .part-label {
+  fill: var(--warn);
+}

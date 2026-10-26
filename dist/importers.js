@@ -1,4 +1,4 @@
-import { svgStraightSegments } from "./common-edge.js?v=0.27.2";
+import { svgStraightSegments } from "./common-edge.js?v=0.27.3";
 import {
   bounds,
   area,
@@ -8,7 +8,7 @@ import {
   simplePolygon,
   sampleArc,
   TOL,
-} from "./geometry.js?v=0.27.2";
+} from "./geometry.js?v=0.27.3";
 import aciColours from "./vendor/aci-colours.js";
 const fail = (s) => {
   throw new Error(s);
@@ -52,6 +52,21 @@ function hull(points) {
 }
 function clean(points) {
   return points.filter((p, i) => !i || !near(p, points[i - 1]));
+}
+// What to check before arranging, instead of a tick box for every import:
+//   envelope — an explicit group without a closed loop around all of it; its outline
+//              is the convex envelope of the group.
+//   inside   — lines lying inside an inner closed outline of the part (a hole when that
+//              outline is cut). They drop out with the hole unless they are a separate
+//              part, so they are worth a look.
+export function groupingReview(part, candidates) {
+  const own = new Set(part.entities), outer = new Set(part.outerMembers || []);
+  const inner = candidates.filter((c) => c.members.every((e) => own.has(e)) && !c.members.some((e) => outer.has(e)));
+  const inside = new Set();
+  for (const loop of inner)
+    for (const e of part.entities)
+      if (!loop.members.includes(e) && !outer.has(e) && containsPolygon(loop.points, e.points)) inside.add(e);
+  return { envelope: !part.outerMembers, inside: inside.size };
 }
 export function identifyParts(entities) {
   if (!entities.length) fail("No supported drawing geometry / 搵唔到可用圖形");
@@ -144,12 +159,14 @@ export function identifyParts(entities) {
     if (!cs.length)
       fail(`Group has no closed outline: ${group} / 群組缺少封閉外輪廓`);
     const all = members.flatMap((e) => e.points);
-    let outer = cs.find((c) => containsPolygon(c.points, all))?.points;
+    const outerLoop = cs.find((c) => containsPolygon(c.points, all));
+    let outer = outerLoop?.points;
     const conservative = !outer;
     if (!outer) outer = hull(all);
     raw.push({
       entities: members,
       outer,
+      outerMembers: outerLoop?.members ?? null,
       group: conservative
         ? "Explicit group · conservative envelope / 群組保守邊界"
         : "Explicit group / 指定群組",
@@ -177,6 +194,7 @@ export function identifyParts(entities) {
     raw.push({
       entities: members,
       outer: c.points,
+      outerMembers: c.members,
       group: "Inferred by containment / 按內外輪廓推斷",
     });
     members.forEach((e) => assigned.add(e));
@@ -196,6 +214,7 @@ export function identifyParts(entities) {
       outer: p.outer.map((q) => ({ x: q.x - b.x, y: q.y - b.y })),
       entities: p.entities,
       group: p.group,
+      review: groupingReview(p, candidates),
     };
   });
   if (parts.length > 80)

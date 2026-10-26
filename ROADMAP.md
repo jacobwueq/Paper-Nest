@@ -86,7 +86,8 @@ versions, benchmark baseline committed. **Passed 26 Oct 2026** (235/235).
 ## Phase 1 · Quick wins / 快速改善
 
 Check to finish the phase: the first plan for the 139-piece list takes under 1.5 s,
-and every Phase 1 UI fix is visible in the preview in both languages.
+and every Phase 1 UI fix is visible in the preview in both languages. **Passed 26 Oct
+2026**: 0.86 s; preview refreshed.
 
 - [x] **1.1 Check sheets before ordering cuts.**
   Done when: plans skip cut ordering for layouts already worse on unplaced parts,
@@ -130,9 +131,14 @@ and every Phase 1 UI fix is visible in the preview in both languages.
   Result: table ✕ and parts-tray − both go through `removeRow()`, which names the row
   (“Removed part “Top / bottom”. Undo”) and restores rows, settings and manual layout.
   Checked in the browser for parts and stock, English and 中文.
-- [ ] **1.6 Laser: no tick box before Arrange.**
+- [x] **1.6 Laser: no tick box before Arrange.**
   Done when: Arrange runs without "I've checked the part groups"; parts whose detail
   lines may be unattached are flagged instead.
+  Result: `groupingReview()` in the importer flags lines inside an inner outline
+  (they drop out with the hole unless they are a separate part) and explicit groups
+  without a closed loop (envelope outline). Flagged parts: dashed amber outline and
+  "check grouping" in Part review; the Arrange panel names them with links. Holes and
+  engraving on the panel itself are not flagged. Checked EN/中文; Arrange runs.
 
 ## Phase 2 · The workshop / 工場
 
@@ -175,3 +181,4 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
 | 2026-10-26 | 1.3 Wording & settings | 240/240 tests; version 0.27.0 shown in footers; settings fold checked EN/中文 |
 | 2026-10-26 | 1.4 Offcuts → stock | 242/242 tests; add 2 offcuts → 3 stock rows → Undo → 1 row, in the browser |
 | 2026-10-26 | 1.5 Undo deletions | 243/243 tests; tray and table removals undo in the browser |
+| 2026-10-26 | 1.6 Laser flags | 247/247 tests; nested-part SVG flagged, sample not; Arrange runs without a tick. Phase 1 done |
