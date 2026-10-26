@@ -27,7 +27,7 @@ export async function createTimberPDF(project, plan, { PDFLib, fontkit, fontByte
   const draw = (page, text, x, y, size = 10, color = gray) => page.drawText(safe(text), { x,y,size,font,color });
   const wrap = (text, width, size = 9) => {
     const lines=[];let line='';
-    for(const c of safe(text)){if(c==='\n'){lines.push(line);line='';continue;}if(font.widthOfTextAtSize(line+c,size)>width&&line){lines.push(line);line=c;}else line+=c;}if(line)lines.push(line);return lines;
+    for(const c of safe(text).match(/[A-Za-z0-9][A-Za-z0-9.,-]*|\n|[^\n]/gu) || []){if(c==='\n'){lines.push(line);line='';continue;}if(font.widthOfTextAtSize(line+c,size)>width&&line){lines.push(line);line=c;}else line+=c;}if(line)lines.push(line);return lines;
   };
   doc.setTitle(`${project.name || 'Paper Nest'} — ${L('Cutting plan','開料方案')}`); doc.setProducer('Paper Nest');
   for (const [index, sheet] of plan.sheets.entries()) {
