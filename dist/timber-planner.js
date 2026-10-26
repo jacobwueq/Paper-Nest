@@ -157,6 +157,29 @@ function finalizePlan(project, sheets, unplaced, required) {
   return { sheets, unplaced, score, fitness, reusableOffcuts, remaining, settings: { ...project.settings }, required, placed: required - unplaced.length };
 }
 export function timberFreeRegions(board) { return leaves(board.root).map(({ x, y, w, h }) => ({ x, y, w, h })); }
+export function manualCommandsFromPlan(project, plan) {
+  validateProject(project);
+  if (!plan?.searchSeed?.order) throw new Error('Wait for an automatic layout before opening Manual Adjust.');
+  const boards = project.stocks.flatMap((stock) => Array.from({ length: stock.qty }, () => ({ root: { kind: 'free', x: project.settings.trim, y: project.settings.trim, w: stock.length - 2 * project.settings.trim, h: stock.width - 2 * project.settings.trim } })));
+  const next = project.stocks.map((_, i) => project.stocks.slice(0, i).reduce((n, s) => n + s.qty, 0));
+  const pieces = new Map(), boardBySheet = new Map();
+  for (const sheet of plan.sheets) {
+    boardBySheet.set(sheet.number, next[sheet.stockIndex]++);
+    for (const part of sheet.parts) pieces.set(part.id, { part, sheet });
+  }
+  const commands = [];
+  for (const id of plan.searchSeed.order) {
+    const found = pieces.get(id); if (!found) continue;
+    const { part, sheet } = found, board = boardBySheet.get(sheet.number);
+    const leaf = leaves(boards[board].root).find((r) => Math.abs(r.x - part.x) < EPS && Math.abs(r.y - part.y) < EPS);
+    if (!leaf || !fits(leaf, part, part.rotated)) throw new Error('The automatic layout changed. Please return to Auto Nest.');
+    const firstCut = sheet.cuts.find((c) => Math.abs(c.x - leaf.x) < EPS && Math.abs(c.y - leaf.y) < EPS && Math.abs(c.w - leaf.w) < EPS && Math.abs(c.h - leaf.h) < EPS);
+    const direction = firstCut?.axis === 'y' ? 'rip' : 'cross';
+    const command = { partId: id, board, x: leaf.x, y: leaf.y, rotated: part.rotated, direction };
+    insert(leaf, part, part.rotated, direction, project.settings.kerf); commands.push(command);
+  }
+  return commands;
+}
 export function manualTimber(project, commands = []) {
   validateProject(project);
   if (!Array.isArray(commands) || commands.length > 500) throw new Error('Invalid manual placement list.');
@@ -166,7 +189,7 @@ export function manualTimber(project, commands = []) {
   const placed = new Set(), byId = new Map(expanded.map((p) => [p.id, p]));
   for (const [index, c] of commands.entries()) {
     const p = c && byId.get(c.partId), board = c && boards[c.board];
-    if (!p || !board || placed.has(c.partId) || !Number.isInteger(c.board) || ![c.x, c.y].every(Number.isFinite) || typeof c.rotated !== 'boolean') throw new Error(`Manual placement ${index + 1} is invalid.`);
+    if (!p || !board || placed.has(c.partId) || !Number.isInteger(c.board) || ![c.x, c.y].every(Number.isFinite) || typeof c.rotated !== 'boolean' || (c.direction !== undefined && !['rip', 'cross'].includes(c.direction))) throw new Error(`Manual placement ${index + 1} is invalid.`);
     if (materialKey(p) !== materialKey(board.stock)) throw new Error('Choose stock with matching material and thickness.');
     if (c.rotated && (!project.settings.rotate || p.grain)) throw new Error('Grain-locked parts cannot rotate.');
     const leaf = leaves(board.root).find((r) => Math.abs(r.x - c.x) < EPS && Math.abs(r.y - c.y) < EPS);
@@ -174,7 +197,7 @@ export function manualTimber(project, commands = []) {
     let direction = project.settings.direction;
     if (direction === 'auto') {
       const w = c.rotated ? p.width : p.length, h = c.rotated ? p.length : p.width, k = project.settings.kerf;
-      direction = Math.max(leaf.w * Math.max(0, leaf.h - h - k), Math.max(0, leaf.w - w - k) * h) > Math.max(Math.max(0, leaf.w - w - k) * leaf.h, w * Math.max(0, leaf.h - h - k)) ? 'rip' : 'cross';
+      direction = c.direction || (Math.max(leaf.w * Math.max(0, leaf.h - h - k), Math.max(0, leaf.w - w - k) * h) > Math.max(Math.max(0, leaf.w - w - k) * leaf.h, w * Math.max(0, leaf.h - h - k)) ? 'rip' : 'cross');
     }
     insert(leaf, p, c.rotated, direction, project.settings.kerf); placed.add(p.id);
   }

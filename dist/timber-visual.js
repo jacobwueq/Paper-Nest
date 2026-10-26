@@ -1,13 +1,13 @@
-import { planTimber, optimizeTimber, compareTimberPlans, manualTimber, timberFreeRegions, validateProject } from './timber-planner.js?v=0.18.0';
+import { planTimber, optimizeTimber, compareTimberPlans, manualCommandsFromPlan, manualTimber, timberFreeRegions, validateProject } from './timber-planner.js?v=0.21.0';
 const escapeHTML = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const fmt = (n) => Number.isFinite(n) ? Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 }) : '—';
 const colors = ['#e5d2af', '#c8d8b9', '#bed6de', '#d9c7df', '#e9c4ac', '#becadb'];
 const validSize = (p) => p && [p.length, p.width].every((n) => Number.isFinite(n) && n > 0 && n <= 20000);
 export function normalizeVisualDraft(value) {
-  const commands = Array.isArray(value?.commands) && value.commands.length <= 500 ? value.commands.filter((c) => c && typeof c.partId === 'string' && /^P\d+\.\d+$/.test(c.partId) && Number.isInteger(c.board) && c.board >= 0 && c.board < 200 && [c.x, c.y].every(Number.isFinite) && typeof c.rotated === 'boolean').map((c) => ({ partId: c.partId, board: c.board, x: c.x, y: c.y, rotated: c.rotated })) : [];
+  const commands = Array.isArray(value?.commands) && value.commands.length <= 500 ? value.commands.filter((c) => c && typeof c.partId === 'string' && /^P\d+\.\d+$/.test(c.partId) && Number.isInteger(c.board) && c.board >= 0 && c.board < 200 && [c.x, c.y].every(Number.isFinite) && typeof c.rotated === 'boolean' && (c.direction === undefined || ['rip', 'cross'].includes(c.direction))).map((c) => ({ partId: c.partId, board: c.board, x: c.x, y: c.y, rotated: c.rotated, ...(c.direction ? { direction: c.direction } : {}) })) : [];
   return { mode: value?.mode === 'manual' ? 'manual' : 'preview', commands, selected: Number.isInteger(value?.selected) && value.selected >= 0 && value.selected < 100 ? value.selected : 0 };
 }
-export function installTimberVisual({ readProject, changePart, changeStock, addPart, removePart, applyPlan, onDraftChange }) {
+export function installTimberVisual({ readProject, changePart, changeStock, addPart, removePart, applyPlan, onDraftChange, onStatusChange = () => {} }) {
   const root = document.getElementById('timber-visual');
   root.innerHTML = `
     <div class="visual-heading"><div><p class="eyebrow">LIVE MATERIAL WORKSPACE · 即時可視化</p><h2>See every piece as you type.<small>一路輸入，一路睇到。</small></h2></div><div class="visual-mode" role="group" aria-label="Planning mode"><button type="button" data-mode="preview" aria-pressed="true">Auto optimise · 自動排料</button><button type="button" data-mode="manual" aria-pressed="false">Place parts · 手動放置</button></div></div>
@@ -46,7 +46,7 @@ export function installTimberVisual({ readProject, changePart, changeStock, addP
   };
   try {
     if (typeof Worker !== 'undefined') {
-      worker = new Worker(new URL('./timber-live-worker.js?v=0.18.0', import.meta.url), { type: 'module' });
+      worker = new Worker(new URL('./timber-live-worker.js?v=0.21.0', import.meta.url), { type: 'module' });
       worker.onmessage = ({ data }) => scheduleResult(data);
       worker.onerror = () => { worker.terminate(); worker = null; if (!workerFailed) { workerFailed = true; runPreview(project, revision); } };
     }
@@ -149,10 +149,11 @@ export function installTimberVisual({ readProject, changePart, changeStock, addP
       $('visual-plan-note').textContent += ' 各物料用板：' + [...groups].map(([label, qty]) => `${label} × ${qty} 張`).join('；');
     }
     if (draft.mode === 'preview') $('visual-plan-note').textContent += ` ${optimizing ? '正在比較排位' : '已比較'} ${searchTrials} 個方案；先放齊、減少用板，再保留最大餘料。`;
+    onStatusChange();
   }
   function select(row) { draft.selected = row; rotated = false; notice = ''; render(); onDraftChange(false); }
   function stopSearch() { revision++; clearTimeout(timer); worker?.postMessage({ cancel: true }); optimizing = false; }
-  function setMode(mode) { draft.mode = mode; activeBoard = 0; notice = ''; if (mode === 'manual') stopSearch(); else if (!estimate && !error) runPreview(project, ++revision); render(); onDraftChange(); }
+  function setMode(mode) { clearTimeout(timer); draft.mode = mode; activeBoard = 0; notice = ''; if (mode === 'manual') stopSearch(); else if (!estimate && !error) runPreview(project, ++revision); render(); onDraftChange(); }
   function place(regionIndex) {
     if (!manual || error) return;
     const board = currentBoard(), selected = project.parts[draft.selected]; if (!board || !selected) return;
@@ -199,7 +200,20 @@ export function installTimberVisual({ readProject, changePart, changeStock, addP
   const replay = () => { manual = manualTimber(project, draft.commands); notice = ''; render(); onDraftChange(); };
   $('visual-undo').onclick = () => { draft.commands.pop(); replay(); };
   $('visual-reset').onclick = () => { draft.commands = []; replay(); };
-  $('visual-confirm').onclick = () => { const result = draft.mode === 'manual' ? manual : estimate; if (result?.placed && !error) { stopSearch(); render(); applyPlan(result, draft.mode); } };
+  function confirmCurrent() { const result = draft.mode === 'manual' ? manual : estimate; if (!result?.placed || error) return false; stopSearch(); render(); applyPlan(result, draft.mode); return true; }
+  $('visual-confirm').onclick = confirmCurrent;
   $('visual-improve').onclick = () => { if (draft.mode === 'manual') { draft.mode = 'preview'; activeBoard = 0; notice = ''; onDraftChange(); runPreview(project, ++revision, 6000); } else if (optimizing) { stopSearch(); render(); } else { notice = ''; onDraftChange(); runPreview(project, ++revision, 6000); } };
-  return { update, restore, getDraft: () => structuredClone(draft), select, bestAutomaticPlan: () => estimate, showAutomaticPlan(result) { stopSearch(); estimate = result; draft.mode = 'preview'; render(); onDraftChange(false); } };
+  return {
+    activateAutomatic() { if (draft.mode !== 'preview') setMode('preview'); else if (!estimate && !error && !optimizing) { clearTimeout(timer); runPreview(project, ++revision); } return true; },
+    activateManual() {
+      try {
+        let seeded = false;
+        if (!draft.commands.length) { if (!estimate?.placed) return false; draft.commands = manualCommandsFromPlan(project, estimate); seeded = true; }
+        manual = manualTimber(project, draft.commands); const changed = draft.mode !== 'manual' || seeded;
+        draft.mode = 'manual'; activeBoard = 0; if (!manual.sheets.some((s) => s.stockIndex === stockRow)) stockRow = manual.sheets[0]?.stockIndex || 0; notice = seeded ? '已承接自動排位。可撤銷最近放置，再選空位重新放入。' : ''; stopSearch(); render(); if (changed) onDraftChange(); return true;
+      } catch (e) { notify(e.message); return false; }
+    },
+    availability: () => ({ mode: draft.mode, canManual: !!(estimate?.placed || manual?.placed), canReview: !!(draft.mode === 'manual' ? manual?.placed : estimate?.placed) }),
+    confirmCurrent,
+    update, restore, getDraft: () => structuredClone(draft), select, bestAutomaticPlan: () => estimate, showAutomaticPlan(result) { stopSearch(); estimate = result; draft.mode = 'preview'; render(); onDraftChange(false); } };
 }

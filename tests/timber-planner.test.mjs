@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { planTimber, optimizeTimber, compareTimberPlans, manualTimber, timberFreeRegions, validateProject, parseCSV, toCSV } from '../dist/timber-planner.js';
+import { planTimber, optimizeTimber, compareTimberPlans, manualCommandsFromPlan, manualTimber, timberFreeRegions, validateProject, parseCSV, toCSV } from '../dist/timber-planner.js';
 
 const stock = (extra = {}) => ({ label: 'Sheet', material: 'Plywood', thickness: 18, length: 100, width: 100, qty: 1, ...extra });
 const part = (extra = {}) => ({ label: 'Panel', material: 'Plywood', thickness: 18, length: 40, width: 40, qty: 1, priority: 1, grain: false, ...extra });
@@ -171,4 +171,12 @@ test('continued optimisation preserves the best layout and cancellation stops re
   const best=await optimizeTimber(p,{budgetMs:10000,maxTrials:80,initialPlan:initial,onProgress(next){assert.ok(compareTimberPlans(next,previous)<=0);previous=next;}});
   assert.ok(compareTimberPlans(best,initial)<=0); assert.equal(best.search.trials,80); verifyPlan(best);
   assert.equal(await optimizeTimber(p,{shouldCancel:()=>true}),null);
+});
+test('Manual Adjust inherits automatic positions, rotations and guillotine splits exactly', () => {
+  const p=project({stocks:[stock({length:1000,width:700,qty:2}),stock({material:'MDF',length:1200,width:800,qty:1})],parts:[part({length:420,width:300,qty:3}),part({length:700,width:200,qty:2}),part({material:'MDF',length:600,width:500,qty:1})]});
+  const auto=planTimber(p), snapshot=JSON.stringify(auto), commands=manualCommandsFromPlan(p,auto), manual=manualTimber(p,commands);
+  const geometry=(r)=>r.sheets.flatMap(s=>s.parts.map(q=>[q.id,s.stockIndex,q.x,q.y,q.w,q.h,q.rotated])).sort((a,b)=>a[0].localeCompare(b[0]));
+  assert.deepEqual(geometry(manual),geometry(auto));assert.equal(manual.placed,auto.placed);assert.equal(JSON.stringify(auto),snapshot);verifyPlan(manual);
+  assert.deepEqual(geometry(manualTimber(p,JSON.parse(JSON.stringify(commands)))),geometry(auto));
+  const undone=manualTimber(p,commands.slice(0,-1));assert.equal(undone.placed,auto.placed-1);verifyPlan(undone);
 });

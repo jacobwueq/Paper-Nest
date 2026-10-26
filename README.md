@@ -7,6 +7,17 @@ The start page now offers **Timber cutting** (`timber.html`) or **Laser cutting*
 have a link back to the chooser. The original DXF/SVG laser application, nesting
 engine and exporters remain in the laser workspace.
 
+The timber workspace follows four tabs: **1 · Setup**, **2 · Auto Nest**,
+**3 · Manual Adjust** and **4 · Review & Export**, with Back/Next controls.
+Setup keeps live size previews. Auto Nest focuses on the optimised layout;
+New manual layouts carry over the automatic positions, rotations and guillotine
+splits instead of starting from an empty sheet; existing manual work is retained.
+Undo recent placements to revise them.
+Manual adjustment is optional: Review & Export can confirm the automatic layout
+directly. Steps stay disabled until their required data/layout is available.
+Navigation preserves inputs and pauses cutting playback when leaving Review.
+Arrow keys move focus between enabled tabs; Enter activates the focused tab.
+
 The timber workspace handles rectangular **sheet timber and panels** (plywood,
 MDF, etc.), in millimetres. Enter finite stock quantities and required finished
 part sizes. Material names (ignoring case/outer whitespace) and thickness must

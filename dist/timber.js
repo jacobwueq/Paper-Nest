@@ -1,5 +1,6 @@
-import { planTimber, validateProject, parseCSV, toCSV } from './timber-planner.js?v=0.18.0';
-import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.18.0';
+import { planTimber, validateProject, parseCSV, toCSV } from './timber-planner.js?v=0.21.0';
+import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.21.0';
+import { installTimberWorkflow } from './timber-workflow.js?v=0.21.0';
 import { timberCutOverlay } from './timber-cut-overlay.js?v=0.20.0';
 import { installCutPlayback } from './timber-playback.js?v=0.20.1';
 import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.20.0';
@@ -23,7 +24,7 @@ const sample = () => ({
     { label: 'Plinth', material: 'Plywood', thickness: 18, length: 764, width: 80, qty: 2, priority: 2, grain: false },
   ],
 });
-let plan = null, plannedProject = null, activeSheet = 0, activeStep = 1, revision = 0, visualUI = null, cutPlayback = null;
+let plan = null, plannedProject = null, activeSheet = 0, activeStep = 1, revision = 0, visualUI = null, cutPlayback = null, workflow = null, workflowValid = false;
 function notify(text, error = false) { $('message').textContent = text; $('message').classList.toggle('error', error); $('message').hidden = !text; }
 function input(row, key, kind, label) {
   const type = kind === 'number' ? 'number' : 'text';
@@ -62,6 +63,7 @@ function renderInputs(p) {
   $('parts').innerHTML = p.parts.map((r, i) => rowHTML(r, 'parts', i)).join('');
   visualUI?.restore(p.visual);
   invalidate();
+  workflow?.showSetup();
 }
 function invalidate() {
   cutPlayback?.clear();
@@ -69,7 +71,9 @@ function invalidate() {
   $('results').hidden = true; $('empty-plan').hidden = false;
   document.querySelectorAll('.print-sheet').forEach((e) => e.remove());
   const p = readProject();
+  try { validateProject(p); workflowValid = true; } catch { workflowValid = false; }
   visualUI?.update(p);
+  workflow?.inputsChanged();
   const count = p.parts.reduce((n, row) => n + (Number.isFinite(row.qty) ? row.qty : 0), 0);
   $('parts-count').textContent = `${p.parts.length} rows / ${fmt(count)} parts`;
   try { localStorage.setItem(STORAGE, JSON.stringify(readProject())); $('save-state').textContent = 'Saved in this browser · timber project & manual layout'; }
@@ -129,6 +133,7 @@ function renderPlan() {
   document.querySelector('.plan-grid').hidden = !plan.sheets.length;
   renderSheet();
   $('finished-parts').innerHTML = plan.sheets.flatMap((s) => s.parts.map((p) => ({ ...p, sheet: s.number }))).sort((a, b) => a.row - b.row || a.copy - b.copy).map((p) => `<tr><td>${esc(p.id)}</td><td>${esc(p.label)}</td><td>${fmt(p.length)} × ${fmt(p.width)}${p.rotated ? ' ↻' : ''}</td><td>${esc(p.material)} / ${fmt(p.thickness)} mm</td><td class="${p.priority === 0 ? 'priority-high' : ''}">${priorityNames[p.priority]}</td><td>S${p.sheet} / ${esc(p.workpiece)}</td></tr>`).join('');
+  workflow?.showReview();
 }
 $('timber-form').addEventListener('input', (event) => { if (event.target.closest('#timber-visual')) return; invalidate(); notify(''); });
 $('timber-form').addEventListener('change', (event) => { if (event.target.closest('#timber-visual')) return; invalidate(); notify(''); });
@@ -265,9 +270,21 @@ visualUI = installTimberVisual({
   },
   onDraftChange(changed = true) {
     if (changed) { cutPlayback?.clear(); revision++; plan = null; plannedProject = null; $('results').hidden = true; document.querySelectorAll('.print-sheet').forEach((e) => e.remove()); }
+    if (changed) workflow?.inputsChanged();
     try { localStorage.setItem(STORAGE, JSON.stringify(readProject())); } catch { $('save-state').textContent = 'Use Save project to keep your work.'; }
   },
+  onStatusChange() { workflow?.refresh(); },
 });
 visualUI.restore(initial.visual); visualUI.update(readProject());
+workflow = installTimberWorkflow({
+  root: $('timber-workflow'), footer: $('timber-workflow-footer'), form: $('timber-form'), results: $('results'),
+  getState: () => ({ valid: workflowValid, hasReview: !!plan?.placed, ...visualUI.availability() }),
+  onEnter(step) {
+    if (step === 1 || step === 2) return visualUI.activateAutomatic();
+    if (step === 3) return visualUI.activateManual();
+    return !!plan?.placed || visualUI.confirmCurrent();
+  },
+  onChange(step) { if (step !== 4) cutPlayback.pause(); },
+});
 try { localStorage.setItem(STORAGE, JSON.stringify(readProject())); } catch { /* The visible save status already offers project download. */ }
 if (restored) notify('Your saved timber project has been restored · 已還原。The visual preview updates as you edit.');
