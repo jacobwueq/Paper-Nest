@@ -1,4 +1,5 @@
-import { timberCutOverlay } from './timber-cut-overlay.js?v=0.20.0';
+import { t } from './locale.js?v=0.22.0';
+import { timberCutOverlay } from './timber-cut-overlay.js?v=0.22.0';
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const fmt = (n) => Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
 const colors = ['#e5d2af', '#d0dbbd', '#c7d8dd', '#dbcee0', '#e8c8b0'];
@@ -62,8 +63,8 @@ export function separatedBoardSVG(sheet, selectedStep, state) {
   const pieces = nodes.map((node) => {
     const part = node.kind === 'part' ? node.part : null, offcut = node.kind === 'free';
     const fill = part ? colors[part.row % colors.length] : offcut ? '#e3ecd9' : '#e4d2af';
-    const name = part ? part.id : offcut ? 'Offcut' : node.id;
-    const detail = part ? part.label : offcut ? node.id : 'Workpiece';
+    const name = part ? part.id : offcut ? t('Offcut','餘料') : node.id;
+    const detail = part ? part.label : offcut ? node.id : t('Workpiece','板件');
     const fs = Math.min(size * .014, node.w / 9, node.h / 3.5), depth = Math.min(size * .004, node.h * .04);
     return `<g data-sim-piece="${esc(node.id)}" style="display:none"><title>${esc(name)} · ${esc(detail)} · ${fmt(node.w)} × ${fmt(node.h)} mm</title><rect x="${node.x + depth}" y="${node.y + depth}" width="${node.w}" height="${node.h}" rx="${size / 1200}" fill="#9f8766" opacity=".3"/><rect x="${node.x}" y="${node.y}" width="${node.w}" height="${node.h}" rx="${size / 1200}" fill="${fill}" stroke="${offcut ? '#93aa7d' : '#9d8867'}" stroke-width="${size / 1100}"/><text x="${node.x + node.w / 2}" y="${node.y + node.h / 2 - fs * .35}" font-size="${fs}" font-family="sans-serif" text-anchor="middle" fill="#5c594b">${esc(name)}</text><text x="${node.x + node.w / 2}" y="${node.y + node.h / 2 + fs * .85}" font-size="${fs * .7}" font-family="sans-serif" text-anchor="middle" fill="#7d796b">${fmt(node.w)} × ${fmt(node.h)} mm</text></g>`;
   }).join('');

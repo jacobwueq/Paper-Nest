@@ -1,3 +1,4 @@
+import { t, onLanguageChange } from './locale.js?v=0.22.0';
 const PLAYBACK_RATE = 2;
 
 export class CutTimeline {
@@ -52,14 +53,14 @@ export function installCutPlayback({ root, describe, onStep, onFrame }) {
   const progress = (s) => { const fraction = s.reducedMotion ? s.finished ? 1 : 0 : s.progress; const percent = s.total ? (s.index + fraction) / s.total * 100 : 0; bar.style.width = percent + '%'; track.setAttribute('aria-valuenow', String(Math.round(percent))); };
   const reducedMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches || false;
   const player = new CutTimeline({ reducedMotion,
-    onStep(cut, state) { onStep(cut, state); progress(state); $('cut-play-instruction').textContent = cut ? describe(cut) : 'No numbered cuts needed after edge preparation.'; },
+    onStep(cut, state) { onStep(cut, state); progress(state); $('cut-play-instruction').textContent = cut ? describe(cut) : t('No numbered cuts needed after edge preparation.', '修邊後毋須再切割。'); },
     onFrame(cut, state) { progress(state); onFrame(cut, state); },
     onState(state) {
       $('cut-play-toggle').disabled = !state.total; $('cut-play-prev').disabled = !state.total || state.index === 0; $('cut-play-next').disabled = !state.total || state.index >= state.total - 1; $('cut-play-restart').disabled = !state.total;
-      $('cut-play-toggle').textContent = state.playing ? '❚❚ Pause · 暫停' : state.finished ? '↻ Replay · 重播' : '▶ Play cuts · 播放';
+      $('cut-play-toggle').textContent = state.playing ? t('❚❚ Pause','❚❚ 暫停') : state.finished ? t('↻ Replay','↻ 重播') : t('▶ Play cuts','▶ 播放切割');
       $('cut-play-toggle').setAttribute('aria-pressed', String(state.playing));
       $('cut-play-separate').checked = state.separatePieces;
-      $('cut-play-status').textContent = !state.total ? 'No cuts' : state.finished ? `Complete · ${state.total} / ${state.total}` : `${state.playing ? 'Playing' : state.active ? 'Paused' : 'Ready'} · Cut ${state.step} / ${state.total}`;
+      $('cut-play-status').textContent = !state.total ? t('No cuts','毋須切割') : state.finished ? t(`Complete · ${state.total} / ${state.total}`, `已完成 · ${state.total}／${state.total}`) : t(`${state.playing ? 'Playing' : state.active ? 'Paused' : 'Ready'} · Cut ${state.step} / ${state.total}`, `${state.playing ? '播放中' : state.active ? '已暫停' : '準備好'} · 第 ${state.step} 刀／共 ${state.total} 刀`);
     },
   });
   $('cut-play-toggle').onclick = () => player.playing ? player.pause() : player.play();
@@ -70,5 +71,6 @@ export function installCutPlayback({ root, describe, onStep, onFrame }) {
   document.addEventListener('visibilitychange', () => { if (document.hidden) player.pause(); });
   window.addEventListener('pagehide', () => player.pause());
   window.addEventListener('beforeprint', () => player.pause());
-  return { setSheet: (sheet, step) => player.setCuts(sheet.cuts, step), selectStep: (step) => player.playFrom(step), clear: () => player.setCuts([]), pause: () => player.pause(), get state() { return player.state; } };
+  onLanguageChange(() => player.emitStep());
+  return { refreshLabels: () => player.emitStep(), setSheet: (sheet, step) => player.setCuts(sheet.cuts, step), selectStep: (step) => player.playFrom(step), clear: () => player.setCuts([]), pause: () => player.pause(), get state() { return player.state; } };
 }

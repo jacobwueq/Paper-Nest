@@ -507,3 +507,29 @@ With enhanced common-edge nesting enabled, each compaction job first checks near
 4. Review & Export: choose full remnant frames or quick full-sheet separation, select cuts, compare additional and estimated total lengths, then export.
 
 Quick separation is post-processing only. At most one horizontal and one vertical cut are proposed, outside the occupied exterior envelope and at least half the configured kerf away from all parts, plus a 0.01 mm numerical guard. Candidates recover an outer strip meeting the minimum offcut-side setting. No safe outer strip means no proposal. Lines reach the physical sheet edges regardless of margin. This conservative first version rejects contact with existing part/common boundaries rather than merging into those boundaries. Duplicate selected separation lines are canonicalised. Both exporters revalidate final geometry and use a separate SEPARATION_CUT layer/group; they reject simultaneous full-frame and quick-cut output. Cut-order execution remains controlled by the laser software.
+
+
+## Downloads and language (0.22)
+
+Use the header’s English / 繁體中文 switch on the chooser and both workspaces.
+The preference stays in the browser. Timber instructions, playback labels,
+CSV cutting-guide operations and PDF/print guides follow the selected language.
+Switching language preserves inputs, the layout, selected sheet and playback step.
+Part names and material values remain user data. CSV column keys stay stable.
+
+Timber has a direct Download PDF action in Review & Export, in addition to Print.
+The PDF contains every used sheet with numbered cuts and the corresponding
+step-by-step guide, using an embedded Traditional Chinese font. PDF libraries and
+the font load locally on demand; no external document service is used.
+
+Timber CSV, project JSON, PDF and laser SVG/DXF/diagnostics exports share a save
+helper. It uses the browser save picker when available. The fallback retains a
+visible download link and its Blob URL so the user can retry the save, and offers
+opening the workspace in a browser tab when an embedded browser restricts saving.
+Cancelling the picker does not trigger a second download.
+
+Validation: 27 Node test files passed; DOM interaction checks covered every export
+button, picker success/cancel/fallback, language changes during playback, unchanged
+project values and the four-step flow. Generated English and Traditional Chinese
+PDFs were parsed and the Chinese guide was visually inspected. These DOM checks
+do not verify delivery to a real browser’s download folder.

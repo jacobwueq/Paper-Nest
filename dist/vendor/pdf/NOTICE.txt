@@ -1,0 +1,4 @@
+PDF export uses pdf-lib and @pdf-lib/fontkit (MIT).
+Paper Nest TC is a modified Noto Sans TC font, instantiated at weight 400 and renamed.
+Source: https://github.com/google/fonts/tree/main/ofl/notosanstc
+See the accompanying licenses.

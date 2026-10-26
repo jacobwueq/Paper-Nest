@@ -1,3 +1,4 @@
+import { t } from './locale.js?v=0.22.0';
 const escapeHTML = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 const escWorkpiece = (s) => escapeHTML(s || '');
@@ -45,7 +46,7 @@ export function timberCutOverlay(sheet, selectedStep = 0, playback = null) {
     const leader = Math.hypot(badge.x - badge.anchorX, badge.y - badge.anchorY) > radius ? `<line x1="${badge.anchorX}" y1="${badge.anchorY}" x2="${badge.x}" y2="${badge.y}" stroke="${color}" stroke-width="${size / 1300}"/>` : '';
     const workpiece = sheet.cuts.find((cut) => cut.step === badge.step)?.workpiece;
     leaders.push(leader ? `<g data-cut-workpiece="${escWorkpiece(workpiece)}">${leader}</g>` : '');
-    return `<g data-cut-number="${badge.step}" data-cut-workpiece="${escWorkpiece(workpiece)}" aria-label="Cut ${escapeHTML(badge.step)}${completed ? ', completed' : active ? ', selected' : ''}"><title>Cut ${escapeHTML(badge.step)}${completed ? ' · completed' : active ? ' · selected' : ''}</title><circle cx="${badge.x}" cy="${badge.y}" r="${radius}" fill="${active || completed ? color : '#fffdf9'}" stroke="${color}" stroke-width="${size / 1100}"/><text x="${badge.x}" y="${badge.y}" dy=".35em" text-anchor="middle" font-family="sans-serif" font-size="${radius * (String(badge.step).length > 2 ? .8 : 1.05)}" font-weight="700" fill="${active || completed ? '#ffffff' : color}">${escapeHTML(badge.step)}</text></g>`;
+    return `<g data-cut-number="${badge.step}" data-cut-workpiece="${escWorkpiece(workpiece)}" aria-label="${t("Cut","第")} ${escapeHTML(badge.step)}${t(""," 刀")}${completed ? ', completed' : active ? ', selected' : ''}"><title>${t("Cut","第")} ${escapeHTML(badge.step)}${t(""," 刀")}${completed ? t(' · completed',' · 已完成') : active ? t(' · selected',' · 已選') : ''}</title><circle cx="${badge.x}" cy="${badge.y}" r="${radius}" fill="${active || completed ? color : '#fffdf9'}" stroke="${color}" stroke-width="${size / 1100}"/><text x="${badge.x}" y="${badge.y}" dy=".35em" text-anchor="middle" font-family="sans-serif" font-size="${radius * (String(badge.step).length > 2 ? .8 : 1.05)}" font-weight="700" fill="${active || completed ? '#ffffff' : color}">${escapeHTML(badge.step)}</text></g>`;
   }).join('');
   const segment = segments.find(({ cut }) => cut.step === selectedStep);
   let trace = '';

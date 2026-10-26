@@ -1,9 +1,13 @@
 import { planTimber, validateProject, parseCSV, toCSV } from './timber-planner.js?v=0.21.0';
-import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.21.0';
-import { installTimberWorkflow } from './timber-workflow.js?v=0.21.0';
-import { timberCutOverlay } from './timber-cut-overlay.js?v=0.20.0';
-import { installCutPlayback } from './timber-playback.js?v=0.20.1';
-import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.20.0';
+import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.22.0';
+import { installTimberWorkflow } from './timber-workflow.js?v=0.22.0';
+import { timberCutOverlay } from './timber-cut-overlay.js?v=0.22.0';
+import { installCutPlayback } from './timber-playback.js?v=0.22.0';
+import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.22.0';
+import { t, getLanguage, onLanguageChange } from './locale.js?v=0.22.0';
+import { saveFile } from './file-download.js?v=0.22.0';
+import { createTimberPDF, loadPDFTools } from './timber-pdf.js?v=0.22.0';
+import { cutDescription, cutDetail, cutRetain, trimGuide } from './timber-text.js?v=0.22.0';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const fmt = (n) => Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
@@ -75,20 +79,16 @@ function invalidate() {
   visualUI?.update(p);
   workflow?.inputsChanged();
   const count = p.parts.reduce((n, row) => n + (Number.isFinite(row.qty) ? row.qty : 0), 0);
-  $('parts-count').textContent = `${p.parts.length} rows / ${fmt(count)} parts`;
+  $('parts-count').textContent = t(`${p.parts.length} rows / ${fmt(count)} parts`, `${p.parts.length} 行／${fmt(count)} 件零件`);
   try { localStorage.setItem(STORAGE, JSON.stringify(readProject())); $('save-state').textContent = 'Saved in this browser · timber project & manual layout'; }
   catch { $('save-state').textContent = 'Browser saving unavailable. Use Save project to keep your work.'; }
 }
 function download(contents, name, type) {
-  const url = URL.createObjectURL(new Blob([contents], { type }));
-  const anchor = document.createElement('a'); anchor.href = url; anchor.download = name; document.body.append(anchor); anchor.click(); anchor.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return saveFile(contents, name, type);
 }
 function filename(suffix) { return (plannedProject?.name || $('project-name').value || 'timber').replace(/[^\p{L}\p{N}_-]+/gu, '-').slice(0, 70) + suffix; }
-function cutDescription(c) { return `${c.axis === 'x' ? 'Crosscut' : 'Rip cut'} at ${fmt(c.offset)} mm from ${c.axis === 'x' ? 'left' : 'top'} edge`; }
-function cutDetail(c) { return `Workpiece ${c.workpiece} (${fmt(c.w)} × ${fmt(c.h)} mm) → ${c.first}${c.second ? ' + ' + c.second : ' + kerf waste'}. ${c.prerequisite ? 'Available after step ' + c.prerequisite + '.' : 'Start from the trimmed sheet.'}`; }
 function trimText(sheet) {
-  const t = plan.settings.trim;
-  return t ? `Prepare first: trim ${fmt(t)} mm from each of the four raw edges, including kerf in the removed strip. Finished starting panel: ${fmt(sheet.root.w)} × ${fmt(sheet.root.h)} mm. Label it S${sheet.number}; stock grain runs along its length →.` : `Start with the full ${fmt(sheet.stock.length)} × ${fmt(sheet.stock.width)} mm panel, labelled S${sheet.number}. Stock grain runs along its length →.`;
+  return trimGuide(sheet, plan.settings);
 }
 function sheetSVG(s, selectedStep = 0, playback = null) {
   if (playback?.active && playback.separatePieces) return separatedBoardSVG(s, selectedStep, playback);
@@ -101,26 +101,26 @@ function sheetSVG(s, selectedStep = 0, playback = null) {
   }).join('');
   const offcuts = s.offcuts.map((o) => `<g><title>${esc(o.id)} · offcut ${fmt(o.w)} × ${fmt(o.h)} mm</title><rect x="${o.x}" y="${o.y}" width="${o.w}" height="${o.h}" fill="#e8eee4" stroke="#a8b89a" stroke-width="${L / 1600}" stroke-dasharray="${L / 500} ${L / 500}"/>${o.w > fs * 7 && o.h > fs * 2 ? `<text x="${o.x + o.w / 2}" y="${o.y + o.h / 2}" text-anchor="middle" font-size="${fs * .65}" fill="#73836a">${fmt(o.w)} × ${fmt(o.h)}</text>` : ''}</g>`).join('');
   const overlay = timberCutOverlay(s, selectedStep, playback);
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-margin} ${-margin} ${L + margin + overlay.rightMargin} ${W + 2 * margin}" role="img" aria-label="Sheet ${s.number}: ${s.parts.length} finished parts, all ${s.cuts.length} cuts numbered in order, stock ${fmt(L)} by ${fmt(W)} millimetres"><rect width="${L}" height="${W}" fill="#eee9df" stroke="#b4a58c" stroke-width="${L / 1000}"/>${offcuts}${parts}${overlay.markup}<text x="${L / 2}" y="${-margin * .35}" text-anchor="middle" font-size="${fs * .8}" fill="#8c8170">${fmt(L)} mm · GRAIN →</text><text transform="translate(${-margin * .35} ${W / 2}) rotate(-90)" text-anchor="middle" font-size="${fs * .8}" fill="#8c8170">${fmt(W)} mm</text></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-margin} ${-margin} ${L + margin + overlay.rightMargin} ${W + 2 * margin}" role="img" aria-label="Sheet ${s.number}: ${s.parts.length} finished parts, all ${s.cuts.length} cuts numbered in order, stock ${fmt(L)} by ${fmt(W)} millimetres"><rect width="${L}" height="${W}" fill="#eee9df" stroke="#b4a58c" stroke-width="${L / 1000}"/>${offcuts}${parts}${overlay.markup}<text x="${L / 2}" y="${-margin * .35}" text-anchor="middle" font-size="${fs * .8}" fill="#8c8170">${fmt(L)} mm · ${t("GRAIN →","木紋 →")}</text><text transform="translate(${-margin * .35} ${W / 2}) rotate(-90)" text-anchor="middle" font-size="${fs * .8}" fill="#8c8170">${fmt(W)} mm</text></svg>`;
 }
-function renderSheet() {
+function renderSheet(resetPlayback = true) {
   if (!plan || !plan.sheets.length) return;
   const s = plan.sheets[activeSheet];
-  $('sheet-meta').textContent = `${s.stock.label || 'Stock'} · ${s.stock.material} / ${fmt(s.stock.thickness)} mm · ${fmt(s.stock.length)} × ${fmt(s.stock.width)} mm · ${(s.yield * 100).toFixed(1)}% finished-part yield`;
-  $('sheet-drawing').innerHTML = sheetSVG(s, activeStep);
-  $('cut-count').textContent = `${s.cuts.length} cuts`;
+  $('sheet-meta').textContent = `${s.stock.label || 'Stock'} · ${s.stock.material} / ${fmt(s.stock.thickness)} mm · ${fmt(s.stock.length)} × ${fmt(s.stock.width)} mm · ${(s.yield * 100).toFixed(1)}% ${t('finished-part yield','成品材料利用率')}`;
+  $('sheet-drawing').innerHTML = sheetSVG(s, activeStep, resetPlayback ? null : cutPlayback?.state);
+  $('cut-count').textContent = t(`${s.cuts.length} cuts`, `${s.cuts.length} 刀`);
   $('trim-guide').textContent = trimText(s);
-  $('cut-guide').innerHTML = s.cuts.length ? s.cuts.map((c) => `<button type="button" class="cut-step" data-step="${c.step}" aria-pressed="${c.step === activeStep}"><span class="step-number">${c.step}</span><span><strong>${cutDescription(c)}</strong><small class="workpiece-reference">${esc(cutDetail(c))}</small><small>Retain ${fmt(c.axis === 'x' ? c.offset : c.w)} × ${fmt(c.axis === 'y' ? c.offset : c.h)} mm as ${esc(c.first)}. Blade removes ${fmt(c.kerf)} mm on the right / bottom side.</small></span></button>`).join('') : '<p class="panel-hint">This part uses the entire prepared panel. No further cuts needed.</p>';
+  $('cut-guide').innerHTML = s.cuts.length ? s.cuts.map((c) => `<button type="button" class="cut-step" data-step="${c.step}" aria-pressed="${c.step === activeStep}"><span class="step-number">${c.step}</span><span><strong>${cutDescription(c)}</strong><small class="workpiece-reference">${esc(cutDetail(c))}</small><small>${esc(cutRetain(c))}</small></span></button>`).join('') : '<p class="panel-hint">This part uses the entire prepared panel. No further cuts needed.</p>';
   const useful = s.offcuts.filter((o) => Math.min(o.w, o.h) >= 50).sort((a, b) => b.w * b.h - a.w * a.h);
   const small = s.offcuts.length - useful.length;
-  $('offcut-list').innerHTML = '<strong>Reusable offcuts · both edges ≥ 50 mm</strong>' + (useful.length ? useful.map((o) => `<span class="offcut-tag">${esc(o.id)} · ${fmt(o.w)} × ${fmt(o.h)} mm</span>`).join('') : '<span>No offcuts meet this size.</span>') + (small ? `<div>${small} smaller remnant${small === 1 ? '' : 's'} also shown on the layout.</div>` : '');
-  cutPlayback?.setSheet(s, activeStep);
+  $('offcut-list').innerHTML = `<strong>${t('Reusable offcuts · both edges ≥ 50 mm','可用餘料 · 兩邊均 ≥ 50 毫米')}</strong>` + (useful.length ? useful.map((o) => `<span class="offcut-tag">${esc(o.id)} · ${fmt(o.w)} × ${fmt(o.h)} mm</span>`).join('') : `<span>${t('No offcuts meet this size.','沒有符合此尺寸嘅餘料。')}</span>`) + (small ? `<div>${t(`${small} smaller remnants also shown on the layout.`, `圖上另有 ${small} 塊較細餘料。`)}</div>` : '');
+  if (resetPlayback) cutPlayback?.setSheet(s, activeStep); else cutPlayback?.refreshLabels();
 }
 function renderPlan() {
   $('results').hidden = false; $('empty-plan').hidden = true;
   const area = plan.sheets.reduce((n, s) => n + s.area, 0), used = plan.sheets.reduce((n, s) => n + s.usedArea, 0);
   const cuts = plan.sheets.reduce((n, s) => n + s.cuts.length, 0);
-  $('plan-caption').textContent = `${plannedProject.name || 'Untitled project'} · Kerf ${fmt(plan.settings.kerf)} mm · Edge trim ${fmt(plan.settings.trim)} mm · ${plan.settings.usePriorities ? 'Optional part priorities enabled' : 'Whole-list optimisation · not input order'} · ${plan.settings.direction === 'auto' ? 'Automatic cut direction' : plan.settings.direction === 'rip' ? 'Rip first' : 'Crosscut first'}`;
+  $('plan-caption').textContent = planCaption();
   $('metrics').innerHTML = `<div class="metric"><span>Stock sheets used</span><strong>${plan.sheets.length}<small>of ${plannedProject.stocks.reduce((n, s) => n + s.qty, 0)} available</small></strong></div><div class="metric"><span>Parts placed</span><strong>${plan.placed}<small>/ ${plan.required}</small></strong></div><div class="metric"><span>Finished-part yield</span><strong>${area ? (used / area * 100).toFixed(1) : '0.0'}%<small>of used stock</small></strong></div><div class="metric"><span>Cutting steps</span><strong>${cuts}<small>+ edge preparation</small></strong></div>`;
   $('unplaced').hidden = plan.unplaced.length === 0;
   if (plan.unplaced.length) {
@@ -128,11 +128,11 @@ function renderPlan() {
     for (const p of plan.unplaced) { const key = `${p.label} (${fmt(p.length)} × ${fmt(p.width)} mm, ${p.material} ${fmt(p.thickness)} mm)`; counts.set(key, (counts.get(key) || 0) + 1); }
     $('unplaced').textContent = plan.manual ? `${plan.unplaced.length} part(s) not yet placed · 尚未放入：${[...counts].map(([label, count]) => `${label} × ${count}`).join('; ')}. Continue placing them in the visual workspace.` : `${plan.unplaced.length} part(s) could not be placed: ${[...counts].map(([label, count]) => `${label} × ${count}`).join('; ')}. Check stock quantity, usable dimensions, material/thickness matches and grain locks. This heuristic may leave parts unplaced even if a different layout could fit.`;
   }
-  $('sheet-select').innerHTML = plan.sheets.map((s, i) => `<option value="${i}">Sheet ${s.number}</option>`).join('');
+  $('sheet-select').innerHTML = plan.sheets.map((s, i) => `<option value="${i}">${t('Sheet','板材')} ${s.number}</option>`).join('');
   activeSheet = 0; activeStep = 1;
   document.querySelector('.plan-grid').hidden = !plan.sheets.length;
   renderSheet();
-  $('finished-parts').innerHTML = plan.sheets.flatMap((s) => s.parts.map((p) => ({ ...p, sheet: s.number }))).sort((a, b) => a.row - b.row || a.copy - b.copy).map((p) => `<tr><td>${esc(p.id)}</td><td>${esc(p.label)}</td><td>${fmt(p.length)} × ${fmt(p.width)}${p.rotated ? ' ↻' : ''}</td><td>${esc(p.material)} / ${fmt(p.thickness)} mm</td><td class="${p.priority === 0 ? 'priority-high' : ''}">${priorityNames[p.priority]}</td><td>S${p.sheet} / ${esc(p.workpiece)}</td></tr>`).join('');
+  $('finished-parts').innerHTML = plan.sheets.flatMap((s) => s.parts.map((p) => ({ ...p, sheet: s.number }))).sort((a, b) => a.row - b.row || a.copy - b.copy).map((p) => `<tr><td>${esc(p.id)}</td><td data-user-content>${esc(p.label)}</td><td>${fmt(p.length)} × ${fmt(p.width)}${p.rotated ? ' ↻' : ''}</td><td data-user-content>${esc(p.material)} / ${fmt(p.thickness)} mm</td><td class="${p.priority === 0 ? 'priority-high' : ''}">${priorityNames[p.priority]}</td><td>S${p.sheet} / ${esc(p.workpiece)}</td></tr>`).join('');
   workflow?.showReview();
 }
 $('timber-form').addEventListener('input', (event) => { if (event.target.closest('#timber-visual')) return; invalidate(); notify(''); });
@@ -204,10 +204,26 @@ $('export-guide').onclick = () => {
   if (!plan) return;
   const rows = [['sheet', 'step', 'workpiece', 'operation', 'measurement_from', 'offset_mm', 'workpiece_length_mm', 'workpiece_width_mm', 'kerf_mm', 'first_result', 'second_result', 'prerequisite_step']];
   for (const s of plan.sheets) {
-    rows.push([s.number, 'Prepare', `S${s.number}`, trimText(s), '', plan.settings.trim, s.stock.length, s.stock.width, plan.settings.kerf, `S${s.number}`, '', '']);
-    for (const c of s.cuts) rows.push([s.number, c.step, c.workpiece, c.axis === 'x' ? 'Crosscut' : 'Rip cut', c.axis === 'x' ? 'left finished edge' : 'top finished edge', c.offset, c.w, c.h, c.kerf, c.first, c.second || 'kerf waste', c.prerequisite || 'Prepare']);
+    rows.push([s.number, t('Prepare','準備'), `S${s.number}`, trimText(s), '', plan.settings.trim, s.stock.length, s.stock.width, plan.settings.kerf, `S${s.number}`, '', '']);
+    for (const c of s.cuts) rows.push([s.number, c.step, c.workpiece, cutDescription(c), c.axis === 'x' ? t('left finished edge','左側完成邊') : t('top finished edge','上側完成邊'), c.offset, c.w, c.h, c.kerf, c.first, c.second || t('kerf waste','鋸縫廢料'), c.prerequisite || t('Prepare','準備')]);
   }
   download(toCSV(rows), filename('-cut-guide.csv'), 'text/csv;charset=utf-8');
+};
+$('download-pdf').onclick = async () => {
+  if (!plan || !plannedProject) { notify(t('Confirm a cutting layout before downloading.', '請先確認排料方案，再下載。'), true); return; }
+  const button = $('download-pdf'), snapshot = plan, project = structuredClone(plannedProject), language = getLanguage(), name = filename('-cutting-plan.pdf');
+  cutPlayback?.pause(); button.disabled = true; button.textContent = t('Preparing PDF…', '正在製作 PDF…');
+  try {
+    let handle = null;
+    if (typeof window.showSaveFilePicker === 'function') {
+      try { handle = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: 'PDF', accept: { 'application/pdf': ['.pdf'] } }] }); }
+      catch (error) { if (error.name === 'AbortError') return; }
+    }
+    const tools = await loadPDFTools();
+    const bytes = await createTimberPDF(project, snapshot, { ...tools, language });
+    await saveFile(bytes, name, 'application/pdf', { handle, picker: false });
+  } catch (error) { notify(t(`PDF download failed: ${error.message}. You can still use Print.`, `PDF 下載失敗：${error.message}。仍可使用列印。`), true); }
+  finally { button.disabled = false; button.textContent = t('Download PDF ↓', '下載 PDF ↓'); }
 };
 $('print-plan').onclick = () => {
   if (!plan) return;
@@ -215,7 +231,7 @@ $('print-plan').onclick = () => {
   document.querySelectorAll('.print-sheet').forEach((e) => e.remove());
   for (const [printIndex, s] of plan.sheets.entries()) {
     const section = document.createElement('section'); section.className = 'print-sheet';
-    section.innerHTML = `<h3>${esc(plannedProject.name)} · Sheet ${printIndex + 1} / ${plan.sheets.length} · S${s.number}</h3><p>${esc(s.stock.material)} / ${fmt(s.stock.thickness)} mm · Stock ${fmt(s.stock.length)} × ${fmt(s.stock.width)} mm · Kerf ${fmt(plan.settings.kerf)} mm</p><div class="trim-guide">${esc(trimText(s))}</div>${sheetSVG(s)}<h4>Cutting sequence · measurements to finished edge, kerf on waste side</h4>${s.cuts.map((c) => `<p class="print-step"><strong>${c.step}. ${cutDescription(c)}</strong> · ${esc(cutDetail(c))}</p>`).join('') || '<p>No cuts needed after edge preparation.</p>'}<p>Offcuts: ${s.offcuts.map((o) => `${esc(o.id)}: ${fmt(o.w)} × ${fmt(o.h)} mm`).join('; ') || 'None'}</p><p>Geometric cut sequence. Check machine setup, blade allowances and workpiece support before cutting.</p>`;
+    section.innerHTML = `<h3>${esc(plannedProject.name)} · ${t("Sheet","板材")} ${printIndex + 1} / ${plan.sheets.length} · S${s.number}</h3><p>${esc(s.stock.material)} / ${fmt(s.stock.thickness)} mm · ${t("Stock","板材")} ${fmt(s.stock.length)} × ${fmt(s.stock.width)} mm · ${t("Kerf","鋸縫")} ${fmt(plan.settings.kerf)} mm</p><div class="trim-guide">${esc(trimText(s))}</div>${sheetSVG(s)}<h4>${t("Cutting sequence · measurements to finished edge, kerf on waste side","切割次序 · 量至完成邊，鋸縫留喺廢料側")}</h4>${s.cuts.map((c) => `<p class="print-step"><strong>${c.step}. ${cutDescription(c)}</strong> · ${esc(cutDetail(c))} ${esc(cutRetain(c))}</p>`).join('') || '<p>No cuts needed after edge preparation.</p>'}<p>${t("Offcuts","餘料")}: ${s.offcuts.map((o) => `${esc(o.id)}: ${fmt(o.w)} × ${fmt(o.h)} mm`).join('; ') || t('None','無')}</p><p>${t("Geometric cut sequence. Check machine setup, blade allowances and workpiece support before cutting.","此為幾何切割次序。開料前請核對機台設定、鋸片預留及板件承托。")}</p>`;
     $('results').insertBefore(section, document.querySelector('.finished-panel'));
   }
   window.print();
@@ -288,3 +304,11 @@ workflow = installTimberWorkflow({
 });
 try { localStorage.setItem(STORAGE, JSON.stringify(readProject())); } catch { /* The visible save status already offers project download. */ }
 if (restored) notify('Your saved timber project has been restored · 已還原。The visual preview updates as you edit.');
+
+function planCaption() {
+  if (!plan || !plannedProject) return '';
+  return t(`${plannedProject.name || 'Untitled project'} · ${t("Kerf","鋸縫")} ${fmt(plan.settings.kerf)} mm · Edge trim ${fmt(plan.settings.trim)} mm · ${plan.settings.usePriorities ? 'Optional part priorities enabled' : 'Whole-list optimisation · not input order'} · ${plan.settings.direction === 'auto' ? 'Automatic cut direction' : plan.settings.direction === 'rip' ? 'Rip first' : 'Crosscut first'}`, `${plannedProject.name || '未命名專案'} · 鋸縫 ${fmt(plan.settings.kerf)} 毫米 · 修邊 ${fmt(plan.settings.trim)} 毫米 · ${plan.settings.usePriorities ? '已啟用可選優先級' : '整體優化，不按輸入次序'} · ${plan.settings.direction === 'auto' ? '自動切割方向' : plan.settings.direction === 'rip' ? '先順紋切割' : '先橫紋切割'}`);
+}
+onLanguageChange(() => {
+  if (plan) { $('plan-caption').textContent = planCaption(); const value = $('sheet-select').value; $('sheet-select').innerHTML = plan.sheets.map((s,i) => `<option value="${i}">${t('Sheet','板材')} ${s.number}</option>`).join(''); $('sheet-select').value = value; renderSheet(false); }
+});

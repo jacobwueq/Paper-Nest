@@ -1,3 +1,4 @@
+import { saveFile } from './file-download.js?v=0.22.0';
 import { installCutStrategy } from "./cut-strategy-ui.js?v=0.15.0";
 let cutStrategyUI = null;
 import { installWorkspace } from "./workspace-ui.js?v=0.14.2";
@@ -638,18 +639,8 @@ function download() {
           settings,
           exportOptions(state.sheet),
         );
-  const a = document.createElement("a");
-  const url = URL.createObjectURL(
-    new Blob([content], {
-      type: format === "svg" ? "image/svg+xml" : "application/dxf",
-    }),
-  );
-  a.href = url;
-  a.download = `${state.name.replace(/\.(dxf|svg)$/i, "").replace(/[^\p{L}\p{N}._-]+/gu, "-")}-sheet-${state.sheet + 1}.${format}`;
-  document.body.append(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  const name = `${state.name.replace(/\.(dxf|svg)$/i, "").replace(/[^\p{L}\p{N}._-]+/gu, "-")}-sheet-${state.sheet + 1}.${format}`;
+  saveFile(content, name, format === "svg" ? "image/svg+xml" : "application/dxf");
 }
 document.addEventListener("click", (e) => {
   const row = e.target.closest("[data-part]");
@@ -675,23 +666,7 @@ function captureRemnants() {
       : [];
 }
 $("download-diagnostics").onclick = () => {
-  const a = document.createElement("a"),
-    url = URL.createObjectURL(
-      new Blob(
-        [
-          JSON.stringify(
-            { settings: readSettings(), jobs: state.diagnostics },
-            null,
-            2,
-          ),
-        ],
-        { type: "application/json" },
-      ),
-    );
-  a.href = url;
-  a.download = "paper-nest-diagnostics.json";
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  saveFile(JSON.stringify({ settings: readSettings(), jobs: state.diagnostics }, null, 2), "paper-nest-diagnostics.json", "application/json");
 };
 $("preserve-remnant-splits").addEventListener("change", () => {
   if (state.running) stop();
