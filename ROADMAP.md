@@ -125,8 +125,11 @@ and every Phase 1 UI fix is visible in the preview in both languages.
   the first. Rows come from `offcutStockRow()` in the planner (length along grain,
   rounded down to 0.1 mm). `notifyUndo()` restores rows, settings and manual layout;
   it is reused by 1.5. Checked in both languages.
-- [ ] **1.5 Undo for deletions.**
+- [x] **1.5 Undo for deletions.**
   Done when: removing a part or stock row shows an undo notice that restores it.
+  Result: table ✕ and parts-tray − both go through `removeRow()`, which names the row
+  (“Removed part “Top / bottom”. Undo”) and restores rows, settings and manual layout.
+  Checked in the browser for parts and stock, English and 中文.
 - [ ] **1.6 Laser: no tick box before Arrange.**
   Done when: Arrange runs without "I've checked the part groups"; parts whose detail
   lines may be unattached are flagged instead.
@@ -171,3 +174,4 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
 | 2026-10-26 | 1.2 Cut-order cache | 239/239 tests; 21/21 plans identical; 139 pieces 0.86 s (baseline 2.6 s); 4 s search 127 tries (baseline 39) |
 | 2026-10-26 | 1.3 Wording & settings | 240/240 tests; version 0.27.0 shown in footers; settings fold checked EN/中文 |
 | 2026-10-26 | 1.4 Offcuts → stock | 242/242 tests; add 2 offcuts → 3 stock rows → Undo → 1 row, in the browser |
+| 2026-10-26 | 1.5 Undo deletions | 243/243 tests; tray and table removals undo in the browser |

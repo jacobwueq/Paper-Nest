@@ -1,15 +1,15 @@
-import { planTimber, validateProject, parseCSV, toCSV, offcutStockRow } from './timber-planner.js?v=0.27.1';
-import { TIMBER_SETTINGS, cleanTimberSettings, defaultTimberSettings } from './timber-settings.js?v=0.27.1';
-import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.27.1';
-import { installTimberWorkflow } from './timber-workflow.js?v=0.27.1';
-import { timberCutOverlay, updateCutTrace } from './timber-cut-overlay.js?v=0.27.1';
-import { installCutPlayback } from './timber-playback.js?v=0.27.1';
-import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.27.1';
-import { t, getLanguage, onLanguageChange } from './locale.js?v=0.27.1';
-import { saveFile } from './file-download.js?v=0.27.1';
-import { createTimberPDF, loadPDFTools } from './timber-pdf.js?v=0.27.1';
-import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency } from './timber-text.js?v=0.27.1';
-import { installSawHelp } from './timber-saw-help.js?v=0.27.1';
+import { planTimber, validateProject, parseCSV, toCSV, offcutStockRow } from './timber-planner.js?v=0.27.2';
+import { TIMBER_SETTINGS, cleanTimberSettings, defaultTimberSettings } from './timber-settings.js?v=0.27.2';
+import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.27.2';
+import { installTimberWorkflow } from './timber-workflow.js?v=0.27.2';
+import { timberCutOverlay, updateCutTrace } from './timber-cut-overlay.js?v=0.27.2';
+import { installCutPlayback } from './timber-playback.js?v=0.27.2';
+import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.27.2';
+import { t, getLanguage, onLanguageChange } from './locale.js?v=0.27.2';
+import { saveFile } from './file-download.js?v=0.27.2';
+import { createTimberPDF, loadPDFTools } from './timber-pdf.js?v=0.27.2';
+import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency } from './timber-text.js?v=0.27.2';
+import { installSawHelp } from './timber-saw-help.js?v=0.27.2';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const fmt = (n) => Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
@@ -170,10 +170,17 @@ function renderPlan() {
 }
 $('timber-form').addEventListener('input', (event) => { if (event.target.closest('#timber-visual')) return; invalidate(); notify(''); });
 $('timber-form').addEventListener('change', (event) => { if (event.target.closest('#timber-visual')) return; invalidate(); notify(''); });
+// Removing a stock or part row (table or parts tray) can be undone from the notice.
+function removeRow(type, row) {
+  const before = readProject(), removed = before[type][row]; if (!removed) return;
+  const name = removed.label || t(`row ${row + 1}`, `第 ${row + 1} 行`);
+  $(type).rows[row].remove(); invalidate();
+  notifyUndo(type === 'parts' ? t(`Removed part “${name}”.`, `已刪除零件「${name}」。`) : t(`Removed stock “${name}”.`, `已刪除板材「${name}」。`), before);
+}
 for (const type of ['stocks', 'parts']) $(type).addEventListener('click', (event) => {
   const remove = event.target.closest('[data-remove]'); if (!remove) return;
-  if (type === 'stocks' && $(type).rows.length <= 1) { notify('Keep at least one stock row. Edit it to enter your stock.', true); return; }
-  remove.closest('tr').remove(); invalidate();
+  if (type === 'stocks' && $(type).rows.length <= 1) { notify(t('Keep at least one stock row. Edit it to enter your stock.', '最少要保留一行板材，可直接修改。'), true); return; }
+  removeRow(type, [...$(type).rows].indexOf(remove.closest('tr')));
 });
 const offcutButtonText = () => keptOffcuts.size ? t(`Add ${keptOffcuts.size} offcut${keptOffcuts.size === 1 ? '' : 's'} to stock`, `將 ${keptOffcuts.size} 塊餘料加入板材`) : t('Add to stock', '加入板材');
 $('offcut-list').addEventListener('change', (event) => {
@@ -329,7 +336,7 @@ visualUI = installTimberVisual({
     if (input) { input.value = value; invalidate(); notify(''); }
   },
   addPart() { $('add-part').click(); },
-  removePart(row) { $('parts').rows[row]?.remove(); invalidate(); notify(''); },
+  removePart(row) { removeRow('parts', row); },
   applyPlan(result, mode) {
     try {
       const project = cleanProject(readProject()); plan = result; plannedProject = project;
