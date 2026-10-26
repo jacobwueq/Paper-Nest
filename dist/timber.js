@@ -1,7 +1,8 @@
 import { planTimber, validateProject, parseCSV, toCSV } from './timber-planner.js?v=0.18.0';
 import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.18.0';
-import { timberCutOverlay } from './timber-cut-overlay.js?v=0.19.0';
-import { installCutPlayback } from './timber-playback.js?v=0.19.0';
+import { timberCutOverlay } from './timber-cut-overlay.js?v=0.20.0';
+import { installCutPlayback } from './timber-playback.js?v=0.20.0';
+import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.20.0';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const fmt = (n) => Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
@@ -86,6 +87,7 @@ function trimText(sheet) {
   return t ? `Prepare first: trim ${fmt(t)} mm from each of the four raw edges, including kerf in the removed strip. Finished starting panel: ${fmt(sheet.root.w)} × ${fmt(sheet.root.h)} mm. Label it S${sheet.number}; stock grain runs along its length →.` : `Start with the full ${fmt(sheet.stock.length)} × ${fmt(sheet.stock.width)} mm panel, labelled S${sheet.number}. Stock grain runs along its length →.`;
 }
 function sheetSVG(s, selectedStep = 0, playback = null) {
+  if (playback?.active && playback.separatePieces) return separatedBoardSVG(s, selectedStep, playback);
   const L = s.stock.length, W = s.stock.width, margin = Math.max(L, W) * .045, fs = Math.max(L, W) * .014;
   const colors = ['#e5d2af', '#d0dbbd', '#c7d8dd', '#dbcee0', '#e8c8b0'];
   const parts = s.parts.map((p) => {
@@ -220,6 +222,7 @@ cutPlayback = installCutPlayback({
     if (!cut || !plan?.sheets[activeSheet]) return;
     activeStep = cut.step;
     $('sheet-drawing').innerHTML = sheetSVG(plan.sheets[activeSheet], activeStep, state);
+    if (state.active && state.separatePieces) updateBoardSeparation($('sheet-drawing').querySelector('svg'), plan.sheets[activeSheet], state);
     for (const button of $('cut-guide').querySelectorAll('[data-step]')) {
       const selected = Number(button.dataset.step) === activeStep;
       button.setAttribute('aria-pressed', String(selected));
@@ -227,6 +230,7 @@ cutPlayback = installCutPlayback({
     }
   },
   onFrame(cut, state) {
+    if (state.separatePieces && plan?.sheets[activeSheet]) updateBoardSeparation($('sheet-drawing').querySelector('svg'), plan.sheets[activeSheet], state);
     const trace = $('sheet-drawing').querySelector('[data-cut-trace]'), head = $('sheet-drawing').querySelector('[data-cut-head]');
     if (!trace || !head || !cut) return;
     const x = cut.x + (cut.axis === 'x' ? cut.offset : cut.w * state.progress);

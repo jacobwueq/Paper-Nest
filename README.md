@@ -78,6 +78,14 @@ the selected step. Playback starts after edge preparation. It pauses for printin
 or a hidden page and resets when the sheet or plan changes. Print/PDF outputs
 keep the full static numbered plan. Reduced-motion preferences use step highlights
 without the moving marker.
+**Separate pieces** is on by default during playback. After the cutting stroke,
+the released sections slide apart before the next cut starts. The simulation
+follows the guillotine workpiece tree, so later cuts and labels move with their
+parent sections. Nested layouts reserve room for their separated descendants to
+avoid overlaps. Restart reassembles the board; toggling the option switches to the
+flat plan at the same playback position. Gaps are illustrative and do not change
+part sizes, saved projects, CSV data or the static print/PDF geometry. Reduced
+motion snaps to each separated state instead of animating the movement.
 Cutting lists support CSV import with `length,width,qty` columns; optional
 `label,material,thickness,priority,grain` columns use the downloadable template.
 CSV defaults are Plywood, 18 mm, Normal priority and unlocked grain. A CSV import
