@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { planTimber, optimizeTimber, compareTimberPlans, manualCommandsFromPlan, manualTimber, timberFreeRegions, validateProject, parseCSV, toCSV } from '../dist/timber-planner.js';
 
+import { simplifyTimberCuts } from '../dist/timber-cut-planner.js';
+import { cutDetail, cutRetain } from '../dist/timber-text.js';
+
 const stock = (extra = {}) => ({ label: 'Sheet', material: 'Plywood', thickness: 18, length: 100, width: 100, qty: 1, ...extra });
 const part = (extra = {}) => ({ label: 'Panel', material: 'Plywood', thickness: 18, length: 40, width: 40, qty: 1, priority: 1, grain: false, ...extra });
 const project = (extra = {}) => ({ settings: { kerf: 3, trim: 0, direction: 'auto', rotate: true }, stocks: [stock()], parts: [part()], ...extra });
@@ -179,4 +182,81 @@ test('Manual Adjust inherits automatic positions, rotations and guillotine split
   assert.deepEqual(geometry(manual),geometry(auto));assert.equal(manual.placed,auto.placed);assert.equal(JSON.stringify(auto),snapshot);verifyPlan(manual);
   assert.deepEqual(geometry(manualTimber(p,JSON.parse(JSON.stringify(commands)))),geometry(auto));
   const undone=manualTimber(p,commands.slice(0,-1));assert.equal(undone.placed,auto.placed-1);verifyPlan(undone);
+});
+
+
+test('one shared straight cut prepares two matching parts before they are separated', () => {
+  const p = project({ stocks: [stock({ length: 83 })], parts: [part({ qty: 2, grain: true })] });
+  p.settings.rotate = false;
+  const result = manualTimber(p, [
+    { partId: 'P1.1', board: 0, x: 0, y: 0, rotated: false, direction: 'cross' },
+    { partId: 'P1.2', board: 0, x: 43, y: 0, rotated: false, direction: 'cross' },
+  ]);
+  const sheet = result.sheets[0]; verifyPlan(result);
+  assert.equal(sheet.originalCutCount, 3); assert.equal(sheet.cuts.length, 2); assert.equal(sheet.cutReduction, 1);
+  assert.equal(sheet.cuts[0].axis, 'y'); assert.equal(sheet.cuts[0].w, 83); assert.equal(sheet.cuts[0].offset, 40);
+  assert.deepEqual(new Set(sheet.cuts[0].edgeParts), new Set(['P1.1', 'P1.2']));
+  assert.deepEqual(new Set(sheet.cuts[1].releasedParts), new Set(['P1.1', 'P1.2']));
+  assert.deepEqual(timberFreeRegions(result.boards[0]), [{ x: 0, y: 43, w: 40, h: 57 }, { x: 43, y: 43, w: 40, h: 57 }], 'manual editing retains its saved placement regions');
+});
+test('a repeated four-part grid needs five cuts rather than seven individual trims', () => {
+  const p = project({ parts: [part({ qty: 4, grain: true })] }); p.settings.rotate = false;
+  const result = manualTimber(p, [
+    { partId: 'P1.1', board: 0, x: 0, y: 0, rotated: false, direction: 'rip' },
+    { partId: 'P1.2', board: 0, x: 43, y: 0, rotated: false, direction: 'rip' },
+    { partId: 'P1.3', board: 0, x: 0, y: 43, rotated: false, direction: 'cross' },
+    { partId: 'P1.4', board: 0, x: 43, y: 43, rotated: false, direction: 'rip' },
+  ]);
+  assert.equal(result.sheets[0].originalCutCount, 7); assert.equal(result.fitness.cutCount, 5); verifyPlan(result);
+  const automatic = planTimber(p); assert.equal(automatic.fitness.cutCount, 5); verifyPlan(automatic);
+});
+test('parts with different lengths can share the same width-setting cut', () => {
+  const p = project({ stocks: [stock({ length: 73 })], parts: [part({ grain: true }), part({ length: 30, grain: true })] });
+  p.settings.rotate = false;
+  const result = planTimber(p); assert.equal(result.placed, 2); assert.equal(result.fitness.cutCount, 2); verifyPlan(result);
+  assert.ok(result.sheets[0].cuts.some((c) => c.axis === 'y' && c.w === 73 && c.edgeParts.length === 2));
+});
+test('cut count ranks ahead of offcuts, while placed parts and sheet use remain first', () => {
+  const base = planTimber(project()), more = structuredClone(base);
+  more.fitness.cutCount += 1; more.fitness.offcuts = [1e12];
+  assert.ok(compareTimberPlans(base, more) < 0, 'larger offcuts cannot buy more cuts');
+  more.fitness.primary[0] += 1; more.fitness.cutCount = 0;
+  assert.ok(compareTimberPlans(base, more) < 0, 'fewer cuts cannot buy an unplaced part');
+  more.fitness.primary[0] -= 1; more.fitness.primary[2] += 1;
+  assert.ok(compareTimberPlans(base, more) < 0, 'fewer cuts cannot buy an extra sheet');
+});
+test('shared cuts never cross a part interior or its required saw clearance', () => {
+  const p = project({ stocks: [stock({ length: 700, width: 600, qty: 3 })], parts: [part({ length: 150, width: 100, qty: 5 }), part({ length: 150, width: 120, qty: 3 }), part({ length: 120, width: 100, qty: 4 })] });
+  p.settings.trim = 5; p.settings.kerf = 3.2;
+  const plan = planTimber(p); verifyPlan(plan);
+  for (const sheet of plan.sheets) {
+    for (const c of sheet.cuts) for (const p of sheet.parts) {
+      const inRegion = p.x >= c.x - 1e-7 && p.y >= c.y - 1e-7 && p.x + p.w <= c.x + c.w + 1e-7 && p.y + p.h <= c.y + c.h + 1e-7;
+      if (!inRegion) continue;
+      const position = c[c.axis] + c.offset, size = c.axis === 'x' ? 'w' : 'h';
+      assert.ok(p[c.axis] + p[size] <= position + 1e-6 || p[c.axis] >= position + c.kerf - 1e-6);
+    }
+    assert.ok(sheet.cuts.length <= sheet.originalCutCount);
+  }
+  const manual = manualTimber(p, manualCommandsFromPlan(p, plan)); verifyPlan(manual);
+  assert.equal(manual.fitness.cutCount, plan.fitness.cutCount);
+});
+
+
+test('an exhausted cut-search budget keeps a valid, separate copy of the original tree', () => {
+  const p = project({ stocks: [stock({ length: 83 })], parts: [part({ qty: 2 })] });
+  const manual = manualTimber(p, [{ partId: 'P1.1', board: 0, x: 0, y: 0, rotated: false, direction: 'cross' }, { partId: 'P1.2', board: 0, x: 43, y: 0, rotated: false, direction: 'cross' }]);
+  const root = manual.boards[0].root, before = JSON.stringify(root);
+  const limited = simplifyTimberCuts(root, 3, { maxStates: 0 });
+  assert.equal(limited.before, 3); assert.equal(limited.after, 3);
+  assert.notEqual(limited.root, root); assert.notEqual(limited.root.first, root.first);
+  assert.equal(JSON.stringify(root), before); assert.deepEqual(limited.root, root);
+});
+test('the shared-cut guide explains when to keep both finished workpieces in either language', () => {
+  const p = project({ stocks: [stock({ length: 83 })], parts: [part({ qty: 2 })] }); p.settings.rotate = false;
+  const result = planTimber(p), cut = result.sheets[0].cuts.find((c) => c.releasedParts.length === 2);
+  assert.ok(cut); assert.match(cutDetail(cut, 'en'), /releases P1.1 \+ P1.2 together/);
+  assert.match(cutDetail(cut, 'zh-Hant'), /同時分出/);
+  assert.match(cutRetain(cut, 'en'), /Keep both workpieces/);
+  assert.match(cutRetain(cut, 'zh-Hant'), /兩邊板件都保留/);
 });

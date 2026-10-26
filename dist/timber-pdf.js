@@ -1,6 +1,6 @@
-import { getLanguage } from './locale.js?v=0.22.0';
-import { cutDescription, cutDetail, cutRetain, trimGuide } from './timber-text.js?v=0.22.0';
-import { timberCutOverlay } from './timber-cut-overlay.js?v=0.22.0';
+import { getLanguage } from './locale.js?v=0.23.0';
+import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency } from './timber-text.js?v=0.23.0';
+import { timberCutOverlay } from './timber-cut-overlay.js?v=0.23.0';
 const scripts = new Map();
 function loadScript(path, name) {
   if (window[name]) return Promise.resolve(window[name]);
@@ -23,7 +23,7 @@ export async function createTimberPDF(project, plan, { PDFLib, fontkit, fontByte
   const L = (en, zh) => language === 'zh-Hant' ? zh : en;
   const gray = rgb(.28,.32,.37), brown = rgb(.6,.36,.25), blue = rgb(.15,.29,.47);
   const characters = new Set(font.getCharacterSet());
-  const safe = (s) => [...String(s)].map((c) => characters.has(c.codePointAt(0)) ? c : '?').join('');
+  const safe = (s) => [...String(s)].map((c) => (c === '\n' || characters.has(c.codePointAt(0))) ? c : '?').join('');
   const draw = (page, text, x, y, size = 10, color = gray) => page.drawText(safe(text), { x,y,size,font,color });
   const wrap = (text, width, size = 9) => {
     const lines=[];let line='';
@@ -42,7 +42,7 @@ export async function createTimberPDF(project, plan, { PDFLib, fontkit, fontByte
     for(const p of sheet.parts){rect(p,rgb(.86,.81,.68));const size=Math.max(4,Math.min(9,p.w*s/Math.max(6,p.id.length),p.h*s/3));draw(page,p.id,ox+(p.x+p.w/2)*s-font.widthOfTextAtSize(p.id,size)/2,oy+(sheet.stock.width-p.y-p.h/2)*s,size);}
     for(const c of sheet.cuts){const x=c.axis==='x'?c.x+c.offset:c.x,y=c.axis==='y'?c.y+c.offset:c.y;page.drawLine({start:{x:ox+x*s,y:oy+(sheet.stock.width-y)*s},end:{x:ox+(c.axis==='x'?x:c.x+c.w)*s,y:oy+(sheet.stock.width-(c.axis==='y'?y:c.y+c.h))*s},thickness:.8,color:brown});}
     for(const b of overlay.badges){const x=ox+b.x*s,y=oy+(sheet.stock.width-b.y)*s,r=Math.max(5,overlay.radius*s);page.drawCircle({x,y,size:r,color:rgb(1,.99,.97),borderColor:brown,borderWidth:.8});const size=Math.min(9,r);draw(page,String(b.step),x-font.widthOfTextAtSize(String(b.step),size)/2,y-size*.34,size,brown);}
-    let y=137;for(const line of wrap(trimGuide(sheet,plan.settings,language),770,9)){draw(page,line,30,y,9);y-=14;}
+    let y=137;for(const line of wrap(trimGuide(sheet,plan.settings,language) + '\n' + cutEfficiency(sheet,language),770,9)){draw(page,line,30,y,9);y-=14;}
     draw(page,L('Numbered lines show the cutting order. Dimensions are finished sizes; separation gaps are not exported.','編號切線顯示切割次序。尺寸為完成尺寸；示意分離間距不會輸出。'),30,45,9);
     let guide=doc.addPage([842,595]), gy=535;
     const title=()=>{draw(guide,`${project.name || 'Paper Nest'} · S${sheet.number} · ${L('Cutting sequence','切割次序')}`,30,565,14,blue);};title();

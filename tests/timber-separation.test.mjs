@@ -31,9 +31,9 @@ test('pieces stay joined until the stroke finishes, then separate without overla
   const reset=timberSeparationLayout(sheet,state(1));assert.equal([...reset.pieces.values()].filter(p=>p.visible).length,1);
 });
 test('later cuts inherit the offset of their separated parent workpiece',()=>{
-  const p={...project,settings:{...project.settings,direction:'cross'},parts:[{...project.parts[0],length:800,width:400,qty:2}]};
+  const p={...project,settings:{...project.settings,direction:'cross'},parts:[{...project.parts[0],length:800,width:400,qty:1},{...project.parts[0],length:800,width:350,qty:1}]};
   const first={partId:'P1.1',board:0,x:5,y:5,rotated:false};
-  const sheet=manualTimber(p,[first,{partId:'P1.2',board:0,x:808.2,y:5,rotated:false}]).sheets[0];
+  const sheet=manualTimber(p,[first,{partId:'P2.1',board:0,x:808.2,y:5,rotated:false}]).sheets[0];
   const rightCut=sheet.cuts.find(c=>c.x>800);assert.ok(rightCut);
   const layout=timberSeparationLayout(sheet,state(rightCut.step));
   assert.ok(layout.cutOffsets.get(rightCut.workpiece).x>=layout.gap-1e-6);

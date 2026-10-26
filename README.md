@@ -533,3 +533,31 @@ button, picker success/cancel/fallback, language changes during playback, unchan
 project values and the four-step flow. Generated English and Traditional Chinese
 PDFs were parsed and the Chinese guide was visually inspected. These DOM checks
 do not verify delivery to a real browser’s download folder.
+
+
+## Timber cut minimisation (0.23)
+
+Timber now compares placed parts, stock sheets/area, then actual cut count before
+ranking reusable offcuts. Thirty initial layout seeds include a cut-count strategy.
+Each candidate also searches for a simpler guillotine tree at the same part
+positions: matching edges can be cut across the current panel before the parts
+are separated. The search is bounded and always retains the original valid tree;
+it does not claim a globally minimal cut count.
+
+A repeated four-part grid on a 100 × 100 panel with 3 mm kerf drops from seven
+cuts to five. Two 40 × 40 parts on an 83 × 100 panel need two cuts: one shared
+40 mm width-setting cut, then one cut that releases both finished pieces. The
+sample cabinet drops from twelve cuts to eleven while using the same one sheet.
+
+Live statistics include cut count. Review explains shared edges, cuts removed
+from the initial placement sequence, and cuts that release two finished pieces.
+Numbering, prerequisites, board separation, PDF, print and CSV all use the revised
+tree. CSV adds shared_part_edges, released_parts and instructions columns. Manual
+editing retains its placement regions and commands, so Auto Nest → Manual Adjust,
+undo and saved project replay keep the same positions and rotations.
+
+Regression checks cover matching dimensions, differing part lengths, kerf, trim,
+grain, cut dependencies, area conservation, search budget fallback, cut priority,
+manual replay and bilingual keep-both instructions. DOM interaction checks cover
+shared-cut numbering, animation, exports, language switching and the four-step
+workflow. Full browser visual QA is unavailable in this environment.

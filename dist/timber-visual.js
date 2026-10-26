@@ -1,5 +1,5 @@
-import { t, onLanguageChange } from './locale.js?v=0.22.0';
-import { planTimber, optimizeTimber, compareTimberPlans, manualCommandsFromPlan, manualTimber, timberFreeRegions, validateProject } from './timber-planner.js?v=0.21.0';
+import { t, onLanguageChange } from './locale.js?v=0.23.0';
+import { planTimber, optimizeTimber, compareTimberPlans, manualCommandsFromPlan, manualTimber, timberFreeRegions, validateProject } from './timber-planner.js?v=0.23.0';
 const escapeHTML = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const fmt = (n) => Number.isFinite(n) ? Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 }) : '—';
 const colors = ['#e5d2af', '#c8d8b9', '#bed6de', '#d9c7df', '#e9c4ac', '#becadb'];
@@ -47,7 +47,7 @@ export function installTimberVisual({ readProject, changePart, changeStock, addP
   };
   try {
     if (typeof Worker !== 'undefined') {
-      worker = new Worker(new URL('./timber-live-worker.js?v=0.21.0', import.meta.url), { type: 'module' });
+      worker = new Worker(new URL('./timber-live-worker.js?v=0.23.0', import.meta.url), { type: 'module' });
       worker.onmessage = ({ data }) => scheduleResult(data);
       worker.onerror = () => { worker.terminate(); worker = null; if (!workerFailed) { workerFailed = true; runPreview(project, revision); } };
     }
@@ -129,7 +129,7 @@ export function installTimberVisual({ readProject, changePart, changeStock, addP
     renderTray();
     const result = draft.mode === 'manual' ? manual : estimate;
     const total = project.parts.reduce((n, p) => n + (Number.isFinite(p.qty) ? p.qty : 0), 0);
-    $('visual-stats').innerHTML = `<span><strong>${project.parts.length}</strong> part types · 種零件</span><span><strong>${fmt(total)}</strong> pieces · 件</span><span><strong>${result ? result.sheets.length : '—'}</strong> ${draft.mode === 'manual' ? 'sheets used · 已用板' : 'sheets estimated · 預計用板'}</span><span class="${result?.unplaced.length ? 'has-unplaced' : ''}"><strong>${result ? result.unplaced.length : '—'}</strong> ${draft.mode === 'manual' ? 'to place · 待放入' : 'unplaced · 未能放入'}</span><span class="remnant-stat"><strong>${result?.reusableOffcuts?.[0] ? `${fmt(result.reusableOffcuts[0].w)} × ${fmt(result.reusableOffcuts[0].h)}` : '—'}</strong>mm · 最大餘料</span>`;
+    $('visual-stats').innerHTML = `<span><strong>${project.parts.length}</strong> part types · 種零件</span><span><strong>${fmt(total)}</strong> pieces · 件</span><span><strong>${result ? result.sheets.length : '—'}</strong> ${draft.mode === 'manual' ? 'sheets used · 已用板' : 'sheets estimated · 預計用板'}</span><span class="${result?.unplaced.length ? 'has-unplaced' : ''}"><strong>${result ? result.unplaced.length : '—'}</strong> ${draft.mode === 'manual' ? 'to place · 待放入' : 'unplaced · 未能放入'}</span><span class="cut-stat"><strong>${result?.fitness?.cutCount ?? '—'}</strong>${t('cuts','刀切割')}</span><span class="remnant-stat"><strong>${result?.reusableOffcuts?.[0] ? `${fmt(result.reusableOffcuts[0].w)} × ${fmt(result.reusableOffcuts[0].h)}` : '—'}</strong>mm · 最大餘料</span>`;
     root.querySelectorAll('[data-mode]').forEach((e) => e.setAttribute('aria-pressed', String(e.dataset.mode === draft.mode)));
     $('visual-stock-type').innerHTML = project.stocks.map((s, i) => `<option value="${i}" ${i === stockRow ? 'selected' : ''}>${escapeHTML(s.material)} / ${fmt(s.thickness)} mm · ${escapeHTML(s.label || `Stock ${i + 1}`)}</option>`).join('');
     for (const e of root.querySelectorAll('[data-visual-stock]')) if (document.activeElement !== e) e.value = project.stocks[stockRow]?.[e.dataset.visualStock] ?? '';
@@ -141,7 +141,7 @@ export function installTimberVisual({ readProject, changePart, changeStock, addP
     $('visual-improve').disabled = !!error;
     $('visual-improve').textContent = draft.mode === 'manual' ? 'Auto optimise all · 全部自動排料' : optimizing ? 'Stop optimisation · 停止' : 'Improve layout · 繼續優化';
     $('visual-view').setAttribute('aria-pressed', String(iso)); $('visual-view').textContent = iso ? 'Top view · 平面' : 'Isometric · 立體';
-    const description = !project.parts.length ? 'Parts tray is empty. Use ＋ to add a part · 零件區已清空，按 ＋ 新增。' : error ? `完成尺寸後繼續預覽 · ${error}` : notice || (draft.mode === 'manual' ? t('① Select a part on the left. ② Click a green free area to place it. Edges align automatically with room for kerf.','① 點選左邊零件 ② 點綠色空位放入。自動靠邊對齊，預留鋸縫。') : estimate ? t('Compare the whole list, ignoring input order: place all parts, minimise sheets, then preserve the largest offcuts.','自動比較整份清單，不跟輸入先後；先放齊、減少用板，再保留最大餘料。') : '正在更新預覽 · Updating layout…');
+    const description = !project.parts.length ? 'Parts tray is empty. Use ＋ to add a part · 零件區已清空，按 ＋ 新增。' : error ? `完成尺寸後繼續預覽 · ${error}` : notice || (draft.mode === 'manual' ? t('① Select a part on the left. ② Click a green free area to place it. Edges align automatically with room for kerf.','① 點選左邊零件 ② 點綠色空位放入。自動靠邊對齊，預留鋸縫。') : estimate ? t('Compare the whole list, ignoring input order: place all parts, minimise sheets, then reduce cuts by sharing matching edges.','自動比較整份清單，不跟輸入先後；先放齊、減少用板，再共用對齊邊，減少切割。') : '正在更新預覽 · Updating layout…');
     $('visual-instruction').textContent = description;
     $('visual-plan-note').textContent = draft.mode === 'manual' ? t('Manual layout. Free areas follow guillotine cuts; confirm to generate the corresponding cutting sequence.','手動排位：空位會按直線切割分區；確認後產生對應切割次序。') : t('Live estimate, limited by available stock. Confirm to generate the cutting guide.','即時預計，受可用板材數量限制；確認後產生切割指引。');
     if (result?.sheets.length) {
@@ -149,7 +149,7 @@ export function installTimberVisual({ readProject, changePart, changeStock, addP
       for (const board of result.sheets) { const label = `${board.stock.material} ${fmt(board.stock.thickness)} mm`; groups.set(label, (groups.get(label) || 0) + 1); }
       $('visual-plan-note').textContent += t(' Sheets by material: ',' 各物料用板：') + [...groups].map(([label, qty]) => `${label} × ${qty}${t(' sheets',' 張')}`).join('；');
     }
-    if (draft.mode === 'preview') $('visual-plan-note').textContent += t(` ${optimizing ? 'Comparing' : 'Compared'} ${searchTrials} layouts; prioritise all parts, fewer sheets, then larger offcuts.`, ` ${optimizing ? '正在比較排位' : '已比較'} ${searchTrials} 個方案；先放齊、減少用板，再保留最大餘料。`);
+    if (draft.mode === 'preview') $('visual-plan-note').textContent += t(` ${optimizing ? 'Comparing' : 'Compared'} ${searchTrials} layouts; prioritise all parts, fewer sheets, then fewer cuts and usable offcuts.`, ` ${optimizing ? '正在比較排位' : '已比較'} ${searchTrials} 個方案；先放齊、減少用板，再減少切割及保留可用餘料。`);
     onStatusChange();
   }
   onLanguageChange(render);

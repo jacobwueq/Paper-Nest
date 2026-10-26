@@ -1,3 +1,4 @@
+import { simplifyTimberCuts } from './timber-cut-planner.js?v=0.23.0';
 // Rectangular guillotine plans. Every cut spans its current workpiece.
 const EPS = 1e-7;
 const positive = (v) => Number.isFinite(v) && v > 0 && v <= 20000;
@@ -44,7 +45,7 @@ function insert(node, p, rotated, direction, kerf) {
   let target;
   if (direction === 'rip') target = divide(divide(node, 'y', h, kerf), 'x', w, kerf);
   else target = divide(divide(node, 'x', w, kerf), 'y', h, kerf);
-  target.kind = 'part'; target.part = { ...p, rotated, x: target.x, y: target.y, w, h };
+  target.kind = 'part'; target.part = { ...p, placementDirection: direction, rotated, x: target.x, y: target.y, w, h };
 }
 function orientations(p, settings) {
   return settings.rotate && !p.grain && Math.abs(p.length - p.width) > EPS ? [false, true] : [false];
@@ -81,7 +82,7 @@ function build(project, order, strategy) {
       for (const split of splitChoices(leaf, p, rotated, settings, strategy.split)) {
         const areas = split.rectangles.map((r) => r.w * r.h).sort((a, b) => b - a);
         const short = Math.min(leaf.w - w, leaf.h - h), long = Math.max(leaf.w - w, leaf.h - h);
-        let base = strategy.slot === 'short' ? short : strategy.slot === 'long' ? long : strategy.slot === 'remnant' ? -areas[0] : leaf.w * leaf.h - w * h;
+        let base = strategy.slot === 'cuts' ? Number(leaf.w - w > EPS) + Number(leaf.h - h > EPS) : strategy.slot === 'short' ? short : strategy.slot === 'long' ? long : strategy.slot === 'remnant' ? -areas[0] : leaf.w * leaf.h - w * h;
         if (strategy.slot === 'lookahead') {
           const future = order.slice(index + 1, index + 13).filter((q) => materialKey(q) === materialKey(p));
           const fitting = future.filter((q) => split.rectangles.some((r) => orientations(q, settings).some((turn) => fits(r, q, turn)))).length;
@@ -126,16 +127,24 @@ function build(project, order, strategy) {
 }
 function finalizePlan(project, sheets, unplaced, required) {
   let cutLength = 0;
+  sheets = sheets.map((sheet) => {
+    const simplified = simplifyTimberCuts(sheet.root, project.settings.kerf, { direction: project.settings.direction });
+    return { ...sheet, root: simplified.root, cutReduction: simplified.before - simplified.after, originalCutCount: simplified.before };
+  });
   for (const sheet of sheets) {
     sheet.cuts = []; sheet.parts = []; sheet.offcuts = [];
     let nextWorkpiece = 1;
+    const descendants = (node) => node.kind === 'part' ? [node.part] : [...(node.first ? descendants(node.first) : []), ...(node.second ? descendants(node.second) : [])];
     const visit = (node, id, prerequisite = null) => {
       node.id = id;
       if (node.kind === 'cut') {
         const step = sheet.cuts.length + 1;
         const first = `S${sheet.number}-W${nextWorkpiece++}`;
         const second = node.second ? `S${sheet.number}-W${nextWorkpiece++}` : null;
-        sheet.cuts.push({ step, workpiece: id, prerequisite, x: node.x, y: node.y, w: node.w, h: node.h, axis: node.axis, offset: node.amount, kerf: node.kerf, first, second });
+        const edge = node[node.axis] + node.amount, size = node.axis === 'x' ? 'w' : 'h';
+        const edgeParts = descendants(node).filter((p) => Math.abs(p[node.axis] + p[size] - edge) < EPS || Math.abs(p[node.axis] - edge - node.kerf) < EPS).map((p) => p.id);
+        const releasedParts = [node.first, node.second].filter((child) => child?.kind === 'part').map((child) => child.part.id);
+        sheet.cuts.push({ edgeParts, releasedParts, firstPartCount: descendants(node.first).length, secondPartCount: node.second ? descendants(node.second).length : 0, step, workpiece: id, prerequisite, x: node.x, y: node.y, w: node.w, h: node.h, axis: node.axis, offset: node.amount, kerf: node.kerf, first, second });
         cutLength += node.axis === 'x' ? node.h : node.w;
         visit(node.first, first, step);
         if (node.second) visit(node.second, second, step);
@@ -174,7 +183,7 @@ export function manualCommandsFromPlan(project, plan) {
     const leaf = leaves(boards[board].root).find((r) => Math.abs(r.x - part.x) < EPS && Math.abs(r.y - part.y) < EPS);
     if (!leaf || !fits(leaf, part, part.rotated)) throw new Error('The automatic layout changed. Please return to Auto Nest.');
     const firstCut = sheet.cuts.find((c) => Math.abs(c.x - leaf.x) < EPS && Math.abs(c.y - leaf.y) < EPS && Math.abs(c.w - leaf.w) < EPS && Math.abs(c.h - leaf.h) < EPS);
-    const direction = firstCut?.axis === 'y' ? 'rip' : 'cross';
+    const direction = part.placementDirection || (firstCut?.axis === 'y' ? 'rip' : 'cross');
     const command = { partId: id, board, x: leaf.x, y: leaf.y, rotated: part.rotated, direction };
     insert(leaf, part, part.rotated, direction, project.settings.kerf); commands.push(command);
   }
@@ -203,15 +212,20 @@ export function manualTimber(project, commands = []) {
   }
   const used = boards.filter((board) => leaves(board.root).length !== 1 || board.root.kind !== 'free');
   const plan = finalizePlan(project, used, expanded.filter((p) => !placed.has(p.id)), expanded.length);
+  // Editing keeps the original placement regions; review uses the simplified cutting tree.
+  for (const sheet of plan.sheets) boards[sheet.number - 1].parts = sheet.parts;
   return { ...plan, boards, manual: true };
 }
 export function compareTimberPlans(a, b) {
   const primary = compareNumbers(a.fitness.primary, b.fitness.primary);
   if (primary) return primary;
-  // Like Laser: R1 wins before R2, then R3. Small scraps cannot buy a smaller R1.
+  // After placement and sheet use, fewer saw strokes win before offcut size.
+  const cuts = a.fitness.cutCount - b.fitness.cutCount;
+  if (cuts) return cuts;
+  // For equal cut counts, preserve R1 before R2, then R3.
   const offcuts = compareNumbers(a.fitness.offcuts, b.fitness.offcuts);
   if (offcuts) return -offcuts;
-  return compareNumbers([a.fitness.occupiedArea, a.fitness.cutLength, a.fitness.cutCount], [b.fitness.occupiedArea, b.fitness.cutLength, b.fitness.cutCount]);
+  return compareNumbers([a.fitness.occupiedArea, a.fitness.cutLength], [b.fitness.occupiedArea, b.fitness.cutLength]);
 }
 function expand(project) {
   return project.parts.flatMap((p, row) => Array.from({ length: p.qty }, (_, copy) => ({ ...p, row, copy: copy + 1, id: `P${row + 1}.${copy + 1}`, label: p.label || `Part ${row + 1}` }))).sort(canonicalPart);
@@ -225,6 +239,7 @@ const strategies = [
   { slot: 'long', split: 'auto', stock: 'small' },
   { slot: 'remnant', split: 'auto', stock: 'small' },
   { slot: 'lookahead', split: 'auto', stock: 'small' },
+  { slot: 'cuts', split: 'auto', stock: 'small' },
 ];
 const sorts = [
   (a, b) => b.length * b.width - a.length * a.width,
@@ -259,9 +274,10 @@ function* candidates(project, warm) {
   // Evaluate complementary sorts and split directions, independently of row order.
   for (let i = 0; i < 24; i++) {
     const sort = sorts[Math.floor(i / 4)];
-    const strategy = strategies[(i % 4 + Math.floor(i / 4) * 3) % strategies.length];
+    const strategy = strategies[(i % 4 + Math.floor(i / 4) * 3) % 8];
     yield record([...expanded].sort(priorityOrder(project, sort)), strategy);
   }
+  for (const sort of sorts) yield record([...expanded].sort(priorityOrder(project, sort)), strategies[8]);
   for (let i = 0; ; i++) {
     if (i < 24) {
       const strategy = strategies[Math.floor(i / sorts.length) + 4];
@@ -289,7 +305,7 @@ export function planTimber(project) {
   let best, trials = 0;
   for (const plan of candidates(project)) {
     trials++; if (!best || compareTimberPlans(plan, best) < 0) best = plan;
-    if (trials >= 24) break;
+    if (trials >= 30) break;
   }
   best.searchKey = searchKey(project); best.search = { trials, complete: true };
   return best;

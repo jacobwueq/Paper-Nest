@@ -1,14 +1,14 @@
-import { t, onLanguageChange } from './locale.js?v=0.22.0';
+import { t, onLanguageChange } from './locale.js?v=0.23.0';
 const steps = [
   ['Setup 設定', 'Setup · 設定', 'Enter stock sizes, part dimensions and quantities. Watch the live preview as you type. 設定板材及零件，輸入時即時預覽。'],
-  ['Auto Nest 排料', 'Auto Nest · 自動排料', 'Compare layouts for fewer sheets and larger offcuts. Use Improve layout to keep searching. 自動比較排位，盡量慳板、保留大塊餘料。'],
+  ['Auto Nest 排料', 'Auto Nest · 自動排料', 'Compare layouts for fewer sheets and fewer cuts. Matching edges share straight cuts; useful offcuts break ties. 自動比較排位，盡量慳板、保留大塊餘料。'],
   ['Manual Adjust 微調', 'Manual Adjust · 手動微調（可選）', 'Start from your current layout. Undo recent placements, then select a part and click a free region to reposition it. 承接目前排位；可撤銷後重新放置，或直接去檢查及匯出。'],
   ['Review & Export 匯出', 'Review & Export · 檢查及匯出', 'Play the cutting sequence, inspect the separated pieces, then print or download the cutting guide. 播放切割次序、核對板件，再列印或下載。'],
 ];
 const titles = [['Setup','設定'],['Auto Nest','自動排料'],['Manual Adjust','手動微調'],['Review & Export','檢查及匯出']];
 const help = [
  ['Enter stock sizes, part dimensions and quantities. Watch the live preview as you type.','設定板材、零件尺寸及數量，輸入時即時預覽。'],
- ['Compare layouts for fewer sheets and larger offcuts. Use Improve layout to keep searching.','自動比較排位，盡量減少用板、保留大塊餘料；可按「繼續優化」再搜尋。'],
+ ['Compare layouts for fewer sheets and fewer cuts. Matching edges share straight cuts; useful offcuts break ties.','自動比較排位，先減少用板，再共用對齊邊以減少切割；相同刀數時保留較大餘料。'],
  ['Continue your manual layout, or start from Auto Nest. Undo recent placements, then select a part and a free region to reposition it. This step is optional.','承接手動排位，或由自動方案開始；可撤銷最近放置，再選零件及空位重新放入。此步驟可略過。'],
  ['Play the cutting sequence, inspect the separated pieces, then print or download the cutting guide.','播放切割次序、核對分開後嘅板件，再列印或下載切割指引。'],
 ];
