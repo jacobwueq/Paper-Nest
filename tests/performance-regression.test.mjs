@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { compactLayout } from "../dist/compaction.js";
-import { profiled } from "../dist/nesting-profile.js?v=0.13.0";
+// Same module instance as dist/, whose imports carry the current VERSION tag.
+const { profiled } = await import(`../dist/nesting-profile.js?v=${(await import("node:fs")).readFileSync(new URL("../VERSION", import.meta.url), "utf8").trim()}`);
 import { evaluateLayout } from "../dist/search.js";
 import { transformed, sampleParts } from "../dist/geometry.js";
 import "../dist/engine/util/offcut.js";

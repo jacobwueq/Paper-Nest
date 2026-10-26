@@ -406,7 +406,8 @@ test("J: all new features disabled match frozen v0.9.2 placements, scoring and c
 });
 
 import { clusterPierceLowerBound } from "../dist/cluster-pierces.js";
-import { profiled } from "../dist/nesting-profile.js?v=0.13.0";
+// Same module instance as dist/, whose imports carry the current VERSION tag.
+const { profiled } = await import(`../dist/nesting-profile.js?v=${(await import("node:fs")).readFileSync(new URL("../VERSION", import.meta.url), "utf8").trim()}`);
 test("pierce lower bound retains separate holes after joining outer contours", () => {
   const parts = [box("a"), box("b")];
   parts[0].entities.push({ kind: "circle", cx: 8, cy: 5, r: 1, layer: "CUT" });
