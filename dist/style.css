@@ -11,12 +11,9 @@
     "Segoe UI",
     "Noto Sans TC",
     sans-serif;
-  color: #172132;
-  background: #f3f5f8;
+  color: var(--ink);
+  background: var(--page);
   font-size: 16px;
-  --blue: #2154e9;
-  --line: #dfe4ec;
-  --muted: #687385;
 }
 .workspace-home { color: #d8e3fb; text-decoration: none; font-size: 13px; white-space: nowrap; }
 .workspace-home:hover { text-decoration: underline; }
@@ -1518,7 +1515,7 @@ body[data-stage="export"] .controls {
 }
 .export-final-label {
   margin: 20px 0 8px;
-  color: #16704b;
+  color: var(--accent-strong);
   font-size: 12px;
   font-weight: 700;
 }
@@ -1528,22 +1525,22 @@ body[data-stage="export"] .controls {
   align-items: center;
   gap: 3px;
   min-height: 58px;
-  background: #16704b;
-  border-color: #16704b;
+  background: var(--accent);
+  border-color: var(--accent);
   color: #fff;
   font-size: 14px;
   font-weight: 650;
 }
 #export.export-final:hover:enabled {
-  background: #10583b;
-  border-color: #10583b;
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
   filter: none;
 }
 #export.export-final:active:enabled {
-  background: #0d4931;
+  background: var(--accent-strong);
 }
 #export.export-final:focus-visible {
-  outline-color: #16704b;
+  outline-color: var(--accent);
 }
 @media (min-width: 801px) and (max-width: 1099px) {
   body[data-stage="export"] .workspace {

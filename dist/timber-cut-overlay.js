@@ -42,7 +42,7 @@ export function timberCutOverlay(sheet, selectedStep = 0, playback = null) {
   const lines = segments.map(({ cut, x1, y1, x2, y2 }) => {
     const active = cut.step === selectedStep;
     const completed = playback?.active && cut.step <= playback.completedThrough;
-    return `<g data-cut-workpiece="${escWorkpiece(cut.workpiece)}"><line data-cut-line="${cut.step}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${completed ? '#4f805e' : active ? '#c64a31' : '#ad7057'}" stroke-width="${size / (active ? 450 : 950)}" opacity="${playback?.active && !active && !completed ? .4 : 1}" ${active || completed ? '' : `stroke-dasharray="${size / 260} ${size / 390}"`}/></g>`;
+    return `<g data-cut-workpiece="${escWorkpiece(cut.workpiece)}"><line data-cut-line="${cut.step}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${completed ? '#4f805e' : active ? '#b3261e' : '#ad7057'}" stroke-width="${size / (active ? 450 : 950)}" opacity="${playback?.active && !active && !completed ? .4 : 1}" ${active || completed ? '' : `stroke-dasharray="${size / 260} ${size / 390}"`}/></g>`;
   }).join('');
   const leaders = [];
   const labels = badges.map((badge) => {

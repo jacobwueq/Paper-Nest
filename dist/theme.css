@@ -1,0 +1,78 @@
+/*
+ * Paper Nest colour language / 顏色語言
+ *
+ * One shared set of colour names for every page. Each workspace sets its own
+ * accent; everything else is neutral or carries a fixed meaning.
+ *   Timber 木材 = orange   ·   Paper / laser 紙材 = blue
+ *   Green = reusable offcut · Red = current / selected cut · Amber = warning
+ *
+ * Load this file before every other stylesheet. Page stylesheets use these
+ * names instead of typing colours directly.
+ */
+:root {
+  /* Neutrals */
+  --ink: #172536;
+  --ink-2: #3b4958;
+  --muted: #677382;
+  --subtle: #8a939d;
+  --line: #dce1e6;
+  --line-strong: #cfd6de;
+  --surface: #ffffff;
+  --surface-2: #f6f7f8;
+  --page: #f5f6f7;
+  --navy: #111e31;
+
+  /* Fixed meanings (same in both workspaces) */
+  --offcut: #2f7a52;
+  --offcut-soft: #eaf3ec;
+  --offcut-line: #b9d6c2;
+  --cut: #b3261e;
+  --warn: #8a5a12;
+  --warn-soft: #fff5e5;
+  --warn-line: #e9d5ad;
+
+  /* Workspace accents */
+  --timber: #c2570c;
+  --timber-strong: #9a420a;
+  --timber-hover: #a94b0a;
+  --timber-soft: #fff3e8;
+  --timber-line: #f0c49c;
+  --paper: #2154e9;
+  --paper-strong: #1a43ba;
+  --paper-hover: #1b47c9;
+  --paper-soft: #eef3ff;
+  --paper-line: #a9bdec;
+
+  /* Default accent: paper blue */
+  --accent: var(--paper);
+  --accent-strong: var(--paper-strong);
+  --accent-hover: var(--paper-hover);
+  --accent-soft: var(--paper-soft);
+  --accent-line: var(--paper-line);
+  --blue: var(--accent);
+}
+
+/* Timber workspace and anything marked as timber */
+.timber-page,
+.timber-card {
+  --accent: var(--timber);
+  --accent-strong: var(--timber-strong);
+  --accent-hover: var(--timber-hover);
+  --accent-soft: var(--timber-soft);
+  --accent-line: var(--timber-line);
+}
+
+/* The chooser itself is neutral; each card carries its own accent */
+.home-page {
+  --accent: var(--ink-2);
+  --accent-strong: var(--ink);
+  --accent-soft: var(--surface-2);
+  --accent-line: var(--line-strong);
+}
+.laser-card {
+  --accent: var(--paper);
+  --accent-strong: var(--paper-strong);
+  --accent-hover: var(--paper-hover);
+  --accent-soft: var(--paper-soft);
+  --accent-line: var(--paper-line);
+}
