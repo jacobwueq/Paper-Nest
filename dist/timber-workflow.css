@@ -12,3 +12,24 @@
 .timber-page[data-timber-step] #visual-confirm{display:none}
 .timber-page[data-timber-step] .visual-footer{justify-content:flex-end}
 .timber-workflow-footer .primary-button:hover:enabled{background:var(--accent-hover);filter:none}
+
+/* 0.25 · Canvas first. The step tabs already say where you are, so the page title shrinks,
+   the repeated headings go, and the live numbers become easier to read. */
+.timber-page .timber-main{padding-top:20px}
+.timber-page .page-heading{margin-bottom:14px;align-items:center}
+.timber-page .page-heading .eyebrow,.timber-page .page-heading p:not(.eyebrow){display:none}
+.timber-page .page-heading h1{font-size:22px;letter-spacing:-.5px;margin:0}
+.timber-page .heading-actions .quiet-button{min-height:32px;padding:7px 11px;font-size:11px}
+.timber-step-tabs{padding:8px;gap:6px}
+.timber-step-tabs button{padding:10px 14px;font-size:13px;min-width:150px}
+.timber-step-intro{padding:12px 3px 14px}
+.timber-step-intro h2{display:none}
+.timber-step-intro p{font-size:12px;color:var(--muted)}
+.timber-page[data-timber-step] .visual-heading{display:none}
+.timber-page .settings-bar{padding:14px 20px;margin-bottom:16px;gap:16px}
+.timber-page .visual-stats{gap:30px;min-height:58px}
+.timber-page .visual-stats>span{font-size:11px;color:var(--muted)}
+.timber-page .visual-stats strong{font-size:22px;color:var(--ink)}
+.timber-page .visual-stats .has-unplaced strong{color:var(--warn)}
+.timber-page .visual-stats .remnant-stat{color:var(--offcut)}
+@media(max-width:760px){.timber-step-tabs button{min-width:140px;padding:10px 12px;font-size:12px}.timber-page .page-heading{flex-direction:column;align-items:flex-start;gap:10px}}

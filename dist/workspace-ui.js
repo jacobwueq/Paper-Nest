@@ -59,14 +59,17 @@ export function installWorkspace({
   }
   panels.setup.append(sections[0], sections[1]);
   panels.optimise.append(sections[2]);
+  // Settings in three levels: essentials stay visible (drawing, sheet size, gap, margin);
+  // "More options" holds everyday adjustments; "Expert settings" holds search tuning.
+  const adjust = document.createElement("details");
+  adjust.className = "settings-tier settings-adjust";
+  adjust.innerHTML = "<summary>More options · 更多選項</summary>";
   const advanced = document.createElement("details");
-  advanced.innerHTML = "<summary>Advanced settings · 進階設定</summary>";
-  panels.setup.append(advanced);
-  for (const id of ["common-edge", "multi-part-clusters"])
-    panels.setup.append($(id).closest("label"));
+  advanced.className = "settings-tier settings-expert";
+  advanced.innerHTML = "<summary>Expert settings · 專家設定</summary>";
+  panels.setup.append(adjust, advanced);
   for (const id of [
     "offcut-shape-weight",
-    "min-offcut-side",
     "pair-clusters",
     "max-cluster-parts",
     "cluster-beam-width",
@@ -86,7 +89,23 @@ export function installWorkspace({
   material.className = "field";
   material.innerHTML =
     '<label for="material-label">Material · 材料（記錄用）</label><select id="material-label"><option>Paper / 紙</option><option>Card / 卡紙</option><option>Other / 其他</option></select><label for="separation-kerf">Separation kerf · 分離切線刀縫 (mm)</label><input id="separation-kerf" type="number" min="0" max="10" step="0.01" value="0.15"><p class="help">Kerf clearance for separation cuts only; part geometry stays unchanged.<br>只用於分離線避讓；不補償零件輪廓。</p>';
-  sections[1].prepend(material);
+  const unitsField = $("units").closest(".field"),
+    unitsHelp = unitsField.nextElementSibling?.classList.contains("help")
+      ? unitsField.nextElementSibling
+      : null;
+  adjust.append(unitsField);
+  if (unitsHelp) adjust.append(unitsHelp);
+  adjust.append(material);
+  const scaleHelp = [...sections[1].querySelectorAll(".help")].find((p) =>
+    /100% keeps/.test(p.textContent),
+  );
+  for (const id of ["rotation", "scale", "allow-mirror", "min-offcut-side"]) {
+    const input = $(id);
+    adjust.append(input.closest(".field") || input.closest("label") || input);
+    if (id === "scale" && scaleHelp) adjust.append(scaleHelp);
+  }
+  for (const id of ["common-edge", "multi-part-clusters"])
+    adjust.append($(id).closest("label"));
   const list = document.createElement("details");
   list.innerHTML = "<summary>Parts & details · 零件及詳情</summary>";
   list.append($("parts-list"), $("inspector"));

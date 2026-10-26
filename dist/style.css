@@ -1618,3 +1618,16 @@ body[data-stage="export"] .controls {
   border-color: var(--line);
   opacity: 1;
 }
+
+/* 0.25 · Settings tiers */
+.controls details.settings-tier > summary {
+  padding: 4px 0;
+  color: var(--ink-2);
+}
+.controls details.settings-tier[open] > summary {
+  margin-bottom: 10px;
+}
+.controls details.settings-expert > summary {
+  color: var(--muted);
+  font-weight: 500;
+}
