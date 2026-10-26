@@ -12,18 +12,25 @@ function clock(options = {}) {
   return {player,advance,frames,seen,traces};
 }
 test('play traces each cut in order, marks completion and replays from the start', () => {
-  const {player,advance,seen,frames}=clock();player.play();advance(10);
+  const {player,advance,seen,frames}=clock();player.play();advance(5);
   assert.equal(player.state.step,1);assert.ok(player.state.progress>0 && player.state.progress<1);
-  advance(20);assert.equal(player.state.step,2);assert.equal(player.state.completedThrough,1);
-  advance(25);assert.equal(player.state.finished,true);assert.equal(player.state.completedThrough,2);assert.equal(frames.size,0);
+  advance(10);assert.equal(player.state.step,2);assert.equal(player.state.completedThrough,1);
+  advance(15);assert.equal(player.state.finished,true);assert.equal(player.state.completedThrough,2);assert.equal(frames.size,0);
   assert.deepEqual(seen.filter(s=>s.playing).map(s=>s.step),[1,2]);
   player.play();assert.equal(player.state.step,1);assert.equal(player.state.progress,0);player.pause();
 });
-test('pause preserves the stroke position, resume continues it, and speed changes timing', () => {
-  const {player,advance,frames}=clock();player.play();advance(9);const p=player.state.progress;
+test('fixed 2x playback preserves the stroke position when paused and resumed', () => {
+  const {player,advance,frames}=clock();player.play();advance(5);const p=player.state.progress;
+  assert.equal(player.state.speed,2);assert.equal(p,800/1800);
   player.pause();advance(20);assert.equal(player.state.progress,p);assert.equal(frames.size,0);
-  player.setSpeed(2);player.play();advance(3);assert.ok(player.state.progress>p);player.pause();
-  player.setSpeed(99);assert.equal(player.state.speed,2);
+  player.play();advance(3);assert.ok(player.state.progress>p);player.pause();
+});
+test('clicking a cut starts it immediately and replaces any previous animation', () => {
+  const {player,advance,frames}=clock();player.setCuts(Array.from({length:5},(_,i)=>({...cuts[0],step:i+1})));
+  player.playFrom(4);assert.equal(player.state.step,4);assert.equal(player.state.playing,true);assert.equal(player.state.progress,0);assert.equal(player.state.completedThrough,3);
+  advance(4);assert.ok(player.state.progress>0);player.playFrom(2);
+  assert.equal(player.state.step,2);assert.equal(player.state.progress,0);assert.equal(frames.size,1,'only one animation loop may be active');
+  player.pause();
 });
 test('seeking pauses playback, and changing or clearing a sheet cancels old frames', () => {
   const {player,advance,frames}=clock();player.play();advance(5);player.seek(2);

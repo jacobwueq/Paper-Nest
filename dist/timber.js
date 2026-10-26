@@ -1,7 +1,7 @@
 import { planTimber, validateProject, parseCSV, toCSV } from './timber-planner.js?v=0.18.0';
 import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.18.0';
 import { timberCutOverlay } from './timber-cut-overlay.js?v=0.20.0';
-import { installCutPlayback } from './timber-playback.js?v=0.20.0';
+import { installCutPlayback } from './timber-playback.js?v=0.20.1';
 import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.20.0';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');

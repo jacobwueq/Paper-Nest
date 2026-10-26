@@ -72,7 +72,8 @@ view without selecting a step. Selecting a step adds red emphasis while keeping
 all other numbers visible. Number badges avoid one another; crowded layouts use
 leader lines and an expanded right margin when needed.
 The final sheet layout also offers **Play cuts**, Pause, previous/next cut,
-Restart and 0.5×/1×/2× speed. A moving marker traces each cut within its current
+Restart and a fixed 2× playback speed. Clicking a cutting-sequence instruction
+starts playback immediately from that cut, with earlier cuts already separated. A moving marker traces each cut within its current
 workpiece; finished cuts turn green and the matching guide instruction follows
 the selected step. Playback starts after edge preparation. It pauses for printing
 or a hidden page and resets when the sheet or plan changes. Print/PDF outputs
