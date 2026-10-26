@@ -1,4 +1,4 @@
-import { scheduleTimberPasses } from './timber-cut-passes.js?v=0.25.0';
+import { scheduleCuts } from './timber-cut-passes.js?v=0.25.4';
 // Re-slice a fixed layout so aligned part edges can share one full-workpiece cut.
 // A bounded memoised search always retains the original valid slicing tree.
 const EPS = 1e-7;
@@ -23,7 +23,7 @@ function result(node, first, second) {
   if (node.kind !== 'cut') return { node, count: 0, length: 0, offcuts: node.kind === 'free' && Math.min(node.w, node.h) >= 50 - EPS ? [node.w * node.h] : [] };
   return { node, count: 1 + first.count + (second?.count || 0), length: (node.axis === 'x' ? node.h : node.w) + first.length + (second?.length || 0), offcuts: [...first.offcuts, ...(second?.offcuts || [])].sort((a, b) => b - a) };
 }
-export function simplifyTimberCuts(root, kerf, { direction = 'auto', maxStates = 900 } = {}) {
+export function simplifyTimberCuts(root, kerf, { direction = 'auto', saw = 'panel', maxStates = 900 } = {}) {
   const originals = new Map(), memo = new Map(), parts = [];
   const index = (node) => {
     if (node.kind === 'part') parts.push(node.part);
@@ -31,7 +31,7 @@ export function simplifyTimberCuts(root, kerf, { direction = 'auto', maxStates =
     originals.set(key(node), entry); return entry;
   };
   const baseline = index(root);
-  if (baseline.count <= Math.max(0, parts.length - 1)) { const schedule = scheduleTimberPasses(root); return { root: copy(root), before: baseline.count, after: schedule.count, splitCount: baseline.count, alignmentCost: schedule.alignmentCost }; }
+  if (baseline.count <= Math.max(0, parts.length - 1)) { const schedule = scheduleCuts(root, saw); return { root: copy(root), before: baseline.count, after: schedule.count, splitCount: baseline.count, alignmentCost: schedule.alignmentCost }; }
   let states = 0;
   const roots = [baseline];
   function solve(region, inside, isRoot = false) {
@@ -82,7 +82,9 @@ export function simplifyTimberCuts(root, kerf, { direction = 'auto', maxStates =
   }
   // Compare whole-line sweeps as well as locally efficient slicing trees.
   // Coverage favours a shared height across a row before narrow column cuts.
-  function sweep(region, inside, bias, forced = null) {
+  // With `lines`, a straight line already cut elsewhere is reused first, so pieces that sit
+  // side by side are divided in the same order and later cuts can pass through them together.
+  function sweep(region, inside, bias, forced = null, lines = null) {
     if (!inside.length) return result({ ...region, kind: 'free' });
     if (inside.length === 1) { const p = inside[0]; if (close(p.x,region.x) && close(p.y,region.y) && close(p.w,region.w) && close(p.h,region.h)) return result({ ...region, kind:'part', part:p }); }
     const choices = [];
@@ -99,15 +101,19 @@ export function simplifyTimberCuts(root, kerf, { direction = 'auto', maxStates =
         }
         if(!valid)continue;
         intervals.sort((a,b)=>a[0]-b[0]);let coverage=0,end=-Infinity;
-        for(const [a,b] of intervals){coverage+=Math.max(0,b-Math.max(a,end));end=Math.max(end,b);}
-        choices.push({axis,size,position,consumed,first,second,coverage:coverage/region[extent],aligned:intervals.length});
+        // A kerf-wide gap between neighbouring parts is still one straight line through the panel.
+        for(const [a,b] of intervals){const from=end>-Infinity&&a-end<=kerf+EPS?end:a;coverage+=Math.max(0,b-Math.max(from,end));end=Math.max(end,b);}
+        choices.push({axis,size,position,consumed,first,second,coverage:coverage/region[extent],aligned:intervals.length,clears:!first.length||!second.length});
       }
     }
-    choices.sort((a,b)=>b.coverage-a.coverage || Number(b.axis===bias)-Number(a.axis===bias) || b.aligned-a.aligned || Math.abs(a.first.length-a.second.length)-Math.abs(b.first.length-b.second.length) || a.position-b.position);
+    // Between equally straight lines, strip waste off the panel before dividing it.
+    const lineOf = (c) => `${c.axis}:${c.position.toFixed(7)}`, order = (c) => lines?.get(lineOf(c)) ?? Infinity;
+    choices.sort((a,b)=>(order(a)-order(b) || 0) || b.coverage-a.coverage || Number(b.clears)-Number(a.clears) || Number(b.axis===bias)-Number(a.axis===bias) || b.aligned-a.aligned || Math.abs(a.first.length-a.second.length)-Math.abs(b.first.length-b.second.length) || a.position-b.position);
     for(const c of choices){
-      const a=sweep({...region,[c.size]:c.position-region[c.axis]},c.first,bias);if(!a)continue;
+      if (lines && !lines.has(lineOf(c))) lines.set(lineOf(c), lines.size);
+      const a=sweep({...region,[c.size]:c.position-region[c.axis]},c.first,bias,null,lines);if(!a)continue;
       const remaining=region[c.axis]+region[c.size]-c.position-c.consumed;
-      const b=remaining>EPS?sweep({...region,[c.axis]:c.position+c.consumed,[c.size]:remaining},c.second,bias):null;if(remaining>EPS&&!b)continue;
+      const b=remaining>EPS?sweep({...region,[c.axis]:c.position+c.consumed,[c.size]:remaining},c.second,bias,null,lines):null;if(remaining>EPS&&!b)continue;
       return result({...region,kind:'cut',axis:c.axis,amount:c.position-region[c.axis],kerf:c.consumed,first:a.node,...(b?{second:b.node}:{})},a,b);
     }
     return originals.get(key(region)) || null;
@@ -115,12 +121,16 @@ export function simplifyTimberCuts(root, kerf, { direction = 'auto', maxStates =
   solve(rectangle(root), parts, true);
   if (maxStates > 0) {
     const starts = [...new Map(roots.filter((entry)=>entry.node.kind==='cut').map((entry)=>[`${entry.node.axis}:${entry.node.amount.toFixed(7)}`,entry.node])).values()];
-    for(const start of starts.slice(0,parts.length>80?1:12)) for(const bias of ['y','x']) {
-      const entry=sweep(rectangle(root),parts,bias,start);if(entry)roots.push(entry);
+    for(const start of starts.slice(0,parts.length>80?1:12)) for(const bias of ['y','x']) for(const reuse of [false,true]) {
+      const entry=sweep(rectangle(root),parts,bias,start,reuse?new Map():null);if(entry)roots.push(entry);
     }
   }
-  const candidates = roots.map((entry) => ({ entry, schedule: scheduleTimberPasses(entry.node) }));
-  candidates.sort((a, b) => a.schedule.count - b.schedule.count || a.schedule.alignmentCost - b.schedule.alignmentCost || compare(a.entry, b.entry));
+  const candidates = roots.map((entry) => ({ entry, schedule: scheduleCuts(entry.node, saw) }));
+  // Equal pass counts: fewer pieces held in alignment, then shorter aligned lines, so long
+  // lines are cut while the panel is still one piece.
+  // Table saw: fewer fence settings, then fewer pieces fed through the saw, then fewer steps.
+  if (saw === 'table') candidates.sort((a, b) => a.schedule.setups - b.schedule.setups || a.schedule.feeds - b.schedule.feeds || a.schedule.count - b.schedule.count || compare(a.entry, b.entry));
+  else candidates.sort((a, b) => a.schedule.count - b.schedule.count || a.schedule.alignmentCost - b.schedule.alignmentCost || a.schedule.alignmentLength - b.schedule.alignmentLength || compare(a.entry, b.entry));
   const best = candidates[0];
   return { root: copy(best.entry.node), before: baseline.count, after: best.schedule.count, splitCount: best.entry.count, alignmentCost: best.schedule.alignmentCost };
 }

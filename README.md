@@ -620,3 +620,29 @@ The laser and about pages show one language at a time (`data-single-language`).
 the text stays in the page. Inline glosses such as `Shared / 共邊 12 mm` keep the
 matching side. Laser setup shows drawing, sheet size, gap and margin; everyday
 adjustments sit under **More options** and search tuning under **Expert settings**.
+
+
+## Saw type and cut order (0.25)
+
+Timber Setup has a **Saw** setting, saved with the project (older projects default to
+panel saw). The finished parts and their positions can be the same; what changes is
+how the cutting guide orders and groups the cuts.
+
+- **Panel saw · long lines first** (vertical wall saw, track saw). Pieces stay where
+  they are, so one pass may run through several workpieces held in line. Waste strips
+  come off first, then a straight line that crosses the whole panel is cut while the
+  panel is still one piece, and the pieces either side are then divided in the same
+  order so later cuts pass through them together. Among plans with the same number of
+  passes, fewer and shorter "keep aligned" passes win. Candidate trees now treat a
+  kerf-wide gap between neighbouring parts as part of one straight line and include a
+  sweep that reuses lines already cut, in the order they were cut.
+- **Table saw · fence settings**. Each piece is fed on its own, so no step asks for
+  pieces to be held in line. Pieces that are ready together and need the same fence
+  distance share one step ("Fence at 450 mm · 3 pieces, one after another"); when a cut
+  produces another piece needing that distance, the next step keeps the fence where it
+  is ("fence unchanged"). Plans compare fence settings, then pieces fed, then steps.
+  The fence distance is measured from the workpiece's left or top edge, as in the guide.
+
+The 26 Oct 2026 screenshot is a regression fixture (`tests/timber-saw-modes.test.mjs`):
+on a panel saw the order is bottom strip, right strip, the 450 mm line across the
+2,254.4 mm panel, then the 720 and 764 mm column cuts through both strips.

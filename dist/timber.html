@@ -2,7 +2,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Timber Cutting · Paper Nest</title>
 <meta name="description" content="Plan sheet timber cutting lists with saw kerf, grain direction, priorities and numbered guillotine cutting guides.">
 <link rel="icon" href="favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="theme.css?v=0.25.0">
-<link rel="stylesheet" href="timber.css?v=0.25.1"><link rel="stylesheet" href="timber-visual.css?v=0.25.0"><link rel="stylesheet" href="timber-workflow.css?v=0.25.2"><script type="module" src="timber.js?v=0.25.1"></script><link rel="stylesheet" href="locale.css?v=0.25.1"><script type="module" src="locale.js?v=0.25.3"></script></head><body class="timber-page">
+<link rel="stylesheet" href="timber.css?v=0.25.4"><link rel="stylesheet" href="timber-visual.css?v=0.25.4"><link rel="stylesheet" href="timber-workflow.css?v=0.25.4"><script type="module" src="timber.js?v=0.25.4"></script><link rel="stylesheet" href="locale.css?v=0.25.4"><script type="module" src="locale.js?v=0.25.4"></script></head><body class="timber-page">
 <header class="studio-header"><a class="studio-brand" href="./"><svg viewBox="0 0 30 30" aria-hidden="true"><path d="M3 3h13v9H3zM19 3h8v24H16v-9H3v9h8V13h8z" fill="currentColor"/></svg><span>Paper Nest <small>紙材排料</small></span></a><nav aria-label="Workspace"><a href="./">← Choose workspace</a><span class="workspace-pill">TIMBER · 木材</span><a href="laser.html">Laser cutting ↗</a></nav></header>
 <main class="timber-main"><div class="page-heading"><div><p class="eyebrow">SHEET TIMBER / 開料工作室</p><h1>Your timber, brought to life.</h1><p>一路輸入尺寸，一路睇到零件同板材。Preview every piece, place it on a sheet, then make your cutting guide.</p></div><div class="heading-actions"><button type="button" id="sample" class="quiet-button">Load sample</button><button type="button" id="project-download" class="quiet-button">Save project ↓</button><label class="quiet-button file-label">Open project<input id="project-upload" type="file" accept=".json,application/json" hidden></label></div></div>
 <div id="timber-workflow"></div>
@@ -11,6 +11,7 @@
 <label class="project-name">Project name<input id="project-name" maxlength="100" value="Workshop cabinet"></label>
 <label>Saw kerf · 鋸縫<div class="input-unit"><input id="kerf" type="number" min="0" max="100" step="0.1" value="3.2" required><span>mm</span></div></label>
 <label>Trim each edge · 修邊<div class="input-unit"><input id="trim" type="number" min="0" max="100" step="0.1" value="5" required><span>mm</span></div></label>
+<label>Saw<select id="saw"><option value="panel">Panel saw · long lines first</option><option value="table">Table saw · fence settings</option></select></label>
 <label>Cutting direction<select id="direction"><option value="auto">Auto · minimise cuts</option><option value="rip">Rip first · along grain</option><option value="cross">Crosscut first · across grain</option></select></label>
 <label class="check-label"><input id="rotate" type="checkbox" checked><span>Allow 90° rotation<small>Only parts without grain lock</small></span></label><label class="check-label"><input id="use-priorities" type="checkbox"><span>Use part priorities<small>Optional · 預設不按先後次序</small></span></label></section>
 <section id="timber-visual" aria-label="Live timber visual workspace"></section>
