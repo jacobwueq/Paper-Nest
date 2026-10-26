@@ -647,6 +647,10 @@ how the cutting guide orders and groups the cuts.
   "fence unchanged". Fence capacity is not limited. The cut-guide CSV adds `saw`,
   `fence_mm` and `fence_edge`.
 
+The ⓘ button beside **Saw** opens a floating explainer (`dist/timber-saw-help.js`): why
+the board-still / blade-still difference changes the cut order, with a small diagram
+of each saw and a button to choose it. It closes with ×, Escape or a click outside.
+
 The 26 Oct 2026 screenshot is a regression fixture (`tests/timber-saw-modes.test.mjs`):
 on a panel saw the order is bottom strip, right strip, the 450 mm line across the
 2,254.4 mm panel, then the 720 and 764 mm column cuts through both strips.

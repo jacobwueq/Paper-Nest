@@ -8,6 +8,7 @@ import { t, getLanguage, onLanguageChange } from './locale.js?v=0.25.4';
 import { saveFile } from './file-download.js?v=0.25.4';
 import { createTimberPDF, loadPDFTools } from './timber-pdf.js?v=0.25.4';
 import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency } from './timber-text.js?v=0.25.4';
+import { installSawHelp } from './timber-saw-help.js?v=0.25.5';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const fmt = (n) => Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
@@ -298,6 +299,7 @@ visualUI = installTimberVisual({
   onStatusChange() { workflow?.refresh(); },
 });
 visualUI.restore(initial.visual); visualUI.update(readProject());
+installSawHelp($('saw'));
 workflow = installTimberWorkflow({
   root: $('timber-workflow'), footer: $('timber-workflow-footer'), form: $('timber-form'), results: $('results'),
   getState: () => ({ valid: workflowValid, hasReview: !!plan?.placed, ...visualUI.availability() }),
