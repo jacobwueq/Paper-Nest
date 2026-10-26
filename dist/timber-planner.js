@@ -1,16 +1,13 @@
-import { scheduleCuts, fenceOf } from './timber-cut-passes.js?v=0.26.1';
-import { simplifyTimberCuts } from './timber-cut-planner.js?v=0.26.1';
+import { scheduleCuts, fenceOf } from './timber-cut-passes.js?v=0.26.2';
+import { simplifyTimberCuts } from './timber-cut-planner.js?v=0.26.2';
+import { validateTimberSettings, settingValue } from './timber-settings.js?v=0.26.2';
 // Rectangular guillotine plans. Every cut spans its current workpiece.
 const EPS = 1e-7;
 const positive = (v) => Number.isFinite(v) && v > 0 && v <= 20000;
 const materialKey = (r) => `${r.material.trim().toLowerCase()}|${r.thickness}`;
 export function validateProject(project) {
   const { settings, stocks, parts } = project;
-  if (!settings || ![settings.kerf, settings.trim].every((v) => Number.isFinite(v) && v >= 0 && v <= 100)) throw new Error('Kerf and edge trim must be between 0 and 100 mm.');
-  if (!['auto', 'rip', 'cross'].includes(settings.direction)) throw new Error('Choose a valid cutting direction.');
-  if (settings.saw !== undefined && !['panel', 'table', 'hybrid'].includes(settings.saw)) throw new Error('Choose a panel saw, a table saw or hybrid.');
-  if (settings.hybridLimit !== undefined && !(Number.isFinite(settings.hybridLimit) && settings.hybridLimit >= 100 && settings.hybridLimit <= 10000)) throw new Error('The table-saw piece length must be between 100 and 10,000 mm.');
-  if (settings.usePriorities !== undefined && typeof settings.usePriorities !== 'boolean') throw new Error('Part priorities must be enabled or disabled.');
+  validateTimberSettings(settings);
   if (!Array.isArray(stocks) || !stocks.length || stocks.length > 50) throw new Error('Add between 1 and 50 stock rows.');
   if (!Array.isArray(parts) || !parts.length || parts.length > 100) throw new Error('Add between 1 and 100 part rows.');
   for (const [type, rows] of [['Stock', stocks], ['Part', parts]]) {
@@ -130,7 +127,7 @@ function build(project, order, strategy) {
 }
 function finalizePlan(project, sheets, unplaced, required) {
   let cutLength = 0;
-  const saw = ['table', 'hybrid'].includes(project.settings.saw) ? project.settings.saw : 'panel', limit = project.settings.hybridLimit ?? 1220;
+  const saw = settingValue(project.settings, 'saw'), limit = settingValue(project.settings, 'hybridLimit');
   sheets = sheets.map((sheet) => {
     const simplified = simplifyTimberCuts(sheet.root, project.settings.kerf, { direction: project.settings.direction, saw, limit });
     return { ...sheet, root: simplified.root, cutReduction: simplified.before - simplified.after, originalCutCount: simplified.before };

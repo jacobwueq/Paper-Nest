@@ -1,14 +1,15 @@
-import { planTimber, validateProject, parseCSV, toCSV } from './timber-planner.js?v=0.26.1';
-import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.26.1';
-import { installTimberWorkflow } from './timber-workflow.js?v=0.26.1';
-import { timberCutOverlay, updateCutTrace } from './timber-cut-overlay.js?v=0.26.1';
-import { installCutPlayback } from './timber-playback.js?v=0.26.1';
-import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.26.1';
-import { t, getLanguage, onLanguageChange } from './locale.js?v=0.26.1';
-import { saveFile } from './file-download.js?v=0.26.1';
-import { createTimberPDF, loadPDFTools } from './timber-pdf.js?v=0.26.1';
-import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency } from './timber-text.js?v=0.26.1';
-import { installSawHelp } from './timber-saw-help.js?v=0.26.1';
+import { planTimber, validateProject, parseCSV, toCSV } from './timber-planner.js?v=0.26.2';
+import { TIMBER_SETTINGS, cleanTimberSettings, defaultTimberSettings } from './timber-settings.js?v=0.26.2';
+import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.26.2';
+import { installTimberWorkflow } from './timber-workflow.js?v=0.26.2';
+import { timberCutOverlay, updateCutTrace } from './timber-cut-overlay.js?v=0.26.2';
+import { installCutPlayback } from './timber-playback.js?v=0.26.2';
+import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.26.2';
+import { t, getLanguage, onLanguageChange } from './locale.js?v=0.26.2';
+import { saveFile } from './file-download.js?v=0.26.2';
+import { createTimberPDF, loadPDFTools } from './timber-pdf.js?v=0.26.2';
+import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency } from './timber-text.js?v=0.26.2';
+import { installSawHelp } from './timber-saw-help.js?v=0.26.2';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const fmt = (n) => Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
@@ -20,7 +21,7 @@ for (const label of document.querySelectorAll('.file-label')) {
 }
 const sample = () => ({
   schema: 'paper-nest-timber-v1', name: 'Workshop cabinet',
-  settings: { kerf: 3.2, trim: 5, direction: 'auto', saw: 'panel', rotate: true, usePriorities: false },
+  settings: defaultTimberSettings(),
   stocks: [{ label: 'Plywood sheet', material: 'Plywood', thickness: 18, length: 2440, width: 1220, qty: 2 }],
   parts: [
     { label: 'Side panel', material: 'Plywood', thickness: 18, length: 720, width: 450, qty: 2, priority: 0, grain: true },
@@ -47,23 +48,40 @@ function readRows(type) {
   });
 }
 function readProject() {
-  return { schema: 'paper-nest-timber-v1', name: $('project-name').value, settings: { kerf: Number($('kerf').value), trim: Number($('trim').value), direction: $('direction').value, saw: $('saw').value, ...($('saw').value === 'hybrid' ? { hybridLimit: Number($('hybrid-limit').value) } : {}), rotate: $('rotate').checked, usePriorities: $('use-priorities').checked }, stocks: readRows('stocks'), parts: readRows('parts'), ...(visualUI ? { visual: visualUI.getDraft() } : {}) };
+  return { schema: 'paper-nest-timber-v1', name: $('project-name').value, settings: readSettings(), stocks: readRows('stocks'), parts: readRows('parts'), ...(visualUI ? { visual: visualUI.getDraft() } : {}) };
+}
+// Each setting's input on the page; defaults and validation come from timber-settings.js.
+const SETTING_INPUTS = { kerf: 'kerf', trim: 'trim', direction: 'direction', saw: 'saw', hybridLimit: 'hybrid-limit', rotate: 'rotate', usePriorities: 'use-priorities' };
+function readSettings() {
+  const raw = {};
+  for (const f of TIMBER_SETTINGS) { const input = $(SETTING_INPUTS[f.key]); raw[f.key] = f.type === 'boolean' ? input.checked : f.type === 'number' ? Number(input.value) : input.value; }
+  for (const f of TIMBER_SETTINGS) if (f.when && !f.when(raw)) delete raw[f.key];
+  return raw;
+}
+function renderSettings(settings) {
+  const s = { ...Object.fromEntries(TIMBER_SETTINGS.map((f) => [f.key, f.default])), ...cleanTimberSettings(settings) };
+  for (const f of TIMBER_SETTINGS) {
+    const input = $(SETTING_INPUTS[f.key]);
+    if (f.type === 'boolean') input.checked = s[f.key];
+    else { input.value = s[f.key]; if (f.type === 'number') Object.assign(input, { min: f.min, max: f.max }); }
+  }
+  $('hybrid-limit-field').hidden = s.saw !== 'hybrid';
 }
 function cleanProject(p, allowDraft = false) {
   if (!p || p.schema !== 'paper-nest-timber-v1' || typeof p.name !== 'string' || p.name.length > 100) throw new Error('Choose a Paper Nest timber project JSON file.');
   if (allowDraft) {
-    if (!p.settings || ![p.settings.kerf, p.settings.trim].every(Number.isFinite) || !['auto', 'rip', 'cross'].includes(p.settings.direction)) throw new Error('Invalid saved settings.');
+    if (!p.settings || typeof p.settings !== 'object') throw new Error('Invalid saved settings.');
     for (const [key, limit] of [['stocks', 50], ['parts', 100]]) {
       if (!Array.isArray(p[key]) || (key === 'stocks' && !p[key].length) || p[key].length > limit) throw new Error('Invalid saved rows.');
       for (const r of p[key]) if (!r || !['length', 'width', 'qty', 'thickness'].every((k) => Number.isFinite(r[k])) || typeof r.label !== 'string' || r.label.length > 100 || typeof r.material !== 'string' || r.material.length > 80 || (key === 'parts' && ![0, 1, 2].includes(r.priority))) throw new Error('Invalid saved row.');
     }
   } else validateProject(p);
-  if ((p.settings.usePriorities !== undefined && typeof p.settings.usePriorities !== 'boolean') || typeof p.settings.rotate !== 'boolean' || p.parts.some((part) => typeof part.grain !== 'boolean')) throw new Error('Project rotation and grain values must be true or false.');
+  if (p.parts.some((part) => typeof part.grain !== 'boolean')) throw new Error('Project rotation and grain values must be true or false.');
   const rows = (values, isPart) => values.map((r) => ({ label: r.label, material: r.material, thickness: r.thickness, length: r.length, width: r.width, qty: r.qty, ...(isPart ? { priority: r.priority, grain: r.grain } : {}) }));
-  return { schema: p.schema, name: p.name, settings: { kerf: p.settings.kerf, trim: p.settings.trim, direction: p.settings.direction, saw: ['table', 'hybrid'].includes(p.settings.saw) ? p.settings.saw : 'panel', ...(p.settings.saw === 'hybrid' ? { hybridLimit: Number.isFinite(p.settings.hybridLimit) ? p.settings.hybridLimit : 1220 } : {}), rotate: p.settings.rotate, usePriorities: p.settings.usePriorities === true }, stocks: rows(p.stocks, false), parts: rows(p.parts, true), visual: normalizeVisualDraft(p.visual) };
+  return { schema: p.schema, name: p.name, settings: cleanTimberSettings(p.settings), stocks: rows(p.stocks, false), parts: rows(p.parts, true), visual: normalizeVisualDraft(p.visual) };
 }
 function renderInputs(p) {
-  $('project-name').value = p.name; $('kerf').value = p.settings.kerf; $('trim').value = p.settings.trim; $('direction').value = p.settings.direction; $('saw').value = ['table', 'hybrid'].includes(p.settings.saw) ? p.settings.saw : 'panel'; $('hybrid-limit').value = p.settings.hybridLimit ?? 1220; $('hybrid-limit-field').hidden = $('saw').value !== 'hybrid'; $('rotate').checked = p.settings.rotate; $('use-priorities').checked = p.settings.usePriorities === true;
+  $('project-name').value = p.name; renderSettings(p.settings);
   $('stocks').innerHTML = p.stocks.map((r, i) => rowHTML(r, 'stocks', i)).join('');
   $('parts').innerHTML = p.parts.map((r, i) => rowHTML(r, 'parts', i)).join('');
   visualUI?.restore(p.visual);

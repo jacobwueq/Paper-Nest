@@ -1,4 +1,4 @@
-import { scheduleCuts } from './timber-cut-passes.js?v=0.26.1';
+import { scheduleCuts } from './timber-cut-passes.js?v=0.26.2';
 // Re-slice a fixed layout so aligned part edges can share one full-workpiece cut.
 // A bounded memoised search always retains the original valid slicing tree.
 const EPS = 1e-7;

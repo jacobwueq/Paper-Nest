@@ -49,7 +49,7 @@ These keep the foundations tidy as features are added.
 ## Phase 0 · Foundations / 底層整理
 
 Check to finish the phase: full suite green on this machine, one command sets
-versions, benchmark baseline committed.
+versions, benchmark baseline committed. **Passed 26 Oct 2026** (235/235).
 
 - [x] **0.1 One version for every script and stylesheet.**
   Today `?v=` tags are mixed (0.13.0 … 0.25.8) and were bumped by hand.
@@ -72,11 +72,16 @@ versions, benchmark baseline committed.
   with the wall clock they ended at 249 mm. Five other test files still pass a
   `milliseconds` budget on the real clock; they pass today and move to fixed work
   when one of them is touched.
-- [ ] **0.4 Timber settings schema.**
+- [x] **0.4 Timber settings schema.**
   kerf, trim, direction, saw, hybridLimit, rotate, usePriorities are each handled
   in five places (validate, read, clean, render, sample).
   Done when: one table in `timber-settings.js` lists each setting's default, range
   and validation; the five places use it; old project files still load.
+  Result: `TIMBER_SETTINGS` holds default, type, range, choices and message for all
+  seven; the planner validates with it, the page reads/cleans/renders through one
+  `SETTING_INPUTS` map, the sample starts from `defaultTimberSettings()`. Old files:
+  missing or wrongly typed values take the default (a 0.13-era file opens as panel saw).
+  21/21 benchmark plans identical. A test fails if the page repeats a default.
 
 ## Phase 1 · Quick wins / 快速改善
 
@@ -139,3 +144,4 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
 | 2026-10-26 | 0.1 One version | Five versions in use (0.13.0–0.25.8) → one (0.26.0); 229/230 tests pass |
 | 2026-10-26 | 0.2 Timber benchmark | Baseline saved: 21 runs; quick plan 2.6–2.7 s at 139 pieces on this machine |
 | 2026-10-26 | 0.3 Fixed-work test | `fixedWorkClock()`; concave-arch test passes 3/3 runs; 230/230 tests pass |
+| 2026-10-26 | 0.4 Settings schema | `timber-settings.js`; 235/235 tests; 21/21 plans identical; old-format project reopens in the browser. Phase 0 done |

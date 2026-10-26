@@ -1,5 +1,5 @@
-import { bounds, transformed } from "./geometry.js?v=0.26.1";
-import { mergeCommonLines } from "./common-line.js?v=0.26.1";
+import { bounds, transformed } from "./geometry.js?v=0.26.2";
+import { mergeCommonLines } from "./common-line.js?v=0.26.2";
 const EPS = 1e-6;
 function sheetBounds(parts, placements, sheet) {
   const byId = new Map(parts.map((p) => [p.id, p]));
