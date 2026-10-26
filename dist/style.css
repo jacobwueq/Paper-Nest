@@ -1598,3 +1598,23 @@ body[data-stage="export"] .controls {
   display: flex;
   align-items: flex-start;
 }
+
+/* 0.25 · One main action per step: after a layout exists, "Next" is the main button and
+   "Tighten layout" / "Re-optimise unlocked" become secondary. A disabled Next stays quiet. */
+#continue,
+#refine-unlocked {
+  background: var(--surface);
+  color: var(--accent-strong);
+  border: 1px solid var(--accent-line);
+}
+#continue:hover:enabled,
+#refine-unlocked:hover:enabled {
+  background: var(--accent-soft);
+  filter: none;
+}
+.step-next:disabled {
+  background: var(--surface);
+  color: var(--subtle);
+  border-color: var(--line);
+  opacity: 1;
+}

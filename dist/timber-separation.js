@@ -1,5 +1,5 @@
-import { cutSegments } from './timber-cut-passes.js?v=0.24.0';
-import { t } from './locale.js?v=0.24.0';
+import { cutSegments } from './timber-cut-passes.js?v=0.25.0';
+import { t } from './locale.js?v=0.25.0';
 import { timberCutOverlay } from './timber-cut-overlay.js?v=0.25.0';
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const fmt = (n) => Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });

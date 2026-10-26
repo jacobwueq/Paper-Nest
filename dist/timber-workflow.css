@@ -5,3 +5,10 @@
 #timber-workflow{display:contents}.timber-step-tabs{position:sticky;top:0;z-index:25;box-shadow:0 3px 8px #21355508}.timber-page[data-timber-step] .results{scroll-margin-top:100px}
 
 .timber-page[data-timber-step="2"] .visual-heading,.timber-page[data-timber-step="3"] .visual-heading{display:none}
+
+/* 0.25 · One main action per step. The footer's primary button confirms the layout on steps 2–3,
+   so the in-canvas confirm button is no longer shown (it stays in the page for the existing code). */
+.timber-footer-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.timber-page[data-timber-step] #visual-confirm{display:none}
+.timber-page[data-timber-step] .visual-footer{justify-content:flex-end}
+.timber-workflow-footer .primary-button:hover:enabled{background:var(--accent-hover);filter:none}

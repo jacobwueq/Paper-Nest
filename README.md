@@ -598,3 +598,18 @@ availability, blocking workpieces, material area, kerf, numbering, trace sequenc
 separation, manual replay and existing laser regressions. DOM checks cover the
 same eight-pass fixture, CSV/print/PDF agreement, Traditional Chinese, playback and
 four-step navigation. Full browser visual QA is unavailable in this environment.
+
+
+## Interface colour language and actions (0.25)
+
+`dist/theme.css` holds one shared set of colour names, loaded before every other
+stylesheet. Timber uses an orange accent and laser (paper) uses blue; everything
+else is neutral. Fixed meanings in both workspaces: green = reusable offcut,
+red = current/selected cut, amber = warning.
+
+Each step shows one main (filled) button. In timber, steps 2 and 3 share a single
+forward action, **Use this layout · Review & Export**, which confirms the shown
+layout exactly as the former in-canvas confirm button did; **Adjust manually first**
+opens step 3. Review shows **Download PDF** with Print and both CSVs under
+**More exports**. In laser, Tighten layout and Re-optimise unlocked are secondary
+and a disabled Next stays quiet. No planning, nesting or export logic changed.

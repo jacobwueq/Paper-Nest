@@ -1,13 +1,13 @@
-import { planTimber, validateProject, parseCSV, toCSV } from './timber-planner.js?v=0.24.0';
+import { planTimber, validateProject, parseCSV, toCSV } from './timber-planner.js?v=0.25.0';
 import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.25.0';
-import { installTimberWorkflow } from './timber-workflow.js?v=0.24.0';
+import { installTimberWorkflow } from './timber-workflow.js?v=0.25.0';
 import { timberCutOverlay, updateCutTrace } from './timber-cut-overlay.js?v=0.25.0';
-import { installCutPlayback } from './timber-playback.js?v=0.24.0';
+import { installCutPlayback } from './timber-playback.js?v=0.25.0';
 import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.25.0';
-import { t, getLanguage, onLanguageChange } from './locale.js?v=0.24.0';
-import { saveFile } from './file-download.js?v=0.24.0';
+import { t, getLanguage, onLanguageChange } from './locale.js?v=0.25.0';
+import { saveFile } from './file-download.js?v=0.25.0';
 import { createTimberPDF, loadPDFTools } from './timber-pdf.js?v=0.25.0';
-import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency } from './timber-text.js?v=0.24.0';
+import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency } from './timber-text.js?v=0.25.0';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const fmt = (n) => Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
@@ -305,6 +305,7 @@ workflow = installTimberWorkflow({
     if (step === 3) return visualUI.activateManual();
     return !!plan?.placed || visualUI.confirmCurrent();
   },
+  onConfirm: () => visualUI.confirmCurrent(),
   onChange(step) { if (step !== 4) cutPlayback.pause(); },
 });
 try { localStorage.setItem(STORAGE, JSON.stringify(readProject())); } catch { /* The visible save status already offers project download. */ }

@@ -10,3 +10,5 @@
 .cut-play-controls .cut-play-separation{font-size:10px;color:#5c738b;white-space:nowrap}.cut-play-separation input{width:14px;height:14px;accent-color:var(--accent);padding:0;margin:0}.sheet-drawing:has([data-board-simulation="separated"]){background:#f3f5f4}.simulated-pieces text{pointer-events:none}
 
 .cut-efficiency{padding:10px 12px;border-left:3px solid #839966;background:#f0f4e9;color:#546545;line-height:1.7}
+.more-exports{position:relative}.more-exports>summary{list-style:none;cursor:pointer;user-select:none}.more-exports>summary::-webkit-details-marker{display:none}.more-exports>summary::after{content:"▾";margin-left:8px;font-size:10px;color:var(--muted)}.more-exports-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:30;display:flex;flex-direction:column;gap:4px;min-width:190px;padding:6px;background:var(--surface);border:1px solid var(--line);border-radius:7px;box-shadow:0 10px 24px #1725361a}.more-exports-menu button{justify-content:flex-start;border-color:transparent;width:100%}.more-exports-menu button:hover{background:var(--surface-2)}
+@media print{.more-exports{display:none}}

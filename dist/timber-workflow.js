@@ -1,4 +1,4 @@
-import { t, onLanguageChange } from './locale.js?v=0.24.0';
+import { t, onLanguageChange } from './locale.js?v=0.25.0';
 const steps = [
   ['Setup 設定', 'Setup · 設定', 'Enter stock sizes, part dimensions and quantities. Watch the live preview as you type. 設定板材及零件，輸入時即時預覽。'],
   ['Auto Nest 排料', 'Auto Nest · 自動排料', 'Compare layouts for fewer sheets and fewer cuts. Matching edges share straight cuts; useful offcuts break ties. 自動比較排位，盡量慳板、保留大塊餘料。'],
@@ -12,11 +12,13 @@ const help = [
  ['Continue your manual layout, or start from Auto Nest. Undo recent placements, then select a part and a free region to reposition it. This step is optional.','承接手動排位，或由自動方案開始；可撤銷最近放置，再選零件及空位重新放入。此步驟可略過。'],
  ['Play the cutting sequence, inspect the separated pieces, then print or download the cutting guide.','播放切割次序、核對分開後嘅板件，再列印或下載切割指引。'],
 ];
-export function installTimberWorkflow({ root, footer, form, results, getState, onEnter, onChange = () => {} }) {
+export function installTimberWorkflow({ root, footer, form, results, getState, onEnter, onConfirm = null, onChange = () => {} }) {
   let step = 1;
   root.innerHTML = `<nav class="timber-step-tabs" role="tablist" aria-label="Timber cutting steps">${steps.map(([label], i) => `<button type="button" role="tab" id="timber-step-${i + 1}" data-timber-tab="${i + 1}" aria-controls="${i === 3 ? results.id : form.id}">${i + 1} · ${label}</button>`).join('')}</nav><section class="timber-step-intro"><h2 id="timber-step-title"></h2><p id="timber-step-help"></p></section>`;
-  footer.innerHTML = '<button type="button" id="timber-step-back" class="quiet-button">← Back</button><span id="timber-step-progress" role="status" aria-live="polite"></span><button type="button" id="timber-step-next" class="primary-button"></button>';
-  const tabs = [...root.querySelectorAll('[data-timber-tab]')], back = footer.querySelector('#timber-step-back'), next = footer.querySelector('#timber-step-next');
+  footer.innerHTML = '<button type="button" id="timber-step-back" class="quiet-button">← Back</button><span id="timber-step-progress" role="status" aria-live="polite"></span><div class="timber-footer-actions"><button type="button" id="timber-step-alt" class="quiet-button" hidden></button><button type="button" id="timber-step-next" class="primary-button"></button></div>';
+  const tabs = [...root.querySelectorAll('[data-timber-tab]')], back = footer.querySelector('#timber-step-back'), next = footer.querySelector('#timber-step-next'), alt = footer.querySelector('#timber-step-alt');
+  // Steps 2 and 3 share one forward action: confirm the shown layout and open Review & Export.
+  const confirms = () => !!onConfirm && (step === 2 || step === 3);
   const canEnter = (target, state) => Number.isInteger(target) && target >= 1 && target <= 4 && (target === 1 || (state.valid && (target === 2 || (target === 3 ? state.canManual : state.hasReview || state.canReview))));
   function render() {
     const state = getState();
@@ -27,8 +29,10 @@ export function installTimberWorkflow({ root, footer, form, results, getState, o
     tabs.forEach((tab, i) => { tab.textContent = `${i + 1} · ${t(...titles[i])}`; const current = step === i + 1; tab.disabled = !canEnter(i + 1, state); tab.setAttribute('aria-selected', String(current)); tab.setAttribute('aria-current', current ? 'step' : 'false'); tab.tabIndex = current ? 0 : -1; });
     root.querySelector('#timber-step-title').textContent = `${step} — ${t(...titles[step - 1])}`;
     root.querySelector('#timber-step-help').textContent = t(...help[step - 1]);
-    back.textContent = t('← Back','← 上一步'); back.disabled = step === 1; next.hidden = step === 4; next.disabled = step < 4 && !canEnter(step + 1, state);
-    next.textContent = step < 4 ? t(`Next: ${titles[step][0]} →`, `下一步：${titles[step][1]} →`) : '';
+    back.textContent = t('← Back','← 上一步'); back.disabled = step === 1; next.hidden = step === 4;
+    if (confirms()) { next.disabled = !state.valid || !state.canReview; next.textContent = t('Use this layout · Review & Export →', '使用此排位 · 檢查及匯出 →'); }
+    else { next.disabled = step < 4 && !canEnter(step + 1, state); next.textContent = step < 4 ? t(`Next: ${titles[step][0]} →`, `下一步：${titles[step][1]} →`) : ''; }
+    alt.hidden = step !== 2 || !onConfirm; alt.disabled = !canEnter(3, state); alt.textContent = t('Adjust manually first', '先手動微調');
     footer.querySelector('#timber-step-progress').textContent = t(`Step ${step} / 4${!state.valid ? ' · Complete stock and part sizes to continue.' : step === 2 && !state.canManual ? ' · Waiting for a layout…' : ''}`, `第 ${step} 步／共 4 步${!state.valid ? ' · 請先完成板材及零件尺寸。' : step === 2 && !state.canManual ? ' · 正在準備排料…' : ''}`);
     onChange(step);
   }
@@ -44,7 +48,9 @@ export function installTimberWorkflow({ root, footer, form, results, getState, o
     const target = event.key === 'Home' ? 0 : event.key === 'End' ? enabled.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + enabled.length) % enabled.length;
     event.preventDefault(); enabled[target]?.focus();
   });
-  back.onclick = () => select(step - 1); next.onclick = () => select(step + 1);
+  back.onclick = () => select(step - 1);
+  next.onclick = () => { if (!confirms()) { select(step + 1); return; } if (onConfirm() === false) render(); };
+  alt.onclick = () => select(3);
   onLanguageChange(render);
   onEnter(1); render();
   return { select, refresh() { const state = getState(); if (step === 2 || step === 3) step = state.mode === 'manual' ? 3 : 2; render(); }, inputsChanged() { if (step === 4) step = 1; render(); }, showSetup() { step = 1; render(); }, showReview() { step = 4; render(); }, get step() { return step; } };
