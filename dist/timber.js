@@ -1,5 +1,6 @@
 import { planTimber, validateProject, parseCSV, toCSV } from './timber-planner.js?v=0.17.0';
 import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.17.1';
+import { timberCutOverlay } from './timber-cut-overlay.js?v=0.17.2';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const fmt = (n) => Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
@@ -91,9 +92,8 @@ function sheetSVG(s, selectedStep = 0) {
     return `<g><title>${esc(details)}</title><rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" fill="${colors[p.row % colors.length]}" stroke="#96846a" stroke-width="${L / 1400}"/><text x="${p.x + p.w / 2}" y="${p.y + p.h / 2 - labelSize / 3}" text-anchor="middle" font-size="${labelSize}" fill="#4e493f">${esc(p.id)}${p.rotated ? ' ↻' : ''}</text>${p.w > fs * 7 && p.h > fs * 3 ? `<text x="${p.x + p.w / 2}" y="${p.y + p.h / 2 + labelSize}" text-anchor="middle" font-size="${labelSize * .7}" fill="#736c60">${fmt(p.w)} × ${fmt(p.h)}</text>` : ''}</g>`;
   }).join('');
   const offcuts = s.offcuts.map((o) => `<g><title>${esc(o.id)} · offcut ${fmt(o.w)} × ${fmt(o.h)} mm</title><rect x="${o.x}" y="${o.y}" width="${o.w}" height="${o.h}" fill="#e8eee4" stroke="#a8b89a" stroke-width="${L / 1600}" stroke-dasharray="${L / 500} ${L / 500}"/>${o.w > fs * 7 && o.h > fs * 2 ? `<text x="${o.x + o.w / 2}" y="${o.y + o.h / 2}" text-anchor="middle" font-size="${fs * .65}" fill="#73836a">${fmt(o.w)} × ${fmt(o.h)}</text>` : ''}</g>`).join('');
-  const c = s.cuts.find((cut) => cut.step === selectedStep);
-  const highlight = c ? `<rect x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" fill="none" stroke="#bd4934" stroke-width="${L / 700}" stroke-dasharray="${L / 250} ${L / 300}"/><line x1="${c.axis === 'x' ? c.x + c.offset : c.x}" y1="${c.axis === 'y' ? c.y + c.offset : c.y}" x2="${c.axis === 'x' ? c.x + c.offset : c.x + c.w}" y2="${c.axis === 'y' ? c.y + c.offset : c.y + c.h}" stroke="#c64a31" stroke-width="${L / 450}"/>` : '';
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-margin} ${-margin} ${L + 2 * margin} ${W + 2 * margin}" role="img" aria-label="Sheet ${s.number}: ${s.parts.length} finished parts, ${s.cuts.length} cuts, stock ${fmt(L)} by ${fmt(W)} millimetres"><rect width="${L}" height="${W}" fill="#eee9df" stroke="#b4a58c" stroke-width="${L / 1000}"/>${offcuts}${parts}${highlight}<text x="${L / 2}" y="${-margin * .35}" text-anchor="middle" font-size="${fs * .8}" fill="#8c8170">${fmt(L)} mm · GRAIN →</text><text transform="translate(${-margin * .35} ${W / 2}) rotate(-90)" text-anchor="middle" font-size="${fs * .8}" fill="#8c8170">${fmt(W)} mm</text></svg>`;
+  const overlay = timberCutOverlay(s, selectedStep);
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-margin} ${-margin} ${L + margin + overlay.rightMargin} ${W + 2 * margin}" role="img" aria-label="Sheet ${s.number}: ${s.parts.length} finished parts, all ${s.cuts.length} cuts numbered in order, stock ${fmt(L)} by ${fmt(W)} millimetres"><rect width="${L}" height="${W}" fill="#eee9df" stroke="#b4a58c" stroke-width="${L / 1000}"/>${offcuts}${parts}${overlay.markup}<text x="${L / 2}" y="${-margin * .35}" text-anchor="middle" font-size="${fs * .8}" fill="#8c8170">${fmt(L)} mm · GRAIN →</text><text transform="translate(${-margin * .35} ${W / 2}) rotate(-90)" text-anchor="middle" font-size="${fs * .8}" fill="#8c8170">${fmt(W)} mm</text></svg>`;
 }
 function renderSheet() {
   if (!plan || !plan.sheets.length) return;

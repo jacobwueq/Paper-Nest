@@ -53,6 +53,10 @@ blade setup and workpiece support before using a plan in the workshop.
 Results include per-sheet SVG previews, selectable highlighted cuts, offcuts,
 part labels/workpiece references, CSV cutting lists and cut guides, and a print
 view containing every used sheet (also suitable for browser Save as PDF).
+Every cut line and its sequence number is visible on the sheet layout and print
+view without selecting a step. Selecting a step adds red emphasis while keeping
+all other numbers visible. Number badges avoid one another; crowded layouts use
+leader lines and an expanded right margin when needed.
 Cutting lists support CSV import with `length,width,qty` columns; optional
 `label,material,thickness,priority,grain` columns use the downloadable template.
 CSV defaults are Plywood, 18 mm, Normal priority and unlocked grain. A CSV import
