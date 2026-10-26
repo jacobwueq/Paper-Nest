@@ -41,20 +41,26 @@ test('panel saw: strips come off first, then the 450 mm line runs across the who
   verifySteps(sheet);
 });
 
-test('table saw: no step asks for pieces to be held in line; one fence setting serves several pieces', () => {
+test('table saw: rip into strips first, one piece per feed, steps grouped by fence distance', () => {
   const sheet = manualTimber(sawProject('table'), sawCommands()).sheets[0];
   assert.ok(sheet.cuts.every((c) => c.alignmentRequired === false && c.saw === 'table'));
-  const fence450 = sheet.cuts.find((c) => c.segments.length === 3);
-  assert.ok(fence450, 'the three columns share the 450 mm fence setting');
-  for (const s of fence450.segments) close(s.offset, 450);
-  assert.match(cutDescription(fence450, 'en'), /Fence at 450 mm · 3 pieces/);
-  assert.match(cutDetail(fence450, 'en'), /feed each piece separately/);
-  assert.doesNotMatch(cutDetail(fence450, 'en'), /aligned/);
-  assert.match(cutDetail(fence450, 'zh-Hant'), /逐件推過/);
-  assert.ok(sheet.fenceSettings < sheet.cuts.length, 'consecutive steps can keep the fence where it is');
-  const repeat = sheet.cuts.find((c) => c.fenceRepeat);
-  assert.ok(repeat); assert.match(cutDescription(repeat, 'en'), /fence unchanged/);
-  assert.match(cutEfficiency(sheet, 'en'), /Table saw · 10 pieces fed through the saw with \d fence settings/);
+  assert.equal(sheet.cuts[0].axis, 'y', 'the first cut on the full sheet is a rip');
+  close(sheet.cuts[0].w, 2430);
+  const widestCrosscut = Math.max(...cutSegments(sheet).filter((c) => c.axis === 'x').map((c) => c.h));
+  assert.ok(widestCrosscut < 504, `crosscuts only on strips, widest ${widestCrosscut}`);
+  for (const step of sheet.cuts) for (const s of step.segments) close(s.fence, step.fence);
+  // The kept piece rides the fence: an offcut is never the measured side.
+  const offcutTrim = cutSegments(sheet).find((c) => c.axis === 'x' && Math.abs(c.x + c.offset - 2259.4) < 1e-5 && c.w > 2000);
+  assert.ok(offcutTrim); close(offcutTrim.fence, 2254.4); assert.equal(offcutTrim.fenceFrom, 'left');
+  const shared = sheet.cuts.find((c) => c.segments.length > 1);
+  assert.match(cutDescription(shared, 'en'), /^Fence at [\d.,]+ mm · \d pieces, one after another/);
+  assert.match(cutDetail(shared, 'en'), /feed each piece separately/);
+  assert.match(cutDetail(shared, 'en'), /edge against the fence/);
+  assert.doesNotMatch(cutDetail(shared, 'en'), /aligned/);
+  assert.match(cutDetail(shared, 'zh-Hant'), /逐件推過/);
+  assert.match(cutDescription(sheet.cuts[0], 'en'), /^Rip cut · fence at 450 mm from the top edge/);
+  assert.match(cutDescription(sheet.cuts[0], 'zh-Hant'), /上邊靠鋸導尺/);
+  assert.match(cutEfficiency(sheet, 'en'), /^Table saw · \d+ pieces fed through the saw with \d+ fence settings/);
   verifySteps(sheet);
 });
 

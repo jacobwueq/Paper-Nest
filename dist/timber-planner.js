@@ -1,4 +1,4 @@
-import { scheduleCuts } from './timber-cut-passes.js?v=0.25.4';
+import { scheduleCuts, fenceOf } from './timber-cut-passes.js?v=0.25.4';
 import { simplifyTimberCuts } from './timber-cut-planner.js?v=0.25.4';
 // Rectangular guillotine plans. Every cut spans its current workpiece.
 const EPS = 1e-7;
@@ -158,12 +158,13 @@ function finalizePlan(project, sheets, unplaced, required) {
     };
     visit(sheet.root, `S${sheet.number}`);
     const schedule = scheduleCuts(sheet.root, saw), byId = new Map(sheet.cutSegments.map((c) => [c.workpiece, c]));
-    sheet.alignmentCost = schedule.alignmentCost; sheet.fenceSettings = schedule.setups ?? null; cutLength += schedule.length;
+    sheet.alignmentCost = schedule.alignmentCost; sheet.fenceSettings = schedule.setups ?? null; sheet.widestCrosscut = schedule.widestCrosscut ?? 0; cutLength += schedule.length;
     sheet.cuts = schedule.passes.map((nodes, index) => {
       const segments = nodes.map((node) => records.get(node)), step = index + 1;
       for (const c of segments) { c.step = step; c.prerequisite = c.parentWorkpiece ? byId.get(c.parentWorkpiece).step : null; }
       const representative = segments[Math.floor(segments.length / 2)];
-      const fenceRepeat = saw === 'table' && index > 0 && Math.abs(schedule.passes[index - 1][0].amount - nodes[0].amount) < 1e-4;
+      if (saw === 'table') for (const node of nodes) { const fence = fenceOf(node), record = records.get(node); record.fence = fence.distance; record.fenceFrom = fence.from; }
+      const fenceRepeat = saw === 'table' && index > 0 && Math.abs(fenceOf(schedule.passes[index - 1][0]).distance - fenceOf(nodes[0]).distance) < 1e-4;
       return { ...representative, step, segments, saw, fenceRepeat, alignmentRequired: saw === 'panel' && segments.length > 1,
         prerequisite: Math.max(0, ...segments.map((c) => c.prerequisite || 0)) || null,
         edgeParts: [...new Set(segments.flatMap((c) => c.edgeParts))], releasedParts: [...new Set(segments.flatMap((c) => c.releasedParts))] };
@@ -177,7 +178,7 @@ function finalizePlan(project, sheets, unplaced, required) {
   const reusableOffcuts = sheets.flatMap((s) => s.offcuts.map((r) => ({ ...r, sheet: s.number, area: r.w * r.h }))).filter((r) => Math.min(r.w, r.h) >= 50 - EPS).sort((a, b) => b.area - a.area || Math.min(b.w, b.h) - Math.min(a.w, a.h));
   const occupiedArea = sheets.reduce((total, s) => total + (Math.max(0, ...s.parts.map((p) => p.x + p.w)) - project.settings.trim) * (Math.max(0, ...s.parts.map((p) => p.y + p.h)) - project.settings.trim), 0);
   const score = [...missing, unplaced.reduce((n, p) => n + p.length * p.width, 0), sheets.length, area];
-  const fitness = { primary: score, offcuts: reusableOffcuts.map((r) => r.area), occupiedArea, cutLength, cutCount: sheets.reduce((n, s) => n + s.cuts.length, 0), alignmentCost: sheets.reduce((n, s) => n + s.alignmentCost, 0) };
+  const fitness = { primary: score, offcuts: reusableOffcuts.map((r) => r.area), occupiedArea, cutLength, cutCount: sheets.reduce((n, s) => n + s.cuts.length, 0), alignmentCost: sheets.reduce((n, s) => n + s.alignmentCost, 0), saw, widestCrosscut: saw === 'table' ? Math.max(0, ...sheets.map((s) => s.widestCrosscut)) : 0 };
   const remaining = project.stocks.map((s, i) => s.qty - sheets.filter((sheet) => sheet.stockIndex === i).length);
   return { sheets, unplaced, score, fitness, reusableOffcuts, remaining, settings: { ...project.settings }, required, placed: required - unplaced.length };
 }
@@ -235,6 +236,9 @@ export function manualTimber(project, commands = []) {
 export function compareTimberPlans(a, b) {
   const primary = compareNumbers(a.fitness.primary, b.fitness.primary);
   if (primary) return primary;
+  // Table saw: after placement and sheet use, ripping to strips before crosscutting wins.
+  const crosscut = (a.fitness.widestCrosscut || 0) - (b.fitness.widestCrosscut || 0);
+  if (Math.abs(crosscut) > 1e-7) return crosscut;
   // After placement and sheet use, fewer saw strokes win before offcut size.
   const cuts = a.fitness.cutCount - b.fitness.cutCount;
   if (cuts) return cuts;

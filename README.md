@@ -636,12 +636,16 @@ how the cutting guide orders and groups the cuts.
   passes, fewer and shorter "keep aligned" passes win. Candidate trees now treat a
   kerf-wide gap between neighbouring parts as part of one straight line and include a
   sweep that reuses lines already cut, in the order they were cut.
-- **Table saw · fence settings**. Each piece is fed on its own, so no step asks for
-  pieces to be held in line. Pieces that are ready together and need the same fence
-  distance share one step ("Fence at 450 mm · 3 pieces, one after another"); when a cut
-  produces another piece needing that distance, the next step keeps the fence where it
-  is ("fence unchanged"). Plans compare fence settings, then pieces fed, then steps.
-  The fence distance is measured from the workpiece's left or top edge, as in the guide.
+- **Table saw · fence settings**. The blade stays still and each piece is pushed past
+  it, so no step asks for pieces to be held in line. Plans rip the sheet into strips
+  along the grain before crosscutting (the widest crosscut is kept as narrow as
+  possible, also when choosing the automatic layout), then use as few fence settings
+  and feeds as they can. The kept piece goes between the fence and the blade; when both
+  sides are kept, the narrower side does. Pieces that are ready together and need the
+  same fence distance share one step ("Fence at 450 mm · 3 pieces, one after another");
+  when a cut produces another piece needing that distance, the next step says
+  "fence unchanged". Fence capacity is not limited. The cut-guide CSV adds `saw`,
+  `fence_mm` and `fence_edge`.
 
 The 26 Oct 2026 screenshot is a regression fixture (`tests/timber-saw-modes.test.mjs`):
 on a panel saw the order is bottom strip, right strip, the 450 mm line across the

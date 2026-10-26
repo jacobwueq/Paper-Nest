@@ -203,9 +203,9 @@ $('export-list').onclick = () => {
 };
 $('export-guide').onclick = () => {
   if (!plan) return;
-  const rows = [['sheet', 'step', 'workpiece', 'operation', 'measurement_from', 'offset_mm', 'workpiece_length_mm', 'workpiece_width_mm', 'kerf_mm', 'first_result', 'second_result', 'prerequisite_step', 'shared_part_edges', 'released_parts', 'instructions', 'alignment_required', 'segments_json']];
+  const rows = [['sheet', 'step', 'workpiece', 'operation', 'measurement_from', 'offset_mm', 'workpiece_length_mm', 'workpiece_width_mm', 'kerf_mm', 'first_result', 'second_result', 'prerequisite_step', 'shared_part_edges', 'released_parts', 'instructions', 'alignment_required', 'segments_json', 'saw', 'fence_mm', 'fence_edge']];
   for (const s of plan.sheets) {
-    rows.push([s.number, t('Prepare','準備'), `S${s.number}`, trimText(s), '', plan.settings.trim, s.stock.length, s.stock.width, plan.settings.kerf, `S${s.number}`, '', '', '', '', '', '', '']);
+    rows.push([s.number, t('Prepare','準備'), `S${s.number}`, trimText(s), '', plan.settings.trim, s.stock.length, s.stock.width, plan.settings.kerf, `S${s.number}`, '', '', '', '', '', '', '', plan.settings.saw === 'table' ? 'table' : 'panel', '', '']);
     for (const c of s.cuts) {
       const members = c.segments || [c];
       const same = (key) => members.every((m) => Math.abs(m[key] - members[0][key]) < 1e-7) ? members[0][key] : '';
@@ -213,7 +213,8 @@ $('export-guide').onclick = () => {
         c.axis === 'x' ? t('each workpiece: left finished edge','各板件：左側完成邊') : t('each workpiece: top finished edge','各板件：上側完成邊'),
         same('offset'), same('w'), same('h'), same('kerf'), members.map((m) => m.first).join(' + '), members.map((m) => m.second || t('kerf waste','鋸縫廢料')).join(' + '),
         c.prerequisite || t('Prepare','準備'), (c.edgeParts || []).join(' + '), (c.releasedParts || []).join(' + '), cutDetail(c) + ' ' + cutRetain(c),
-        c.alignmentRequired ? 'yes' : 'no', JSON.stringify(members.map(({workpiece,x,y,w,h,axis,offset,kerf,first,second,prerequisite}) => ({workpiece,x,y,w,h,axis,offset,kerf,first,second,prerequisite})))]);
+        c.alignmentRequired ? 'yes' : 'no', JSON.stringify(members.map(({workpiece,x,y,w,h,axis,offset,kerf,first,second,prerequisite,fence,fenceFrom}) => ({workpiece,x,y,w,h,axis,offset,kerf,first,second,prerequisite,...(fence !== undefined ? { fence, fenceFrom } : {})}))),
+        c.saw || 'panel', c.saw === 'table' ? same('fence') : '', c.saw === 'table' ? (members.every((m) => m.fenceFrom === members[0].fenceFrom) ? members[0].fenceFrom : 'per workpiece') : '']);
     }
   }
   download(toCSV(rows), filename('-cut-guide.csv'), 'text/csv;charset=utf-8');

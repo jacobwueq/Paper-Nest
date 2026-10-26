@@ -50,11 +50,17 @@ export function scheduleTimberPasses(root) {
 }
 export const cutSegments = (sheet) => sheet.cutSegments || sheet.cuts.flatMap((cut) => cut.segments || [cut]);
 
-// Table saw: each workpiece is fed on its own, so nothing needs holding in line. Pieces that are
-// ready at the same time and need the same fence distance share one step; when a cut produces
-// another piece needing that distance, the next step keeps the fence where it is.
-// The fence distance is the cut's offset from the workpiece's left or top edge.
-const fenceKey = (node) => node.amount.toFixed(4);
+// Table saw: the blade stays still and each piece is pushed past it along the fence, so nothing
+// is held in line and the useful grouping is by fence distance. The piece being kept goes between
+// the fence and the blade; when both sides are kept, the narrower one does.
+const hasPart = (node) => !!node && (node.kind === 'part' || (node.kind === 'cut' && (hasPart(node.first) || hasPart(node.second))));
+export function fenceOf(node) {
+  const size = node.axis === 'x' ? node.w : node.h, first = node.amount, second = node.second ? size - node.amount - node.kerf : 0;
+  const keepFirst = hasPart(node.first), keepSecond = hasPart(node.second);
+  const fromFar = keepSecond && (!keepFirst || second < first - 1e-7);
+  return fromFar ? { distance: second, from: node.axis === 'x' ? 'right' : 'bottom' } : { distance: first, from: node.axis === 'x' ? 'left' : 'top' };
+}
+const fenceKey = (node) => fenceOf(node).distance.toFixed(4);
 export function scheduleFenceBatches(root) {
   const jobs = [];
   (function visit(node, parent = -1) {
@@ -81,6 +87,8 @@ export function scheduleFenceBatches(root) {
     passes.push(pass.map((job) => job.node)); fence = key;
   }
   const length = passes.reduce((n, pass) => n + pass.reduce((m, node) => m + (node.axis === 'x' ? node.h : node.w), 0), 0);
-  return { passes, count: passes.length, setups, feeds: jobs.length, alignmentCost: 0, alignmentLength: 0, length };
+  // Crosscutting a wide piece is the awkward feed on a table saw, so plans that rip to strips first win.
+  const widestCrosscut = Math.max(0, ...jobs.filter((job) => job.node.axis === 'x').map((job) => job.node.h));
+  return { passes, count: passes.length, setups, feeds: jobs.length, widestCrosscut, alignmentCost: 0, alignmentLength: 0, length };
 }
 export const scheduleCuts = (root, saw = 'panel') => saw === 'table' ? scheduleFenceBatches(root) : scheduleTimberPasses(root);

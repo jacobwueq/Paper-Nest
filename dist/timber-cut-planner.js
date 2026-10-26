@@ -128,8 +128,9 @@ export function simplifyTimberCuts(root, kerf, { direction = 'auto', saw = 'pane
   const candidates = roots.map((entry) => ({ entry, schedule: scheduleCuts(entry.node, saw) }));
   // Equal pass counts: fewer pieces held in alignment, then shorter aligned lines, so long
   // lines are cut while the panel is still one piece.
-  // Table saw: fewer fence settings, then fewer pieces fed through the saw, then fewer steps.
-  if (saw === 'table') candidates.sort((a, b) => a.schedule.setups - b.schedule.setups || a.schedule.feeds - b.schedule.feeds || a.schedule.count - b.schedule.count || compare(a.entry, b.entry));
+  // Table saw: rip into strips before crosscutting (narrowest widest crosscut), then fewer fence
+  // settings, then fewer pieces fed through the saw, then fewer steps.
+  if (saw === 'table') candidates.sort((a, b) => a.schedule.widestCrosscut - b.schedule.widestCrosscut || a.schedule.setups - b.schedule.setups || a.schedule.feeds - b.schedule.feeds || a.schedule.count - b.schedule.count || compare(a.entry, b.entry));
   else candidates.sort((a, b) => a.schedule.count - b.schedule.count || a.schedule.alignmentCost - b.schedule.alignmentCost || a.schedule.alignmentLength - b.schedule.alignmentLength || compare(a.entry, b.entry));
   const best = candidates[0];
   return { root: copy(best.entry.node), before: baseline.count, after: best.schedule.count, splitCount: best.entry.count, alignmentCost: best.schedule.alignmentCost };

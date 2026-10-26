@@ -1,12 +1,16 @@
 import { getLanguage } from './locale.js?v=0.25.4';
 const n = (value) => Number(value.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
 const choose = (lang, en, zh) => lang === 'zh-Hant' ? zh : en;
+const edgeZh = { left: '左', right: '右', top: '上', bottom: '下' };
+// Table saw: the distance and the edge that rides the fence.
+const fenceAt = (c) => c.fence ?? c.offset, fenceEdge = (c) => c.fenceFrom || (c.axis === 'x' ? 'left' : 'top');
 export function cutDescription(c, lang = getLanguage()) {
   const fence = c.saw === 'table' && c.fenceRepeat ? choose(lang, ' · fence unchanged', ' · 鋸導尺不變') : '';
   return describe(c, lang) + fence;
 }
 function describe(c, lang) {
-  if (c.segments?.length > 1 && c.saw === 'table') return choose(lang, `Fence at ${n(c.offset)} mm · ${c.segments.length} pieces, one after another`, `鋸導尺定喺 ${n(c.offset)} 毫米 · 逐件切 ${c.segments.length} 件`);
+  if (c.segments?.length > 1 && c.saw === 'table') return choose(lang, `Fence at ${n(fenceAt(c))} mm · ${c.segments.length} pieces, one after another`, `鋸導尺定喺 ${n(fenceAt(c))} 毫米 · 逐件切 ${c.segments.length} 件`);
+  if (c.saw === 'table') return choose(lang, `${c.axis === 'x' ? 'Crosscut' : 'Rip cut'} · fence at ${n(fenceAt(c))} mm from the ${fenceEdge(c)} edge`, `${c.axis === 'x' ? '橫紋切割' : '順紋切割'} · 鋸導尺 ${n(fenceAt(c))} 毫米（${edgeZh[fenceEdge(c)]}邊靠鋸導尺）`);
   if (c.segments?.length > 1) return choose(lang, `Shared ${c.axis === 'x' ? 'vertical' : 'horizontal'} pass · ${c.segments.length} aligned workpieces`, `共用${c.axis === 'x' ? '垂直' : '水平'}切割 · 對齊 ${c.segments.length} 件板件`);
   return choose(lang, `${c.axis === 'x' ? 'Crosscut' : 'Rip cut'} at ${n(c.offset)} mm from ${c.axis === 'x' ? 'left' : 'top'} edge`, `${c.axis === 'x' ? '橫紋切割' : '順紋切割'}：由${c.axis === 'x' ? '左邊' : '上邊'}量 ${n(c.offset)} 毫米`);
 }
@@ -15,8 +19,9 @@ export function cutDetail(c, lang = getLanguage()) {
   const shared = c.edgeParts?.length > 1 ? choose(lang, ` One straight cut sets matching edges for ${edgeList}.`, ` 一刀直線切割，同時完成 ${edgeList} 嘅對齊邊。`) : '';
   const released = c.releasedParts?.length > 1 ? choose(lang, ` This cut releases ${c.releasedParts.join(' + ')} together.`, ` 呢一刀同時分出 ${c.releasedParts.join(' ＋ ')}。`) : '';
   if (c.segments?.length > 1 && c.saw === 'table') return choose(lang,
-    `Set the fence once at ${n(c.offset)} mm and feed each piece separately: ${c.segments.map((s) => `${s.workpiece} (${n(s.w)} × ${n(s.h)} mm, measured from its ${s.axis === 'x' ? 'left' : 'top'} edge)`).join('; ')}. Ready after step ${c.prerequisite}.`,
-    `鋸導尺定喺 ${n(c.offset)} 毫米一次，逐件推過：${c.segments.map((s) => `${s.workpiece}（${n(s.w)} × ${n(s.h)} 毫米，由${s.axis === 'x' ? '左' : '上'}邊量）`).join('；')}。先完成第 ${c.prerequisite} 刀。`) + shared + released;
+    `Set the fence once at ${n(fenceAt(c))} mm and feed each piece separately: ${c.segments.map((s) => `${s.workpiece} (${n(s.w)} × ${n(s.h)} mm, ${fenceEdge(s)} edge against the fence)`).join('; ')}. Ready after step ${c.prerequisite}.`,
+    `鋸導尺定喺 ${n(fenceAt(c))} 毫米一次，逐件推過：${c.segments.map((s) => `${s.workpiece}（${n(s.w)} × ${n(s.h)} 毫米，${edgeZh[fenceEdge(s)]}邊靠鋸導尺）`).join('；')}。先完成第 ${c.prerequisite} 刀。`) + shared + released;
+  if (c.saw === 'table') return choose(lang, `Workpiece ${c.workpiece} (${n(c.w)} × ${n(c.h)} mm), ${fenceEdge(c)} edge against the fence → ${c.first}${c.second ? ' + ' + c.second : ' + kerf waste'}. ${c.prerequisite ? 'Available after step ' + c.prerequisite + '.' : 'Start from the trimmed sheet.'}`, `板件 ${c.workpiece}（${n(c.w)} × ${n(c.h)} 毫米），${edgeZh[fenceEdge(c)]}邊靠鋸導尺 → ${c.first}${c.second ? ' ＋ ' + c.second : ' ＋ 鋸縫廢料'}。${c.prerequisite ? '先完成第 ' + c.prerequisite + ' 刀。' : '由修邊後嘅整張板開始。'}`) + shared + released;
   if (c.segments?.length > 1) return choose(lang,
     `Keep ${c.segments.map((s) => s.workpiece).join(', ')} aligned in their original sheet positions and cut in one straight pass. Set aside finished parts and offcuts outside this pass. Measurements: ${c.segments.map((s) => `${s.workpiece}: ${n(s.offset)} mm from ${s.axis === 'x' ? 'left' : 'top'} edge`).join('; ')}. Ready after step ${c.prerequisite}.`,
     `將 ${c.segments.map((s) => s.workpiece).join('、')} 按原板材位置對齊，一次直線切過；先移開本刀以外已完成嘅零件及餘料。各板件量度：${c.segments.map((s) => `${s.workpiece}：由${s.axis === 'x' ? '左' : '上'}邊量 ${n(s.offset)} 毫米`).join('；')}。先完成第 ${c.prerequisite} 刀。`) + shared + released;
