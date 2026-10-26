@@ -1,5 +1,6 @@
 // Sets one version on every cache-busting `?v=` tag in dist/ (scripts, stylesheets,
-// module imports, worker URLs) and records it in VERSION. Never bump tags by hand.
+// module imports, worker URLs) and on the visible `class="app-version">v…` labels in
+// the page footers, and records it in VERSION. Never bump either by hand.
 //   node scripts/set-version.mjs 0.26.0   → set a new version
 //   node scripts/set-version.mjs --check  → exit 1 if any tag differs from VERSION
 import fs from 'node:fs';
@@ -7,7 +8,7 @@ import path from 'node:path';
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const dist = path.join(root, 'dist');
-const TAG = /(\?v=)\d+\.\d+\.\d+/g;
+const TAG = /(\?v=|class="app-version">v)(\d+\.\d+\.\d+)/g;
 
 export function distFiles(dir = dist) {
   const out = [];
@@ -21,7 +22,7 @@ export function distFiles(dir = dist) {
 export function versionsInUse() {
   const found = new Map();
   for (const file of distFiles()) for (const match of fs.readFileSync(file, 'utf8').matchAll(TAG)) {
-    const version = match[0].slice(3);
+    const version = match[2];
     if (!found.has(version)) found.set(version, new Set());
     found.get(version).add(path.relative(root, file));
   }

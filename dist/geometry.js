@@ -1,15 +1,15 @@
-import { preservedRemnants } from "./remnant-policy.js?v=0.26.4";
+import { preservedRemnants } from "./remnant-policy.js?v=0.27.0";
 import {
   cached,
   objectKey,
   poseKey,
   count,
-} from "./nesting-profile.js?v=0.26.4";
+} from "./nesting-profile.js?v=0.27.0";
 import {
   commonContactClearance,
   sharedJunctions,
   junctionClearance,
-} from "./common-contact.js?v=0.26.4";
+} from "./common-contact.js?v=0.27.0";
 // Geometry is expressed in millimetres, with screen Y pointing down.
 export const TOL = 0.02;
 export const near = (a, b, e = 1e-5) => Math.hypot(a.x - b.x, a.y - b.y) <= e;

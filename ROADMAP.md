@@ -106,11 +106,17 @@ and every Phase 1 UI fix is visible in the preview in both languages.
   parts. 30–50 % of sheets repeat in a 4 s search. 21/21 plans identical; 139 pieces
   1.0 s → 0.86 s; 4 s search at 139 pieces 84 → 127 tries (and found 237 steps
   instead of 238).
-- [ ] **1.3 Wording and settings tidy-up.**
+- [x] **1.3 Wording and settings tidy-up.**
   Auto Nest footer note matches the single "Use this layout" button; laser header
   shows the workspace name (version in the footer); timber Cutting direction and
   Use part priorities move into a More options fold.
   Done when: checked in both languages; no setting lost from saved projects.
+  Result: Auto Nest and Manual notes name “Use this layout”; laser header says LASER
+  CUTTING (was a stale 0.15.0) and all three footers show the version, set by
+  `set-version.mjs` and guarded by a test; Cutting direction and Use part priorities
+  sit in a More options fold (closes on Escape or a click elsewhere). Also: restored
+  notice no longer mixes languages; “1 sheet” singular. Checked in both languages;
+  direction/priorities survive reload.
 - [ ] **1.4 Offcuts back into stock.**
   Done when: each reusable offcut on Review has "Add to stock", which adds a stock
   row (material, thickness, size, qty 1, label "Offcut S1-W2"); undoable.
@@ -158,3 +164,4 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
 | 2026-10-26 | 0.4 Settings schema | `timber-settings.js`; 235/235 tests; 21/21 plans identical; old-format project reopens in the browser. Phase 0 done |
 | 2026-10-26 | 1.1 Sheets-first pruning | 237/237 tests; 21/21 plans identical; 139 pieces 2.6 s → 1.0 s; 4 s search 39 → 84 tries |
 | 2026-10-26 | 1.2 Cut-order cache | 239/239 tests; 21/21 plans identical; 139 pieces 0.86 s (baseline 2.6 s); 4 s search 127 tries (baseline 39) |
+| 2026-10-26 | 1.3 Wording & settings | 240/240 tests; version 0.27.0 shown in footers; settings fold checked EN/中文 |

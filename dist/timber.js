@@ -1,15 +1,15 @@
-import { planTimber, validateProject, parseCSV, toCSV } from './timber-planner.js?v=0.26.4';
-import { TIMBER_SETTINGS, cleanTimberSettings, defaultTimberSettings } from './timber-settings.js?v=0.26.4';
-import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.26.4';
-import { installTimberWorkflow } from './timber-workflow.js?v=0.26.4';
-import { timberCutOverlay, updateCutTrace } from './timber-cut-overlay.js?v=0.26.4';
-import { installCutPlayback } from './timber-playback.js?v=0.26.4';
-import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.26.4';
-import { t, getLanguage, onLanguageChange } from './locale.js?v=0.26.4';
-import { saveFile } from './file-download.js?v=0.26.4';
-import { createTimberPDF, loadPDFTools } from './timber-pdf.js?v=0.26.4';
-import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency } from './timber-text.js?v=0.26.4';
-import { installSawHelp } from './timber-saw-help.js?v=0.26.4';
+import { planTimber, validateProject, parseCSV, toCSV } from './timber-planner.js?v=0.27.0';
+import { TIMBER_SETTINGS, cleanTimberSettings, defaultTimberSettings } from './timber-settings.js?v=0.27.0';
+import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.27.0';
+import { installTimberWorkflow } from './timber-workflow.js?v=0.27.0';
+import { timberCutOverlay, updateCutTrace } from './timber-cut-overlay.js?v=0.27.0';
+import { installCutPlayback } from './timber-playback.js?v=0.27.0';
+import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.27.0';
+import { t, getLanguage, onLanguageChange } from './locale.js?v=0.27.0';
+import { saveFile } from './file-download.js?v=0.27.0';
+import { createTimberPDF, loadPDFTools } from './timber-pdf.js?v=0.27.0';
+import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency } from './timber-text.js?v=0.27.0';
+import { installSawHelp } from './timber-saw-help.js?v=0.27.0';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const fmt = (n) => Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
@@ -320,6 +320,10 @@ visualUI = installTimberVisual({
 });
 visualUI.restore(initial.visual); visualUI.update(readProject());
 installSawHelp($('saw'));
+// "More options" folds out over the canvas: close it on Escape or a click elsewhere.
+{ const more = document.querySelector('.settings-more');
+  document.addEventListener('click', (event) => { if (more?.open && !more.contains(event.target)) more.open = false; });
+  document.addEventListener('keydown', (event) => { if (more?.open && event.key === 'Escape') { more.open = false; more.querySelector('summary').focus(); } }); }
 $('saw').addEventListener('change', () => { $('hybrid-limit-field').hidden = $('saw').value !== 'hybrid'; });
 workflow = installTimberWorkflow({
   root: $('timber-workflow'), footer: $('timber-workflow-footer'), form: $('timber-form'), results: $('results'),
@@ -333,7 +337,7 @@ workflow = installTimberWorkflow({
   onChange(step) { if (step !== 4) cutPlayback.pause(); },
 });
 try { localStorage.setItem(STORAGE, JSON.stringify(readProject())); } catch { /* The visible save status already offers project download. */ }
-if (restored) notify('Your saved timber project has been restored · 已還原。The visual preview updates as you edit.');
+if (restored) notify(t('Your saved timber project has been restored. The preview updates as you edit.', '已還原你儲存嘅木材專案，預覽會隨修改即時更新。'));
 
 function planCaption() {
   if (!plan || !plannedProject) return '';
