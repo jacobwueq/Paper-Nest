@@ -23,7 +23,7 @@ function result(node, first, second) {
   if (node.kind !== 'cut') return { node, count: 0, length: 0, offcuts: node.kind === 'free' && Math.min(node.w, node.h) >= 50 - EPS ? [node.w * node.h] : [] };
   return { node, count: 1 + first.count + (second?.count || 0), length: (node.axis === 'x' ? node.h : node.w) + first.length + (second?.length || 0), offcuts: [...first.offcuts, ...(second?.offcuts || [])].sort((a, b) => b - a) };
 }
-export function simplifyTimberCuts(root, kerf, { direction = 'auto', saw = 'panel', maxStates = 900 } = {}) {
+export function simplifyTimberCuts(root, kerf, { direction = 'auto', saw = 'panel', limit = 1220, maxStates = 900 } = {}) {
   const originals = new Map(), memo = new Map(), parts = [];
   const index = (node) => {
     if (node.kind === 'part') parts.push(node.part);
@@ -31,7 +31,7 @@ export function simplifyTimberCuts(root, kerf, { direction = 'auto', saw = 'pane
     originals.set(key(node), entry); return entry;
   };
   const baseline = index(root);
-  if (baseline.count <= Math.max(0, parts.length - 1)) { const schedule = scheduleCuts(root, saw); return { root: copy(root), before: baseline.count, after: schedule.count, splitCount: baseline.count, alignmentCost: schedule.alignmentCost }; }
+  if (baseline.count <= Math.max(0, parts.length - 1)) { const schedule = scheduleCuts(root, saw, { limit }); return { root: copy(root), before: baseline.count, after: schedule.count, splitCount: baseline.count, alignmentCost: schedule.alignmentCost }; }
   let states = 0;
   const roots = [baseline];
   function solve(region, inside, isRoot = false) {
@@ -125,12 +125,14 @@ export function simplifyTimberCuts(root, kerf, { direction = 'auto', saw = 'pane
       const entry=sweep(rectangle(root),parts,bias,start,reuse?new Map():null);if(entry)roots.push(entry);
     }
   }
-  const candidates = roots.map((entry) => ({ entry, schedule: scheduleCuts(entry.node, saw) }));
+  const candidates = roots.map((entry) => ({ entry, schedule: scheduleCuts(entry.node, saw, { limit }) }));
   // Equal pass counts: fewer pieces held in alignment, then shorter aligned lines, so long
   // lines are cut while the panel is still one piece.
   // Table saw: rip into strips before crosscutting (narrowest widest crosscut), then fewer fence
   // settings, then fewer pieces fed through the saw, then fewer steps.
   if (saw === 'table') candidates.sort((a, b) => a.schedule.widestCrosscut - b.schedule.widestCrosscut || a.schedule.setups - b.schedule.setups || a.schedule.feeds - b.schedule.feeds || a.schedule.count - b.schedule.count || compare(a.entry, b.entry));
+  // Hybrid: fewer steps in total, then fewer pieces held in line on the panel saw, then fewer fence settings.
+  else if (saw === 'hybrid') candidates.sort((a, b) => a.schedule.count - b.schedule.count || a.schedule.alignmentCost - b.schedule.alignmentCost || a.schedule.setups - b.schedule.setups || a.schedule.feeds - b.schedule.feeds || a.schedule.alignmentLength - b.schedule.alignmentLength || compare(a.entry, b.entry));
   else candidates.sort((a, b) => a.schedule.count - b.schedule.count || a.schedule.alignmentCost - b.schedule.alignmentCost || a.schedule.alignmentLength - b.schedule.alignmentLength || compare(a.entry, b.entry));
   const best = candidates[0];
   return { root: copy(best.entry.node), before: baseline.count, after: best.schedule.count, splitCount: best.entry.count, alignmentCost: best.schedule.alignmentCost };

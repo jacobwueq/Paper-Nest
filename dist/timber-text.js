@@ -6,7 +6,8 @@ const edgeZh = { left: '左', right: '右', top: '上', bottom: '下' };
 const fenceAt = (c) => c.fence ?? c.offset, fenceEdge = (c) => c.fenceFrom || (c.axis === 'x' ? 'left' : 'top');
 export function cutDescription(c, lang = getLanguage()) {
   const fence = c.saw === 'table' && c.fenceRepeat ? choose(lang, ' · fence unchanged', ' · 鋸導尺不變') : '';
-  return describe(c, lang) + fence;
+  const machine = c.hybrid ? (c.saw === 'table' ? choose(lang, 'Table saw · ', '檯鋸 · ') : choose(lang, 'Panel saw · ', '板鋸 · ')) : '';
+  return machine + describe(c, lang) + fence;
 }
 function describe(c, lang) {
   if (c.segments?.length > 1 && c.saw === 'table') return choose(lang, `Fence at ${n(fenceAt(c))} mm · ${c.segments.length} pieces, one after another`, `鋸導尺定喺 ${n(fenceAt(c))} 毫米 · 逐件切 ${c.segments.length} 件`);
@@ -15,6 +16,10 @@ function describe(c, lang) {
   return choose(lang, `${c.axis === 'x' ? 'Crosscut' : 'Rip cut'} at ${n(c.offset)} mm from ${c.axis === 'x' ? 'left' : 'top'} edge`, `${c.axis === 'x' ? '橫紋切割' : '順紋切割'}：由${c.axis === 'x' ? '左邊' : '上邊'}量 ${n(c.offset)} 毫米`);
 }
 export function cutDetail(c, lang = getLanguage()) {
+  const move = c.machineChange ? choose(lang, 'Move the pieces to the table saw. ', '將板件搬去檯鋸。') : '';
+  return move + detail(c, lang);
+}
+function detail(c, lang) {
   const edgeList = c.edgeParts?.slice(0, 6).join(', ') + (c.edgeParts?.length > 6 ? choose(lang, ` … (+${c.edgeParts.length - 6} more)`, `…（另有 ${c.edgeParts.length - 6} 件）`) : '');
   const shared = c.edgeParts?.length > 1 ? choose(lang, ` One straight cut sets matching edges for ${edgeList}.`, ` 一刀直線切割，同時完成 ${edgeList} 嘅對齊邊。`) : '';
   const released = c.releasedParts?.length > 1 ? choose(lang, ` This cut releases ${c.releasedParts.join(' + ')} together.`, ` 呢一刀同時分出 ${c.releasedParts.join(' ＋ ')}。`) : '';
@@ -49,6 +54,10 @@ export function trimGuide(sheet, settings, lang = getLanguage()) {
 export function cutEfficiency(sheet, lang = getLanguage()) {
   const shared = sheet.cuts.filter((c) => c.segments?.length > 1).length;
   const saved = sheet.cutReduction || 0;
+  if (sheet.saw === 'hybrid') {
+    const panel = sheet.cuts.filter((c) => c.saw === 'panel').length, table = sheet.cuts.length - panel;
+    return choose(lang, `Hybrid · ${panel} panel-saw passes break the sheet down, then ${table} table-saw steps with ${sheet.fenceSettings ?? table} fence settings.`, `混合 · 先用板鋸切 ${panel} 刀拆開大板，再用檯鋸做 ${table} 步，只需設定鋸導尺 ${sheet.fenceSettings ?? table} 次。`);
+  }
   if (sheet.cuts[0]?.saw === 'table') {
     const feeds = sheet.cuts.reduce((n, c) => n + (c.segments?.length || 1), 0);
     const settings = sheet.fenceSettings ?? sheet.cuts.length;

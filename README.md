@@ -647,9 +647,18 @@ how the cutting guide orders and groups the cuts.
   "fence unchanged". Fence capacity is not limited. The cut-guide CSV adds `saw`,
   `fence_mm` and `fence_edge`.
 
+- **Hybrid · panel saw, then table saw**. The panel saw breaks the sheet down while a
+  workpiece is longer than **Table saw for pieces up to** (1,220 mm by default, shown only
+  in Hybrid); once a piece is that size or smaller, it and everything cut from it go to
+  the table saw. All panel-saw steps come first, using the panel-saw rules; the rest use
+  the table-saw rules. Each step starts with its machine, and the first table-saw step
+  says to move the pieces across. Plans compare total steps, then pieces held in line,
+  then fence settings.
+
 The ⓘ button beside **Saw** opens a floating explainer (`dist/timber-saw-help.js`): why
 the board-still / blade-still difference changes the cut order, with a small diagram
-of each saw and a button to choose it. It closes with ×, Escape or a click outside.
+of each saw (panel saw from the front, table saw from above, hybrid as long lines then
+short cuts) and a button to choose it. It closes with ×, Escape or a click outside.
 
 The 26 Oct 2026 screenshot is a regression fixture (`tests/timber-saw-modes.test.mjs`):
 on a panel saw the order is bottom strip, right strip, the 450 mm line across the

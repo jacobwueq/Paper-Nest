@@ -8,7 +8,8 @@ export function validateProject(project) {
   const { settings, stocks, parts } = project;
   if (!settings || ![settings.kerf, settings.trim].every((v) => Number.isFinite(v) && v >= 0 && v <= 100)) throw new Error('Kerf and edge trim must be between 0 and 100 mm.');
   if (!['auto', 'rip', 'cross'].includes(settings.direction)) throw new Error('Choose a valid cutting direction.');
-  if (settings.saw !== undefined && !['panel', 'table'].includes(settings.saw)) throw new Error('Choose a panel saw or a table saw.');
+  if (settings.saw !== undefined && !['panel', 'table', 'hybrid'].includes(settings.saw)) throw new Error('Choose a panel saw, a table saw or hybrid.');
+  if (settings.hybridLimit !== undefined && !(Number.isFinite(settings.hybridLimit) && settings.hybridLimit >= 100 && settings.hybridLimit <= 10000)) throw new Error('The table-saw piece length must be between 100 and 10,000 mm.');
   if (settings.usePriorities !== undefined && typeof settings.usePriorities !== 'boolean') throw new Error('Part priorities must be enabled or disabled.');
   if (!Array.isArray(stocks) || !stocks.length || stocks.length > 50) throw new Error('Add between 1 and 50 stock rows.');
   if (!Array.isArray(parts) || !parts.length || parts.length > 100) throw new Error('Add between 1 and 100 part rows.');
@@ -129,9 +130,9 @@ function build(project, order, strategy) {
 }
 function finalizePlan(project, sheets, unplaced, required) {
   let cutLength = 0;
-  const saw = project.settings.saw === 'table' ? 'table' : 'panel';
+  const saw = ['table', 'hybrid'].includes(project.settings.saw) ? project.settings.saw : 'panel', limit = project.settings.hybridLimit ?? 1220;
   sheets = sheets.map((sheet) => {
-    const simplified = simplifyTimberCuts(sheet.root, project.settings.kerf, { direction: project.settings.direction, saw });
+    const simplified = simplifyTimberCuts(sheet.root, project.settings.kerf, { direction: project.settings.direction, saw, limit });
     return { ...sheet, root: simplified.root, cutReduction: simplified.before - simplified.after, originalCutCount: simplified.before };
   });
   for (const sheet of sheets) {
@@ -157,15 +158,18 @@ function finalizePlan(project, sheets, unplaced, required) {
       else sheet.offcuts.push({ ...node, id });
     };
     visit(sheet.root, `S${sheet.number}`);
-    const schedule = scheduleCuts(sheet.root, saw), byId = new Map(sheet.cutSegments.map((c) => [c.workpiece, c]));
-    sheet.alignmentCost = schedule.alignmentCost; sheet.fenceSettings = schedule.setups ?? null; sheet.widestCrosscut = schedule.widestCrosscut ?? 0; cutLength += schedule.length;
+    const schedule = scheduleCuts(sheet.root, saw, { limit }), byId = new Map(sheet.cutSegments.map((c) => [c.workpiece, c]));
+    sheet.saw = saw; sheet.panelPasses = schedule.panelPasses ?? null; sheet.alignmentCost = schedule.alignmentCost; sheet.fenceSettings = schedule.setups ?? null; sheet.widestCrosscut = schedule.widestCrosscut ?? 0; cutLength += schedule.length;
     sheet.cuts = schedule.passes.map((nodes, index) => {
       const segments = nodes.map((node) => records.get(node)), step = index + 1;
       for (const c of segments) { c.step = step; c.prerequisite = c.parentWorkpiece ? byId.get(c.parentWorkpiece).step : null; }
       const representative = segments[Math.floor(segments.length / 2)];
-      if (saw === 'table') for (const node of nodes) { const fence = fenceOf(node), record = records.get(node); record.fence = fence.distance; record.fenceFrom = fence.from; }
-      const fenceRepeat = saw === 'table' && index > 0 && Math.abs(fenceOf(schedule.passes[index - 1][0]).distance - fenceOf(nodes[0]).distance) < 1e-4;
-      return { ...representative, step, segments, saw, fenceRepeat, alignmentRequired: saw === 'panel' && segments.length > 1,
+      // In hybrid mode each step says which machine it is on.
+      const machine = schedule.machines?.[index] ?? saw, previous = schedule.machines?.[index - 1] ?? saw;
+      if (machine === 'table') for (const node of nodes) { const fence = fenceOf(node), record = records.get(node); record.fence = fence.distance; record.fenceFrom = fence.from; }
+      const fenceRepeat = machine === 'table' && previous === 'table' && index > 0 && Math.abs(fenceOf(schedule.passes[index - 1][0]).distance - fenceOf(nodes[0]).distance) < 1e-4;
+      const machineChange = saw === 'hybrid' && machine === 'table' && previous === 'panel' && index > 0;
+      return { ...representative, step, segments, saw: machine, hybrid: saw === 'hybrid', machineChange, fenceRepeat, alignmentRequired: machine === 'panel' && segments.length > 1,
         prerequisite: Math.max(0, ...segments.map((c) => c.prerequisite || 0)) || null,
         edgeParts: [...new Set(segments.flatMap((c) => c.edgeParts))], releasedParts: [...new Set(segments.flatMap((c) => c.releasedParts))] };
     });

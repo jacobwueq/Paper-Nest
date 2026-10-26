@@ -29,7 +29,7 @@ const pairs = [
 ["Saved in this browser", "已儲存於此瀏覽器"],
 ["Browser saving unavailable. Use Save project to keep your work.", "瀏覽器未能儲存，請按「儲存專案」保留工作。"],
 
-['More exports','更多匯出'],['Saw','鋸機'],['Panel saw · long lines first','立式板鋸 · 先切長直線'],['Table saw · fence settings','檯鋸 · 按鋸導尺設定'],['Vector geometry · max. 5 MB','向量圖形 · 最大 5 MB'],['Ready to review','可以檢查'],['Choose workspace','選擇工作模式'],['← Choose workspace','← 選擇工作模式'],['Laser cutting ↗','雷射切割 ↗'],['One workshop. Two ways to cut.','一個工作室，兩種切割模式。'],
+['More exports','更多匯出'],['Saw','鋸機'],['Hybrid · panel saw, then table saw','混合 · 先板鋸，後檯鋸'],['Table saw for pieces up to','板件長度以下用檯鋸'],['Panel saw · long lines first','立式板鋸 · 先切長直線'],['Table saw · fence settings','檯鋸 · 按鋸導尺設定'],['Vector geometry · max. 5 MB','向量圖形 · 最大 5 MB'],['Ready to review','可以檢查'],['Choose workspace','選擇工作模式'],['← Choose workspace','← 選擇工作模式'],['Laser cutting ↗','雷射切割 ↗'],['One workshop. Two ways to cut.','一個工作室，兩種切割模式。'],
 ['What are we','今日要切'],['cutting today','啲咩材料'],['Files stay in your browser','檔案於本機處理'],['Delete part','刪除零件'],
 ['What are we cutting today?','今日要切啲咩材料？'],['Start with your material. Turn a list of parts into a plan for the workshop.','由材料開始，將零件清單變成工作室可用嘅切割方案。'],
 ['Timber cutting','木材開料'],['Laser cutting','雷射切割'],['Cutting lists','開料清單'],['Grain & kerf','木紋及鋸縫'],['Cut-order guide','切割次序指引'],['Shape nesting','異形排料'],['1:1 export','原尺寸匯出'],

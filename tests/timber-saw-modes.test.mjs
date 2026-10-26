@@ -80,5 +80,31 @@ test('automatic planning works for both saws and older projects without a saw de
   const old = sawProject(); delete old.settings.saw;
   validateProject(old);
   assert.ok(planTimber(old).sheets[0].cuts.every((c) => c.saw === 'panel'));
-  assert.throws(() => validateProject(sawProject('bandsaw')), /panel saw or a table saw/);
+  assert.throws(() => validateProject(sawProject('bandsaw')), /panel saw, a table saw or hybrid/);
+});
+
+test('hybrid: the panel saw breaks the sheet into columns, then the table saw cuts them at shared fence settings', () => {
+  const sheet = manualTimber({ ...sawProject('hybrid') }, sawCommands()).sheets[0];
+  const machines = sheet.cuts.map((c) => c.saw);
+  const firstTable = machines.indexOf('table');
+  assert.ok(firstTable > 0 && machines.slice(firstTable).every((m) => m === 'table'), 'all panel-saw steps come first');
+  for (const c of sheet.cuts.slice(0, firstTable)) for (const s of c.segments) assert.ok(Math.max(s.w, s.h) > 1220, 'panel saw only cuts pieces longer than the limit');
+  for (const c of sheet.cuts.slice(firstTable)) for (const s of c.segments) assert.ok(Math.max(s.w, s.h) <= 1220);
+  assert.equal(sheet.cuts[firstTable].machineChange, true);
+  assert.match(cutDetail(sheet.cuts[firstTable], 'en'), /^Move the pieces to the table saw\./);
+  assert.match(cutDescription(sheet.cuts[0], 'en'), /^Panel saw · /);
+  assert.match(cutDescription(sheet.cuts[firstTable], 'zh-Hant'), /^檯鋸 · /);
+  assert.ok(sheet.cuts.slice(firstTable).some((c) => c.segments.length === 3), 'three columns share the 450 mm fence');
+  assert.equal(sheet.cuts.length, 7);
+  assert.match(cutEfficiency(sheet, 'en'), /^Hybrid · 4 panel-saw passes break the sheet down, then 3 table-saw steps/);
+  verifySteps(sheet);
+});
+
+test('hybrid: a lower limit keeps more cuts on the panel saw; the limit is validated', () => {
+  const p = sawProject('hybrid'); p.settings.hybridLimit = 800;
+  const sheet = manualTimber(p, sawCommands()).sheets[0];
+  const panel = sheet.cuts.filter((c) => c.saw === 'panel').length;
+  assert.ok(panel > 4); verifySteps(sheet);
+  const auto = planTimber(sawProject('hybrid')); for (const s of auto.sheets) verifySteps(s);
+  p.settings.hybridLimit = 50; assert.throws(() => validateProject(p), /between 100 and 10,000 mm/);
 });

@@ -8,7 +8,7 @@ import { t, getLanguage, onLanguageChange } from './locale.js?v=0.25.4';
 import { saveFile } from './file-download.js?v=0.25.4';
 import { createTimberPDF, loadPDFTools } from './timber-pdf.js?v=0.25.4';
 import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency } from './timber-text.js?v=0.25.4';
-import { installSawHelp } from './timber-saw-help.js?v=0.25.5';
+import { installSawHelp } from './timber-saw-help.js?v=0.25.7';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const fmt = (n) => Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
@@ -47,7 +47,7 @@ function readRows(type) {
   });
 }
 function readProject() {
-  return { schema: 'paper-nest-timber-v1', name: $('project-name').value, settings: { kerf: Number($('kerf').value), trim: Number($('trim').value), direction: $('direction').value, saw: $('saw').value, rotate: $('rotate').checked, usePriorities: $('use-priorities').checked }, stocks: readRows('stocks'), parts: readRows('parts'), ...(visualUI ? { visual: visualUI.getDraft() } : {}) };
+  return { schema: 'paper-nest-timber-v1', name: $('project-name').value, settings: { kerf: Number($('kerf').value), trim: Number($('trim').value), direction: $('direction').value, saw: $('saw').value, ...($('saw').value === 'hybrid' ? { hybridLimit: Number($('hybrid-limit').value) } : {}), rotate: $('rotate').checked, usePriorities: $('use-priorities').checked }, stocks: readRows('stocks'), parts: readRows('parts'), ...(visualUI ? { visual: visualUI.getDraft() } : {}) };
 }
 function cleanProject(p, allowDraft = false) {
   if (!p || p.schema !== 'paper-nest-timber-v1' || typeof p.name !== 'string' || p.name.length > 100) throw new Error('Choose a Paper Nest timber project JSON file.');
@@ -60,10 +60,10 @@ function cleanProject(p, allowDraft = false) {
   } else validateProject(p);
   if ((p.settings.usePriorities !== undefined && typeof p.settings.usePriorities !== 'boolean') || typeof p.settings.rotate !== 'boolean' || p.parts.some((part) => typeof part.grain !== 'boolean')) throw new Error('Project rotation and grain values must be true or false.');
   const rows = (values, isPart) => values.map((r) => ({ label: r.label, material: r.material, thickness: r.thickness, length: r.length, width: r.width, qty: r.qty, ...(isPart ? { priority: r.priority, grain: r.grain } : {}) }));
-  return { schema: p.schema, name: p.name, settings: { kerf: p.settings.kerf, trim: p.settings.trim, direction: p.settings.direction, saw: p.settings.saw === 'table' ? 'table' : 'panel', rotate: p.settings.rotate, usePriorities: p.settings.usePriorities === true }, stocks: rows(p.stocks, false), parts: rows(p.parts, true), visual: normalizeVisualDraft(p.visual) };
+  return { schema: p.schema, name: p.name, settings: { kerf: p.settings.kerf, trim: p.settings.trim, direction: p.settings.direction, saw: ['table', 'hybrid'].includes(p.settings.saw) ? p.settings.saw : 'panel', ...(p.settings.saw === 'hybrid' ? { hybridLimit: Number.isFinite(p.settings.hybridLimit) ? p.settings.hybridLimit : 1220 } : {}), rotate: p.settings.rotate, usePriorities: p.settings.usePriorities === true }, stocks: rows(p.stocks, false), parts: rows(p.parts, true), visual: normalizeVisualDraft(p.visual) };
 }
 function renderInputs(p) {
-  $('project-name').value = p.name; $('kerf').value = p.settings.kerf; $('trim').value = p.settings.trim; $('direction').value = p.settings.direction; $('saw').value = p.settings.saw === 'table' ? 'table' : 'panel'; $('rotate').checked = p.settings.rotate; $('use-priorities').checked = p.settings.usePriorities === true;
+  $('project-name').value = p.name; $('kerf').value = p.settings.kerf; $('trim').value = p.settings.trim; $('direction').value = p.settings.direction; $('saw').value = ['table', 'hybrid'].includes(p.settings.saw) ? p.settings.saw : 'panel'; $('hybrid-limit').value = p.settings.hybridLimit ?? 1220; $('hybrid-limit-field').hidden = $('saw').value !== 'hybrid'; $('rotate').checked = p.settings.rotate; $('use-priorities').checked = p.settings.usePriorities === true;
   $('stocks').innerHTML = p.stocks.map((r, i) => rowHTML(r, 'stocks', i)).join('');
   $('parts').innerHTML = p.parts.map((r, i) => rowHTML(r, 'parts', i)).join('');
   visualUI?.restore(p.visual);
@@ -300,6 +300,7 @@ visualUI = installTimberVisual({
 });
 visualUI.restore(initial.visual); visualUI.update(readProject());
 installSawHelp($('saw'));
+$('saw').addEventListener('change', () => { $('hybrid-limit-field').hidden = $('saw').value !== 'hybrid'; });
 workflow = installTimberWorkflow({
   root: $('timber-workflow'), footer: $('timber-workflow-footer'), form: $('timber-form'), results: $('results'),
   getState: () => ({ valid: workflowValid, hasReview: !!plan?.placed, ...visualUI.availability() }),

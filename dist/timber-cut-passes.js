@@ -2,12 +2,13 @@
 // Finished parts/offcuts can be set aside; uncut workpieces may never be crossed.
 const EPS = 1e-7;
 const lineKey = (node) => `${node.axis}:${(node[node.axis] + node.amount).toFixed(7)}`;
-export function scheduleTimberPasses(root) {
+// `include` limits scheduling to some cuts (hybrid mode); excluded cuts count as already done.
+export function scheduleTimberPasses(root, include = () => true) {
   const jobs = [];
   function visit(node, parent = -1) {
     if (node.kind !== 'cut') return;
-    const index = jobs.length;
-    jobs.push({ node, parent, key: lineKey(node), index });
+    let index = parent;
+    if (include(node)) { index = jobs.length; jobs.push({ node, parent, key: lineKey(node), index }); }
     visit(node.first, index); if (node.second) visit(node.second, index);
   }
   visit(root);
@@ -61,11 +62,12 @@ export function fenceOf(node) {
   return fromFar ? { distance: second, from: node.axis === 'x' ? 'right' : 'bottom' } : { distance: first, from: node.axis === 'x' ? 'left' : 'top' };
 }
 const fenceKey = (node) => fenceOf(node).distance.toFixed(4);
-export function scheduleFenceBatches(root) {
+export function scheduleFenceBatches(root, include = () => true) {
   const jobs = [];
   (function visit(node, parent = -1) {
     if (node.kind !== 'cut') return;
-    const index = jobs.length; jobs.push({ node, parent, key: fenceKey(node), index });
+    let index = parent;
+    if (include(node)) { index = jobs.length; jobs.push({ node, parent, key: fenceKey(node), index }); }
     visit(node.first, index); if (node.second) visit(node.second, index);
   })(root);
   const done = new Set(), passes = [], area = (job) => job.node.w * job.node.h;
@@ -91,4 +93,18 @@ export function scheduleFenceBatches(root) {
   const widestCrosscut = Math.max(0, ...jobs.filter((job) => job.node.axis === 'x').map((job) => job.node.h));
   return { passes, count: passes.length, setups, feeds: jobs.length, widestCrosscut, alignmentCost: 0, alignmentLength: 0, length };
 }
-export const scheduleCuts = (root, saw = 'panel') => saw === 'table' ? scheduleFenceBatches(root) : scheduleTimberPasses(root);
+// Hybrid: the panel saw breaks the sheet down while a workpiece is longer than `limit`;
+// once a piece is shorter, it and everything cut from it go to the table saw.
+export function scheduleHybrid(root, limit = 1220) {
+  const panelCuts = new Set();
+  (function mark(node) {
+    if (node.kind !== 'cut' || Math.max(node.w, node.h) <= limit + 1e-7) return;
+    panelCuts.add(node); mark(node.first); if (node.second) mark(node.second);
+  })(root);
+  const panel = scheduleTimberPasses(root, (node) => panelCuts.has(node));
+  const table = scheduleFenceBatches(root, (node) => !panelCuts.has(node));
+  return { passes: [...panel.passes, ...table.passes], machines: [...panel.passes.map(() => 'panel'), ...table.passes.map(() => 'table')],
+    count: panel.count + table.count, panelPasses: panel.count, setups: table.setups, feeds: table.feeds, widestCrosscut: table.widestCrosscut,
+    alignmentCost: panel.alignmentCost, alignmentLength: panel.alignmentLength, length: panel.length + table.length };
+}
+export const scheduleCuts = (root, saw = 'panel', { limit = 1220 } = {}) => saw === 'table' ? scheduleFenceBatches(root) : saw === 'hybrid' ? scheduleHybrid(root, limit) : scheduleTimberPasses(root);
