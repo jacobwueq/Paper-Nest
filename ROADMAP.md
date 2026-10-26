@@ -117,9 +117,14 @@ and every Phase 1 UI fix is visible in the preview in both languages.
   sit in a More options fold (closes on Escape or a click elsewhere). Also: restored
   notice no longer mixes languages; “1 sheet” singular. Checked in both languages;
   direction/priorities survive reload.
-- [ ] **1.4 Offcuts back into stock.**
+- [x] **1.4 Offcuts back into stock.**
   Done when: each reusable offcut on Review has "Add to stock", which adds a stock
   row (material, thickness, size, qty 1, label "Offcut S1-W2"); undoable.
+  Result: each reusable offcut has a tick box; one button adds the ticked ones
+  ("Add 2 offcuts to stock"), so several can be kept without the plan closing after
+  the first. Rows come from `offcutStockRow()` in the planner (length along grain,
+  rounded down to 0.1 mm). `notifyUndo()` restores rows, settings and manual layout;
+  it is reused by 1.5. Checked in both languages.
 - [ ] **1.5 Undo for deletions.**
   Done when: removing a part or stock row shows an undo notice that restores it.
 - [ ] **1.6 Laser: no tick box before Arrange.**
@@ -165,3 +170,4 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
 | 2026-10-26 | 1.1 Sheets-first pruning | 237/237 tests; 21/21 plans identical; 139 pieces 2.6 s → 1.0 s; 4 s search 39 → 84 tries |
 | 2026-10-26 | 1.2 Cut-order cache | 239/239 tests; 21/21 plans identical; 139 pieces 0.86 s (baseline 2.6 s); 4 s search 127 tries (baseline 39) |
 | 2026-10-26 | 1.3 Wording & settings | 240/240 tests; version 0.27.0 shown in footers; settings fold checked EN/中文 |
+| 2026-10-26 | 1.4 Offcuts → stock | 242/242 tests; add 2 offcuts → 3 stock rows → Undo → 1 row, in the browser |

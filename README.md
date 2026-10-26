@@ -82,6 +82,13 @@ Every cut line and its sequence number is visible on the sheet layout and print
 view without selecting a step. Selecting a step adds red emphasis while keeping
 all other numbers visible. Number badges avoid one another; crowded layouts use
 leader lines and an expanded right margin when needed.
+
+Reusable offcuts (both edges ≥ 50 mm) on Review can be ticked and added to stock in
+one go ("Add 2 offcuts to stock"): each becomes a stock row labelled `Offcut S1-W2`
+with the sheet's material and thickness, its length along the sheet's grain, sizes
+rounded down to 0.1 mm and quantity 1. The notice has Undo.
+Review 上可剔選可用餘料（兩邊 ≥ 50 mm）一次加入板材，每塊成為一行「Offcut S1-W2」，
+物料及厚度同原板，長度沿原板木紋，尺寸向下取至 0.1 mm，數量 1；提示內可撤銷。
 The final sheet layout also offers **Play cuts**, Pause, previous/next cut,
 Restart and a fixed 2× playback speed. Clicking a cutting-sequence instruction
 starts playback immediately from that cut, with earlier cuts already separated. A moving marker traces each cut within its current

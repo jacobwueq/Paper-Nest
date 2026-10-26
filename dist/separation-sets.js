@@ -3,10 +3,10 @@ import {
   pointIn,
   segmentsCross,
   segmentDistance,
-} from "./geometry.js?v=0.27.0";
-import { extractPartEdges, transformEdge } from "./common-edge.js?v=0.27.0";
-import { mergeCommonLines, lineLength } from "./common-line.js?v=0.27.0";
-import { rectanglePoints } from "./offcut-export.js?v=0.27.0";
+} from "./geometry.js?v=0.27.1";
+import { extractPartEdges, transformEdge } from "./common-edge.js?v=0.27.1";
+import { mergeCommonLines, lineLength } from "./common-line.js?v=0.27.1";
+import { rectanglePoints } from "./offcut-export.js?v=0.27.1";
 const EPS = 1e-6;
 const edges = (points) =>
   points.map((start, i) => ({ start, end: points[(i + 1) % points.length] }));

@@ -1,6 +1,6 @@
-import { scheduleCuts, fenceOf } from './timber-cut-passes.js?v=0.27.0';
-import { cachedSimplifyTimberCuts } from './timber-cut-planner.js?v=0.27.0';
-import { validateTimberSettings, settingValue } from './timber-settings.js?v=0.27.0';
+import { scheduleCuts, fenceOf } from './timber-cut-passes.js?v=0.27.1';
+import { cachedSimplifyTimberCuts } from './timber-cut-planner.js?v=0.27.1';
+import { validateTimberSettings, settingValue } from './timber-settings.js?v=0.27.1';
 // Rectangular guillotine plans. Every cut spans its current workpiece.
 const EPS = 1e-7;
 const positive = (v) => Number.isFinite(v) && v > 0 && v <= 20000;
@@ -192,6 +192,13 @@ function finalizePlan(project, sheets, unplaced, required, cutCache = null) {
   const fitness = { primary: score, offcuts: reusableOffcuts.map((r) => r.area), occupiedArea, cutLength, cutCount: sheets.reduce((n, s) => n + s.cuts.length, 0), alignmentCost: sheets.reduce((n, s) => n + s.alignmentCost, 0), saw, widestCrosscut: saw === 'table' ? Math.max(0, ...sheets.map((s) => s.widestCrosscut)) : 0 };
   const remaining = project.stocks.map((s, i) => s.qty - sheets.filter((sheet) => sheet.stockIndex === i).length);
   return { sheets, unplaced, score, fitness, reusableOffcuts, remaining, settings: { ...project.settings }, required, placed: required - unplaced.length };
+}
+// A stock row for an offcut kept for the next job: same material and thickness as its
+// sheet; length along the sheet's grain (x), rounded down to 0.1 mm so the row is never
+// larger than the real piece.
+export function offcutStockRow(sheet, offcut) {
+  const down = (v) => Math.floor(v * 10 + 1e-6) / 10;
+  return { label: `Offcut ${offcut.id}`, material: sheet.stock.material, thickness: sheet.stock.thickness, length: down(offcut.w), width: down(offcut.h), qty: 1 };
 }
 export function timberFreeRegions(board) { return leaves(board.root).map(({ x, y, w, h }) => ({ x, y, w, h })); }
 export function manualCommandsFromPlan(project, plan) {

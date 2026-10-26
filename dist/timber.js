@@ -1,15 +1,15 @@
-import { planTimber, validateProject, parseCSV, toCSV } from './timber-planner.js?v=0.27.0';
-import { TIMBER_SETTINGS, cleanTimberSettings, defaultTimberSettings } from './timber-settings.js?v=0.27.0';
-import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.27.0';
-import { installTimberWorkflow } from './timber-workflow.js?v=0.27.0';
-import { timberCutOverlay, updateCutTrace } from './timber-cut-overlay.js?v=0.27.0';
-import { installCutPlayback } from './timber-playback.js?v=0.27.0';
-import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.27.0';
-import { t, getLanguage, onLanguageChange } from './locale.js?v=0.27.0';
-import { saveFile } from './file-download.js?v=0.27.0';
-import { createTimberPDF, loadPDFTools } from './timber-pdf.js?v=0.27.0';
-import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency } from './timber-text.js?v=0.27.0';
-import { installSawHelp } from './timber-saw-help.js?v=0.27.0';
+import { planTimber, validateProject, parseCSV, toCSV, offcutStockRow } from './timber-planner.js?v=0.27.1';
+import { TIMBER_SETTINGS, cleanTimberSettings, defaultTimberSettings } from './timber-settings.js?v=0.27.1';
+import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.27.1';
+import { installTimberWorkflow } from './timber-workflow.js?v=0.27.1';
+import { timberCutOverlay, updateCutTrace } from './timber-cut-overlay.js?v=0.27.1';
+import { installCutPlayback } from './timber-playback.js?v=0.27.1';
+import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.27.1';
+import { t, getLanguage, onLanguageChange } from './locale.js?v=0.27.1';
+import { saveFile } from './file-download.js?v=0.27.1';
+import { createTimberPDF, loadPDFTools } from './timber-pdf.js?v=0.27.1';
+import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency } from './timber-text.js?v=0.27.1';
+import { installSawHelp } from './timber-saw-help.js?v=0.27.1';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const fmt = (n) => Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
@@ -30,8 +30,18 @@ const sample = () => ({
     { label: 'Plinth', material: 'Plywood', thickness: 18, length: 764, width: 80, qty: 2, priority: 2, grain: false },
   ],
 });
+const keptOffcuts = new Map(); // offcut id → stock row, for "Add to stock" on Review
 let plan = null, plannedProject = null, activeSheet = 0, activeStep = 1, revision = 0, visualUI = null, cutPlayback = null, workflow = null, workflowValid = false;
 function notify(text, error = false) { $('message').textContent = text; $('message').classList.toggle('error', error); $('message').hidden = !text; }
+// A notice with an Undo button. `snapshot` is a readProject() taken before the change;
+// Undo puts every row, setting and the manual layout back.
+function notifyUndo(text, snapshot) {
+  notify(text);
+  const undo = document.createElement('button');
+  undo.type = 'button'; undo.className = 'text-button notice-undo'; undo.textContent = t('Undo', '撤銷');
+  undo.onclick = () => { renderInputs(snapshot); notify(t('Undone.', '已撤銷。')); };
+  $('message').append(' ', undo);
+}
 function input(row, key, kind, label) {
   const type = kind === 'number' ? 'number' : 'text';
   return `<input data-field="${key}" type="${type}" value="${esc(row[key])}" aria-label="${esc(label)}" ${type === 'number' ? `min="${key === 'qty' ? 1 : 0.01}" max="${key === 'qty' ? 500 : 20000}" step="${key === 'qty' ? 1 : 'any'}"` : `maxlength="${key === 'material' ? 80 : 100}"`} required>`;
@@ -89,7 +99,7 @@ function renderInputs(p) {
   workflow?.showSetup();
 }
 function invalidate() {
-  cutPlayback?.clear();
+  cutPlayback?.clear(); keptOffcuts.clear();
   revision++; plan = null; plannedProject = null;
   $('results').hidden = true; $('empty-plan').hidden = false;
   document.querySelectorAll('.print-sheet').forEach((e) => e.remove());
@@ -135,7 +145,8 @@ function renderSheet(resetPlayback = true) {
   $('cut-guide').innerHTML = s.cuts.length ? s.cuts.map((c) => `<button type="button" class="cut-step" data-step="${c.step}"${s.saw === 'hybrid' ? ` data-machine="${c.saw}"` : ''} aria-pressed="${c.step === activeStep}"><span class="step-number">${c.step}</span><span><strong>${cutDescription(c)}</strong><small class="workpiece-reference">${esc(cutDetail(c))}</small><small>${esc(cutRetain(c))}</small></span></button>`).join('') : '<p class="panel-hint">This part uses the entire prepared panel. No further cuts needed.</p>';
   const useful = s.offcuts.filter((o) => Math.min(o.w, o.h) >= 50).sort((a, b) => b.w * b.h - a.w * a.h);
   const small = s.offcuts.length - useful.length;
-  $('offcut-list').innerHTML = `<strong>${t('Reusable offcuts · both edges ≥ 50 mm','可用餘料 · 兩邊均 ≥ 50 毫米')}</strong>` + (useful.length ? useful.map((o) => `<span class="offcut-tag">${esc(o.id)} · ${fmt(o.w)} × ${fmt(o.h)} mm</span>`).join('') : `<span>${t('No offcuts meet this size.','沒有符合此尺寸嘅餘料。')}</span>`) + (small ? `<div>${t(`${small} smaller remnants also shown on the layout.`, `圖上另有 ${small} 塊較細餘料。`)}</div>` : '');
+  $('offcut-list').innerHTML = `<strong>${t('Reusable offcuts · both edges ≥ 50 mm','可用餘料 · 兩邊均 ≥ 50 毫米')}</strong>` + (useful.length ? useful.map((o) => `<label class="offcut-tag"><input type="checkbox" data-offcut="${esc(o.id)}"${keptOffcuts.has(o.id) ? ' checked' : ''}> ${esc(o.id)} · ${fmt(o.w)} × ${fmt(o.h)} mm</label>`).join('') : `<span>${t('No offcuts meet this size.','沒有符合此尺寸嘅餘料。')}</span>`) + (small ? `<div>${t(`${small} smaller remnant${small === 1 ? '' : 's'} also shown on the layout.`, `圖上另有 ${small} 塊較細餘料。`)}</div>` : '') + (useful.length ? `<div class="offcut-actions"><button type="button" class="small-button" id="offcuts-to-stock">${offcutButtonText()}</button><small>${t('Tick the offcuts you will keep; they become stock rows for the next cutting list.','剔選會保留嘅餘料，佢哋會成為下一張開料清單嘅板材。')}</small></div>` : '');
+  $('offcuts-to-stock')?.toggleAttribute('disabled', !keptOffcuts.size);
   if (resetPlayback) cutPlayback?.setSheet(s, activeStep); else cutPlayback?.refreshLabels();
 }
 function renderPlan() {
@@ -163,6 +174,22 @@ for (const type of ['stocks', 'parts']) $(type).addEventListener('click', (event
   const remove = event.target.closest('[data-remove]'); if (!remove) return;
   if (type === 'stocks' && $(type).rows.length <= 1) { notify('Keep at least one stock row. Edit it to enter your stock.', true); return; }
   remove.closest('tr').remove(); invalidate();
+});
+const offcutButtonText = () => keptOffcuts.size ? t(`Add ${keptOffcuts.size} offcut${keptOffcuts.size === 1 ? '' : 's'} to stock`, `將 ${keptOffcuts.size} 塊餘料加入板材`) : t('Add to stock', '加入板材');
+$('offcut-list').addEventListener('change', (event) => {
+  const box = event.target.closest('[data-offcut]'); if (!box || !plan) return;
+  const sheet = plan.sheets[activeSheet], offcut = sheet.offcuts.find((o) => o.id === box.dataset.offcut);
+  if (box.checked && offcut) keptOffcuts.set(offcut.id, offcutStockRow(sheet, offcut)); else keptOffcuts.delete(box.dataset.offcut);
+  $('offcuts-to-stock').textContent = offcutButtonText(); $('offcuts-to-stock').disabled = !keptOffcuts.size;
+});
+$('offcut-list').addEventListener('click', (event) => {
+  if (!event.target.closest('#offcuts-to-stock') || !keptOffcuts.size) return;
+  const before = readProject(), p = readProject(), rows = [...keptOffcuts.values()];
+  if (p.stocks.length + rows.length > 50) { notify(t('Use up to 50 stock rows. Remove some rows first.', '最多 50 行板材，請先刪除部分。'), true); return; }
+  p.stocks.push(...rows); keptOffcuts.clear(); renderInputs(p);
+  document.querySelector('.visual-details').open = true;
+  notifyUndo(t(`Added ${rows.map((r) => r.label).join(', ')} to stock.`, `已將 ${rows.map((r) => r.label).join('、')} 加入板材。`), before);
+  $('message').scrollIntoView({ block: 'center' });
 });
 $('add-stock').onclick = () => {
   const p = readProject(); if (p.stocks.length >= 50) { notify('Use up to 50 stock rows.', true); return; }
