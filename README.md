@@ -71,6 +71,13 @@ Every cut line and its sequence number is visible on the sheet layout and print
 view without selecting a step. Selecting a step adds red emphasis while keeping
 all other numbers visible. Number badges avoid one another; crowded layouts use
 leader lines and an expanded right margin when needed.
+The final sheet layout also offers **Play cuts**, Pause, previous/next cut,
+Restart and 0.5×/1×/2× speed. A moving marker traces each cut within its current
+workpiece; finished cuts turn green and the matching guide instruction follows
+the selected step. Playback starts after edge preparation. It pauses for printing
+or a hidden page and resets when the sheet or plan changes. Print/PDF outputs
+keep the full static numbered plan. Reduced-motion preferences use step highlights
+without the moving marker.
 Cutting lists support CSV import with `length,width,qty` columns; optional
 `label,material,thickness,priority,grain` columns use the downloadable template.
 CSV defaults are Plywood, 18 mm, Normal priority and unlocked grain. A CSV import

@@ -1,6 +1,7 @@
 import { planTimber, validateProject, parseCSV, toCSV } from './timber-planner.js?v=0.18.0';
 import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.18.0';
-import { timberCutOverlay } from './timber-cut-overlay.js?v=0.17.2';
+import { timberCutOverlay } from './timber-cut-overlay.js?v=0.19.0';
+import { installCutPlayback } from './timber-playback.js?v=0.19.0';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const fmt = (n) => Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
@@ -21,7 +22,7 @@ const sample = () => ({
     { label: 'Plinth', material: 'Plywood', thickness: 18, length: 764, width: 80, qty: 2, priority: 2, grain: false },
   ],
 });
-let plan = null, plannedProject = null, activeSheet = 0, activeStep = 1, revision = 0, visualUI = null;
+let plan = null, plannedProject = null, activeSheet = 0, activeStep = 1, revision = 0, visualUI = null, cutPlayback = null;
 function notify(text, error = false) { $('message').textContent = text; $('message').classList.toggle('error', error); $('message').hidden = !text; }
 function input(row, key, kind, label) {
   const type = kind === 'number' ? 'number' : 'text';
@@ -62,6 +63,7 @@ function renderInputs(p) {
   invalidate();
 }
 function invalidate() {
+  cutPlayback?.clear();
   revision++; plan = null; plannedProject = null;
   $('results').hidden = true; $('empty-plan').hidden = false;
   document.querySelectorAll('.print-sheet').forEach((e) => e.remove());
@@ -83,7 +85,7 @@ function trimText(sheet) {
   const t = plan.settings.trim;
   return t ? `Prepare first: trim ${fmt(t)} mm from each of the four raw edges, including kerf in the removed strip. Finished starting panel: ${fmt(sheet.root.w)} × ${fmt(sheet.root.h)} mm. Label it S${sheet.number}; stock grain runs along its length →.` : `Start with the full ${fmt(sheet.stock.length)} × ${fmt(sheet.stock.width)} mm panel, labelled S${sheet.number}. Stock grain runs along its length →.`;
 }
-function sheetSVG(s, selectedStep = 0) {
+function sheetSVG(s, selectedStep = 0, playback = null) {
   const L = s.stock.length, W = s.stock.width, margin = Math.max(L, W) * .045, fs = Math.max(L, W) * .014;
   const colors = ['#e5d2af', '#d0dbbd', '#c7d8dd', '#dbcee0', '#e8c8b0'];
   const parts = s.parts.map((p) => {
@@ -92,7 +94,7 @@ function sheetSVG(s, selectedStep = 0) {
     return `<g><title>${esc(details)}</title><rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" fill="${colors[p.row % colors.length]}" stroke="#96846a" stroke-width="${L / 1400}"/><text x="${p.x + p.w / 2}" y="${p.y + p.h / 2 - labelSize / 3}" text-anchor="middle" font-size="${labelSize}" fill="#4e493f">${esc(p.id)}${p.rotated ? ' ↻' : ''}</text>${p.w > fs * 7 && p.h > fs * 3 ? `<text x="${p.x + p.w / 2}" y="${p.y + p.h / 2 + labelSize}" text-anchor="middle" font-size="${labelSize * .7}" fill="#736c60">${fmt(p.w)} × ${fmt(p.h)}</text>` : ''}</g>`;
   }).join('');
   const offcuts = s.offcuts.map((o) => `<g><title>${esc(o.id)} · offcut ${fmt(o.w)} × ${fmt(o.h)} mm</title><rect x="${o.x}" y="${o.y}" width="${o.w}" height="${o.h}" fill="#e8eee4" stroke="#a8b89a" stroke-width="${L / 1600}" stroke-dasharray="${L / 500} ${L / 500}"/>${o.w > fs * 7 && o.h > fs * 2 ? `<text x="${o.x + o.w / 2}" y="${o.y + o.h / 2}" text-anchor="middle" font-size="${fs * .65}" fill="#73836a">${fmt(o.w)} × ${fmt(o.h)}</text>` : ''}</g>`).join('');
-  const overlay = timberCutOverlay(s, selectedStep);
+  const overlay = timberCutOverlay(s, selectedStep, playback);
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-margin} ${-margin} ${L + margin + overlay.rightMargin} ${W + 2 * margin}" role="img" aria-label="Sheet ${s.number}: ${s.parts.length} finished parts, all ${s.cuts.length} cuts numbered in order, stock ${fmt(L)} by ${fmt(W)} millimetres"><rect width="${L}" height="${W}" fill="#eee9df" stroke="#b4a58c" stroke-width="${L / 1000}"/>${offcuts}${parts}${overlay.markup}<text x="${L / 2}" y="${-margin * .35}" text-anchor="middle" font-size="${fs * .8}" fill="#8c8170">${fmt(L)} mm · GRAIN →</text><text transform="translate(${-margin * .35} ${W / 2}) rotate(-90)" text-anchor="middle" font-size="${fs * .8}" fill="#8c8170">${fmt(W)} mm</text></svg>`;
 }
 function renderSheet() {
@@ -106,6 +108,7 @@ function renderSheet() {
   const useful = s.offcuts.filter((o) => Math.min(o.w, o.h) >= 50).sort((a, b) => b.w * b.h - a.w * a.h);
   const small = s.offcuts.length - useful.length;
   $('offcut-list').innerHTML = '<strong>Reusable offcuts · both edges ≥ 50 mm</strong>' + (useful.length ? useful.map((o) => `<span class="offcut-tag">${esc(o.id)} · ${fmt(o.w)} × ${fmt(o.h)} mm</span>`).join('') : '<span>No offcuts meet this size.</span>') + (small ? `<div>${small} smaller remnant${small === 1 ? '' : 's'} also shown on the layout.</div>` : '');
+  cutPlayback?.setSheet(s, activeStep);
 }
 function renderPlan() {
   $('results').hidden = false; $('empty-plan').hidden = true;
@@ -158,9 +161,7 @@ $('timber-form').addEventListener('submit', (event) => {
 $('sheet-select').onchange = () => { activeSheet = Number($('sheet-select').value); activeStep = 1; renderSheet(); };
 $('cut-guide').onclick = (event) => {
   const step = event.target.closest('[data-step]'); if (!step || !plan) return;
-  activeStep = Number(step.dataset.step);
-  $('sheet-drawing').innerHTML = sheetSVG(plan.sheets[activeSheet], activeStep);
-  for (const button of $('cut-guide').querySelectorAll('[data-step]')) button.setAttribute('aria-pressed', String(Number(button.dataset.step) === activeStep));
+  cutPlayback.selectStep(Number(step.dataset.step));
 };
 $('project-download').onclick = () => {
   try { const p = cleanProject(readProject(), true); download(JSON.stringify(p, null, 2) + '\n', filename('.timber.json'), 'application/json'); }
@@ -203,6 +204,7 @@ $('export-guide').onclick = () => {
 };
 $('print-plan').onclick = () => {
   if (!plan) return;
+  cutPlayback?.pause();
   document.querySelectorAll('.print-sheet').forEach((e) => e.remove());
   for (const [printIndex, s] of plan.sheets.entries()) {
     const section = document.createElement('section'); section.className = 'print-sheet';
@@ -211,6 +213,27 @@ $('print-plan').onclick = () => {
   }
   window.print();
 };
+cutPlayback = installCutPlayback({
+  root: $('cut-playback'),
+  describe: (cut) => `${cut.step}. ${cutDescription(cut)} · ${cutDetail(cut)}`,
+  onStep(cut, state) {
+    if (!cut || !plan?.sheets[activeSheet]) return;
+    activeStep = cut.step;
+    $('sheet-drawing').innerHTML = sheetSVG(plan.sheets[activeSheet], activeStep, state);
+    for (const button of $('cut-guide').querySelectorAll('[data-step]')) {
+      const selected = Number(button.dataset.step) === activeStep;
+      button.setAttribute('aria-pressed', String(selected));
+      if (selected && state.playing) $('cut-guide').scrollTop = Math.max(0, button.offsetTop - $('cut-guide').offsetTop - 30);
+    }
+  },
+  onFrame(cut, state) {
+    const trace = $('sheet-drawing').querySelector('[data-cut-trace]'), head = $('sheet-drawing').querySelector('[data-cut-head]');
+    if (!trace || !head || !cut) return;
+    const x = cut.x + (cut.axis === 'x' ? cut.offset : cut.w * state.progress);
+    const y = cut.y + (cut.axis === 'y' ? cut.offset : cut.h * state.progress);
+    trace.setAttribute('x2', x); trace.setAttribute('y2', y); head.setAttribute('cx', x); head.setAttribute('cy', y);
+  },
+});
 let initial = sample(), restored = false;
 try { const saved = localStorage.getItem(STORAGE); if (saved) { initial = cleanProject(JSON.parse(saved), true); restored = true; } } catch { /* Use the sample when saved state is unavailable or structurally invalid. */ }
 renderInputs(initial);
@@ -237,7 +260,7 @@ visualUI = installTimberVisual({
     } catch (error) { notify(error.message, true); }
   },
   onDraftChange(changed = true) {
-    if (changed) { revision++; plan = null; plannedProject = null; $('results').hidden = true; document.querySelectorAll('.print-sheet').forEach((e) => e.remove()); }
+    if (changed) { cutPlayback?.clear(); revision++; plan = null; plannedProject = null; $('results').hidden = true; document.querySelectorAll('.print-sheet').forEach((e) => e.remove()); }
     try { localStorage.setItem(STORAGE, JSON.stringify(readProject())); } catch { $('save-state').textContent = 'Use Save project to keep your work.'; }
   },
 });
