@@ -98,9 +98,14 @@ and every Phase 1 UI fix is visible in the preview in both languages.
   quick plan at 139 pieces 2.6 s → 1.0 s on this machine (all lists 0.27–0.98× time);
   "Improve layout" tries in 4 s at 139 pieces 39 → 84. `planTimber(project, { pruning:
   false })` keeps the old path for tests.
-- [ ] **1.2 Remember cut orders per sheet.**
+- [x] **1.2 Remember cut orders per sheet.**
   Done when: a sheet with the same parts in the same places reuses its cut order
   within a search; plans identical; tries per second up again (record it).
+  Result: `cachedSimplifyTimberCuts()` keys on every node's kind, rectangle, axis,
+  amount and kerf plus the options; a hit returns a fresh copy bound to this sheet's
+  parts. 30–50 % of sheets repeat in a 4 s search. 21/21 plans identical; 139 pieces
+  1.0 s → 0.86 s; 4 s search at 139 pieces 84 → 127 tries (and found 237 steps
+  instead of 238).
 - [ ] **1.3 Wording and settings tidy-up.**
   Auto Nest footer note matches the single "Use this layout" button; laser header
   shows the workspace name (version in the footer); timber Cutting direction and
@@ -152,3 +157,4 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
 | 2026-10-26 | 0.3 Fixed-work test | `fixedWorkClock()`; concave-arch test passes 3/3 runs; 230/230 tests pass |
 | 2026-10-26 | 0.4 Settings schema | `timber-settings.js`; 235/235 tests; 21/21 plans identical; old-format project reopens in the browser. Phase 0 done |
 | 2026-10-26 | 1.1 Sheets-first pruning | 237/237 tests; 21/21 plans identical; 139 pieces 2.6 s → 1.0 s; 4 s search 39 → 84 tries |
+| 2026-10-26 | 1.2 Cut-order cache | 239/239 tests; 21/21 plans identical; 139 pieces 0.86 s (baseline 2.6 s); 4 s search 127 tries (baseline 39) |

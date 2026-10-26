@@ -1,6 +1,6 @@
-import { scheduleCuts, fenceOf } from './timber-cut-passes.js?v=0.26.3';
-import { simplifyTimberCuts } from './timber-cut-planner.js?v=0.26.3';
-import { validateTimberSettings, settingValue } from './timber-settings.js?v=0.26.3';
+import { scheduleCuts, fenceOf } from './timber-cut-passes.js?v=0.26.4';
+import { cachedSimplifyTimberCuts } from './timber-cut-planner.js?v=0.26.4';
+import { validateTimberSettings, settingValue } from './timber-settings.js?v=0.26.4';
 // Rectangular guillotine plans. Every cut spans its current workpiece.
 const EPS = 1e-7;
 const positive = (v) => Number.isFinite(v) && v > 0 && v <= 20000;
@@ -78,7 +78,7 @@ function primaryScore(project, sheets, unplaced) {
 }
 // cutoff: a primary score to beat. A layout already worse than it cannot rank, so its
 // cuts are not ordered (the slow part) and a pruned stand-in is returned instead.
-function build(project, order, strategy, cutoff = null) {
+function build(project, order, strategy, cutoff = null, cutCache = null) {
   const { settings } = project;
   const remaining = project.stocks.map((s) => s.qty), sheets = [], unplaced = [];
   const stockOrder = project.stocks.map((_, i) => i).sort((i, j) => materialKey(project.stocks[i]).localeCompare(materialKey(project.stocks[j])) || project.stocks[i].length - project.stocks[j].length || project.stocks[i].width - project.stocks[j].width);
@@ -133,15 +133,15 @@ function build(project, order, strategy, cutoff = null) {
     const primary = primaryScore(project, sheets, unplaced);
     if (compareNumbers(primary, cutoff) > 0) return { pruned: true, score: primary, fitness: { primary }, sheets: [], unplaced };
   }
-  const plan = finalizePlan(project, sheets, unplaced, order.length);
+  const plan = finalizePlan(project, sheets, unplaced, order.length, cutCache);
   plan.searchSeed = { order: order.map((p) => p.id), strategy };
   return plan;
 }
-function finalizePlan(project, sheets, unplaced, required) {
+function finalizePlan(project, sheets, unplaced, required, cutCache = null) {
   let cutLength = 0;
   const saw = settingValue(project.settings, 'saw'), limit = settingValue(project.settings, 'hybridLimit');
   sheets = sheets.map((sheet) => {
-    const simplified = simplifyTimberCuts(sheet.root, project.settings.kerf, { direction: project.settings.direction, saw, limit });
+    const simplified = cachedSimplifyTimberCuts(sheet.root, project.settings.kerf, { direction: project.settings.direction, saw, limit }, cutCache);
     return { ...sheet, root: simplified.root, cutReduction: simplified.before - simplified.after, originalCutCount: simplified.before };
   });
   for (const sheet of sheets) {
@@ -291,13 +291,14 @@ function randomFor(parts) {
   for (const c of parts.map((p) => `${materialKey(p)}:${p.length}:${p.width}:${p.grain}`).join(';')) seed = Math.imul(seed ^ c.charCodeAt(0), 16777619) >>> 0;
   return () => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return (seed >>> 0) / 4294967296; };
 }
-function* candidates(project, warm, { pruning = true, keep = 8 } = {}) {
+function* candidates(project, warm, { pruning = true, keep = 8, caching = true } = {}) {
+  const cutCache = caching ? new Map() : null;
   const expanded = expand(project), random = randomFor(expanded), population = [];
   const record = (order, strategy) => {
     // Only the best `keep` plans matter (8 for the evolving search, which picks parents
     // from them; 1 for the quick plan, which never does), so a layout worse on sheets
     // than the keep-th can change nothing: skip ordering its cuts.
-    const plan = build(project, order, strategy, pruning && population.length >= keep ? population[keep - 1].plan.fitness.primary : null);
+    const plan = build(project, order, strategy, pruning && population.length >= keep ? population[keep - 1].plan.fitness.primary : null, cutCache);
     if (plan.pruned) return plan;
     population.push({ order, strategy, plan }); population.sort((a, b) => compareTimberPlans(a.plan, b.plan));
     if (population.length > 8) population.length = 8;
@@ -337,24 +338,25 @@ function* candidates(project, warm, { pruning = true, keep = 8 } = {}) {
     yield record(order, strategy);
   }
 }
-// search.pruning (default on) skips cut ordering for layouts that cannot rank; off
-// gives the same plan more slowly, and is kept for tests and benchmarks.
-export function planTimber(project, { pruning = true } = {}) {
+// pruning (default on) skips cut ordering for layouts that cannot rank; caching (on)
+// reuses the cut order of a sheet already seen in this search. Off gives the same
+// plan more slowly; the switches are kept for tests and benchmarks.
+export function planTimber(project, { pruning = true, caching = true } = {}) {
   validateProject(project);
   let best, trials = 0, pruned = 0;
   // Its 30 tries are fixed sorts and never draw parents from the population.
-  for (const plan of candidates(project, null, { pruning, keep: 1 })) {
+  for (const plan of candidates(project, null, { pruning, caching, keep: 1 })) {
     trials++; if (plan.pruned) pruned++; else if (!best || compareTimberPlans(plan, best) < 0) best = plan;
     if (trials >= 30) break;
   }
   best.searchKey = searchKey(project); best.search = { trials, pruned, complete: true };
   return best;
 }
-export async function optimizeTimber(project, { budgetMs = 1200, maxTrials = 256, initialPlan, onProgress = () => {}, shouldCancel = () => false, pruning = true } = {}) {
+export async function optimizeTimber(project, { budgetMs = 1200, maxTrials = 256, initialPlan, onProgress = () => {}, shouldCancel = () => false, pruning = true, caching = true } = {}) {
   validateProject(project);
   const started = performance.now(), duration = Math.max(0, Math.min(10000, budgetMs));
   let best, trials = 0, pruned = 0, lastReport = started, improved = false;
-  for (const plan of candidates(project, initialPlan, { pruning })) {
+  for (const plan of candidates(project, initialPlan, { pruning, caching })) {
     if (shouldCancel()) return null;
     trials++; if (plan.pruned) pruned++;
     else if (!best || compareTimberPlans(plan, best) < 0) { best = plan; improved = true; }

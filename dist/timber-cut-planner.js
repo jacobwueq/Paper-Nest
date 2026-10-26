@@ -1,4 +1,4 @@
-import { scheduleCuts } from './timber-cut-passes.js?v=0.26.3';
+import { scheduleCuts } from './timber-cut-passes.js?v=0.26.4';
 // Re-slice a fixed layout so aligned part edges can share one full-workpiece cut.
 // A bounded memoised search always retains the original valid slicing tree.
 const EPS = 1e-7;
@@ -136,4 +136,42 @@ export function simplifyTimberCuts(root, kerf, { direction = 'auto', saw = 'pane
   else candidates.sort((a, b) => a.schedule.count - b.schedule.count || a.schedule.alignmentCost - b.schedule.alignmentCost || a.schedule.alignmentLength - b.schedule.alignmentLength || compare(a.entry, b.entry));
   const best = candidates[0];
   return { root: copy(best.entry.node), before: baseline.count, after: best.schedule.count, splitCount: best.entry.count, alignmentCost: best.schedule.alignmentCost };
+}
+
+// Roadmap 1.2: the same sheet (same tree of cuts, parts and offcuts in the same places)
+// comes up again and again during a search. `cache` is a Map owned by one search; a
+// hit returns a fresh copy of the remembered tree with this sheet's own part records,
+// so callers can label and mutate it as before. The key holds every input that
+// simplifyTimberCuts reads: each node's kind, rectangle, axis, amount and kerf, plus
+// the options.
+const treeKey = (n) => n.kind === 'cut'
+  ? `C${n.axis}${n.amount.toFixed(7)}k${n.kerf.toFixed(7)}[${key(n)}](${treeKey(n.first)})(${n.second ? treeKey(n.second) : ''})`
+  : `${n.kind[0]}[${key(n)}]${n.kind === 'part' ? `{${key(n.part)}}` : ''}`;
+const CACHE_LIMIT = 4000;
+function strip(node) {
+  const result = { ...node };
+  if (node.kind === 'part') result.part = { x: node.part.x, y: node.part.y, w: node.part.w, h: node.part.h };
+  if (node.first) result.first = strip(node.first);
+  if (node.second) result.second = strip(node.second);
+  return result;
+}
+function rebind(node, parts) {
+  const result = { ...node };
+  if (node.kind === 'part') result.part = parts.get(key(node.part));
+  if (node.first) result.first = rebind(node.first, parts);
+  if (node.second) result.second = rebind(node.second, parts);
+  return result;
+}
+export function cachedSimplifyTimberCuts(root, kerf, options = {}, cache = null) {
+  if (!cache) return simplifyTimberCuts(root, kerf, options);
+  const { direction = 'auto', saw = 'panel', limit = 1220, maxStates = 900 } = options;
+  const id = `${kerf}|${direction}|${saw}|${limit}|${maxStates}|${treeKey(root)}`;
+  const parts = new Map();
+  (function collect(n) { if (n.kind === 'part') parts.set(key(n.part), n.part); if (n.first) collect(n.first); if (n.second) collect(n.second); })(root);
+  const hit = cache.get(id);
+  if (hit) { cache.hits = (cache.hits || 0) + 1; return { ...hit, root: rebind(hit.root, parts) }; }
+  const fresh = simplifyTimberCuts(root, kerf, options);
+  if (cache.size >= CACHE_LIMIT) cache.clear();
+  cache.set(id, { ...fresh, root: strip(fresh.root) });
+  return fresh;
 }

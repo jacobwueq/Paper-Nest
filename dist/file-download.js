@@ -1,4 +1,4 @@
-import { t } from './locale.js?v=0.26.3';
+import { t } from './locale.js?v=0.26.4';
 const retained = [];
 function feedback(text, link = null) {
   let box = document.getElementById('download-feedback');
