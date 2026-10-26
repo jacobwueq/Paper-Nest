@@ -7,7 +7,7 @@ export function normalizeVisualDraft(value) {
   const commands = Array.isArray(value?.commands) && value.commands.length <= 500 ? value.commands.filter((c) => c && typeof c.partId === 'string' && /^P\d+\.\d+$/.test(c.partId) && Number.isInteger(c.board) && c.board >= 0 && c.board < 200 && [c.x, c.y].every(Number.isFinite) && typeof c.rotated === 'boolean').map((c) => ({ partId: c.partId, board: c.board, x: c.x, y: c.y, rotated: c.rotated })) : [];
   return { mode: value?.mode === 'manual' ? 'manual' : 'preview', commands, selected: Number.isInteger(value?.selected) && value.selected >= 0 && value.selected < 100 ? value.selected : 0 };
 }
-export function installTimberVisual({ readProject, changePart, changeStock, addPart, applyPlan, onDraftChange }) {
+export function installTimberVisual({ readProject, changePart, changeStock, addPart, removePart, applyPlan, onDraftChange }) {
   const root = document.getElementById('timber-visual');
   root.innerHTML = `
     <div class="visual-heading"><div><p class="eyebrow">LIVE MATERIAL WORKSPACE · 即時可視化</p><h2>See every piece as you type.<small>一路輸入，一路睇到。</small></h2></div><div class="visual-mode" role="group" aria-label="Planning mode"><button type="button" data-mode="preview" aria-pressed="true">Live preview · 即時預覽</button><button type="button" data-mode="manual" aria-pressed="false">Place parts · 手動放置</button></div></div>
@@ -76,12 +76,13 @@ export function installTimberVisual({ readProject, changePart, changeStock, addP
       const valid = validSize(p), turn = row === draft.selected && rotated;
       const w = valid ? Math.max(3, (turn ? p.width : p.length) / max * 65) : 70, h = valid ? Math.max(3, (turn ? p.length : p.width) / max * 65) : 35;
       const assigned = placed.filter((item) => item.row === row).length;
-      return `<button type="button" class="visual-part-card ${draft.selected === row ? 'is-selected' : ''}" data-row="${row}" aria-pressed="${draft.selected === row}"><span class="part-mini"><svg viewBox="0 0 120 78" aria-hidden="true"><rect x="${(120 - w) / 2}" y="${(78 - h) / 2}" width="${w}" height="${h}" rx="1" fill="${colors[row % colors.length]}" stroke="${draft.selected === row ? '#376cde' : '#9d8b71'}" stroke-width="1.4"/>${p.grain && valid ? `<path d="M${(120 - w) / 2 + 3} 39h${Math.max(1, w - 6)}" stroke="#927f5f" stroke-dasharray="3 3"/>` : ''}</svg></span><span class="part-mini-copy"><strong>P${row + 1} · ${escapeHTML(p.label || 'Untitled part')}</strong><span>${valid ? `${fmt(p.length)} × ${fmt(p.width)} mm` : 'Enter size · 輸入尺寸'}</span><small>${escapeHTML(p.material)} · ${fmt(p.thickness)} mm${p.grain ? ' · → grain' : ''}</small></span><span class="part-mini-qty">${draft.mode === 'manual' ? `${assigned}/${fmt(p.qty)}` : `×${fmt(p.qty)}`}</span></button>`;
-    }).join('');
+      return `<div class="visual-part-entry"><button type="button" class="visual-part-card ${draft.selected === row ? 'is-selected' : ''}" data-row="${row}" aria-pressed="${draft.selected === row}"><span class="part-mini"><svg viewBox="0 0 120 78" aria-hidden="true"><rect x="${(120 - w) / 2}" y="${(78 - h) / 2}" width="${w}" height="${h}" rx="1" fill="${colors[row % colors.length]}" stroke="${draft.selected === row ? '#376cde' : '#9d8b71'}" stroke-width="1.4"/>${p.grain && valid ? `<path d="M${(120 - w) / 2 + 3} 39h${Math.max(1, w - 6)}" stroke="#927f5f" stroke-dasharray="3 3"/>` : ''}</svg></span><span class="part-mini-copy"><strong>P${row + 1} · ${escapeHTML(p.label || 'Untitled part')}</strong><span>${valid ? `${fmt(p.length)} × ${fmt(p.width)} mm` : 'Enter size · 輸入尺寸'}</span><small>${escapeHTML(p.material)} · ${fmt(p.thickness)} mm${p.grain ? ' · → grain' : ''}</small></span><span class="part-mini-qty">${draft.mode === 'manual' ? `${assigned}/${fmt(p.qty)}` : `×${fmt(p.qty)}`}</span></button><button type="button" class="visual-part-delete" data-delete-row="${row}" aria-label="Delete ${escapeHTML(p.label || `Part ${row + 1}`)}" title="Delete part · 刪除零件">−</button></div>`;
+    }).join('') || '<p class="visual-tray-empty">No parts yet · 暫未有零件<br>Use ＋ to add a part.</p>';
     const selected = project.parts[draft.selected];
-    $('visual-selected-name').textContent = selected?.label || 'Selected part'; $('visual-selected-code').textContent = `P${draft.selected + 1}${rotated ? ' ↻ 90°' : ''}`;
+    $('visual-selected-name').textContent = selected?.label || 'No part selected'; $('visual-selected-code').textContent = selected ? `P${draft.selected + 1}${rotated ? ' ↻ 90°' : ''}` : '—';
     for (const e of root.querySelectorAll('[data-visual-field]')) {
       const value = selected?.[e.dataset.visualField];
+      e.disabled = !selected;
       if (document.activeElement !== e) { if (e.type === 'checkbox') e.checked = Boolean(value); else e.value = value ?? ''; }
     }
     $('visual-rotate').disabled = !selected || selected.grain || !project.settings.rotate;
@@ -127,7 +128,7 @@ export function installTimberVisual({ readProject, changePart, changeStock, addP
     $('visual-undo').disabled = draft.mode !== 'manual' || !draft.commands.length; $('visual-reset').disabled = draft.mode !== 'manual' || !draft.commands.length;
     $('visual-confirm').disabled = !result?.placed || !!error;
     $('visual-view').setAttribute('aria-pressed', String(iso)); $('visual-view').textContent = iso ? 'Top view · 平面' : 'Isometric · 立體';
-    const description = error ? `完成尺寸後繼續預覽 · ${error}` : notice || (draft.mode === 'manual' ? '① 點選左邊零件  ② 點綠色空位放入。自動靠邊對齊，預留鋸縫。' : estimate ? '即時預覽已更新。點選零件修改尺寸，或切換「手動放置」逐件放入板材。' : '正在更新預覽 · Updating layout…');
+    const description = !project.parts.length ? 'Parts tray is empty. Use ＋ to add a part · 零件區已清空，按 ＋ 新增。' : error ? `完成尺寸後繼續預覽 · ${error}` : notice || (draft.mode === 'manual' ? '① 點選左邊零件  ② 點綠色空位放入。自動靠邊對齊，預留鋸縫。' : estimate ? '即時預覽已更新。點選零件修改尺寸，或切換「手動放置」逐件放入板材。' : '正在更新預覽 · Updating layout…');
     $('visual-instruction').textContent = description;
     $('visual-plan-note').textContent = draft.mode === 'manual' ? 'Manual layout · 手動排位。空位會按直線切割分區；確認後產生對應切割次序。' : 'Live estimate · 即時預計，受可用板材數量限制。確認後產生切割指引。';
     if (result?.sheets.length) {
@@ -152,7 +153,17 @@ export function installTimberVisual({ readProject, changePart, changeStock, addP
     try { const next = manualTimber(project, [...draft.commands, command]); draft.commands.push(command); manual = next; notice = `${copy} 已放入 S${board.number}。繼續點空位放下一件，或選另一種零件。`; render(); onDraftChange(); }
     catch (e) { notify(e.message); }
   }
-  $('visual-tray').addEventListener('click', (event) => { const e = event.target.closest('[data-row]'); if (e) select(Number(e.dataset.row)); });
+  $('visual-tray').addEventListener('click', (event) => {
+    const remove = event.target.closest('[data-delete-row]');
+    if (remove) {
+      const row = Number(remove.dataset.deleteRow);
+      if (draft.selected > row) draft.selected--;
+      removePart(row);
+      ($('visual-tray').querySelector(`[data-row="${draft.selected}"]`) || $('visual-add')).focus();
+      return;
+    }
+    const e = event.target.closest('[data-row]'); if (e) select(Number(e.dataset.row));
+  });
   for (const e of root.querySelectorAll('[data-visual-field]')) e.addEventListener('input', () => { changePart(draft.selected, e.dataset.visualField, e.type === 'checkbox' ? e.checked : e.type === 'number' ? Number(e.value) : e.value); });
   for (const e of root.querySelectorAll('[data-visual-stock]')) e.addEventListener('input', () => { changeStock(stockRow, e.dataset.visualStock, Number(e.value)); });
   root.querySelectorAll('[data-mode]').forEach((e) => e.onclick = () => setMode(e.dataset.mode));

@@ -1,5 +1,5 @@
 import { planTimber, validateProject, parseCSV, toCSV } from './timber-planner.js?v=0.17.0';
-import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.17.0';
+import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.17.1';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const fmt = (n) => Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
@@ -45,7 +45,7 @@ function cleanProject(p, allowDraft = false) {
   if (allowDraft) {
     if (!p.settings || ![p.settings.kerf, p.settings.trim].every(Number.isFinite) || !['auto', 'rip', 'cross'].includes(p.settings.direction)) throw new Error('Invalid saved settings.');
     for (const [key, limit] of [['stocks', 50], ['parts', 100]]) {
-      if (!Array.isArray(p[key]) || !p[key].length || p[key].length > limit) throw new Error('Invalid saved rows.');
+      if (!Array.isArray(p[key]) || (key === 'stocks' && !p[key].length) || p[key].length > limit) throw new Error('Invalid saved rows.');
       for (const r of p[key]) if (!r || !['length', 'width', 'qty', 'thickness'].every((k) => Number.isFinite(r[k])) || typeof r.label !== 'string' || r.label.length > 100 || typeof r.material !== 'string' || r.material.length > 80 || (key === 'parts' && ![0, 1, 2].includes(r.priority))) throw new Error('Invalid saved row.');
     }
   } else validateProject(p);
@@ -129,7 +129,7 @@ $('timber-form').addEventListener('input', (event) => { if (event.target.closest
 $('timber-form').addEventListener('change', (event) => { if (event.target.closest('#timber-visual')) return; invalidate(); notify(''); });
 for (const type of ['stocks', 'parts']) $(type).addEventListener('click', (event) => {
   const remove = event.target.closest('[data-remove]'); if (!remove) return;
-  if ($(type).rows.length <= 1) { notify('Keep at least one row. Edit it to enter your stock or part.', true); return; }
+  if (type === 'stocks' && $(type).rows.length <= 1) { notify('Keep at least one stock row. Edit it to enter your stock.', true); return; }
   remove.closest('tr').remove(); invalidate();
 });
 $('add-stock').onclick = () => {
@@ -163,7 +163,7 @@ $('cut-guide').onclick = (event) => {
   for (const button of $('cut-guide').querySelectorAll('[data-step]')) button.setAttribute('aria-pressed', String(Number(button.dataset.step) === activeStep));
 };
 $('project-download').onclick = () => {
-  try { const p = cleanProject(readProject()); download(JSON.stringify(p, null, 2) + '\n', filename('.timber.json'), 'application/json'); }
+  try { const p = cleanProject(readProject(), true); download(JSON.stringify(p, null, 2) + '\n', filename('.timber.json'), 'application/json'); }
   catch (error) { notify(error.message, true); }
 };
 async function readFile(input, kind) {
@@ -171,7 +171,7 @@ async function readFile(input, kind) {
   try {
     if (file.size > 1024 * 1024) throw new Error('Choose a file smaller than 1 MB.');
     const text = await file.text();
-    if (kind === 'project') { renderInputs(cleanProject(JSON.parse(text))); notify('Timber project opened. The live workspace is ready · 已開啟即時工作區。'); }
+    if (kind === 'project') { renderInputs(cleanProject(JSON.parse(text), true)); notify('Timber project opened. The live workspace is ready · 已開啟即時工作區。'); }
     else {
       const parts = parseCSV(text), p = readProject(); p.parts = parts; cleanProject(p); renderInputs(p); notify(`Imported ${parts.length} cutting-list rows. Material defaults to Plywood and thickness to 18 mm when omitted.`);
     }
@@ -227,6 +227,7 @@ visualUI = installTimberVisual({
     if (input) { input.value = value; invalidate(); notify(''); }
   },
   addPart() { $('add-part').click(); },
+  removePart(row) { $('parts').rows[row]?.remove(); invalidate(); notify(''); },
   applyPlan(result, mode) {
     try {
       const project = cleanProject(readProject()); plan = result; plannedProject = project;
