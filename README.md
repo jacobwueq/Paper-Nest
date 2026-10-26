@@ -613,3 +613,10 @@ layout exactly as the former in-canvas confirm button did; **Adjust manually fir
 opens step 3. Review shows **Download PDF** with Print and both CSVs under
 **More exports**. In laser, Tighten layout and Re-optimise unlocked are secondary
 and a disabled Next stays quiet. No planning, nesting or export logic changed.
+
+The laser and about pages show one language at a time (`data-single-language`).
+`locale.js` pairs an English label with the Chinese text right after it (text,
+`<small>`, `<span>` or a `<br>` line) and `locale.css` hides the other language;
+the text stays in the page. Inline glosses such as `Shared / 共邊 12 mm` keep the
+matching side. Laser setup shows drawing, sheet size, gap and margin; everyday
+adjustments sit under **More options** and search tuning under **Expert settings**.

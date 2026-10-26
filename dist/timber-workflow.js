@@ -1,4 +1,4 @@
-import { t, onLanguageChange } from './locale.js?v=0.25.0';
+import { t, onLanguageChange } from './locale.js?v=0.25.3';
 const steps = [
   ['Setup 設定', 'Setup · 設定', 'Enter stock sizes, part dimensions and quantities. Watch the live preview as you type. 設定板材及零件，輸入時即時預覽。'],
   ['Auto Nest 排料', 'Auto Nest · 自動排料', 'Compare layouts for fewer sheets and fewer cuts. Matching edges share straight cuts; useful offcuts break ties. 自動比較排位，盡量慳板、保留大塊餘料。'],

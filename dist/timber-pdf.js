@@ -1,5 +1,5 @@
 import { cutSegments } from './timber-cut-passes.js?v=0.25.0';
-import { getLanguage } from './locale.js?v=0.25.0';
+import { getLanguage } from './locale.js?v=0.25.3';
 import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency } from './timber-text.js?v=0.25.0';
 import { timberCutOverlay } from './timber-cut-overlay.js?v=0.25.0';
 const scripts = new Map();

@@ -1,4 +1,4 @@
-import { getLanguage } from './locale.js?v=0.25.0';
+import { getLanguage } from './locale.js?v=0.25.3';
 const n = (value) => Number(value.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
 const choose = (lang, en, zh) => lang === 'zh-Hant' ? zh : en;
 export function cutDescription(c, lang = getLanguage()) {
