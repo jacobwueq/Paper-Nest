@@ -1,25 +1,25 @@
-import { alignNearby } from "./auto-align.js?v=0.26.0";
-import { compactMultiPartClusters } from "./multi-cluster.js?v=0.26.0";
+import { alignNearby } from "./auto-align.js?v=0.26.1";
+import { compactMultiPartClusters } from "./multi-cluster.js?v=0.26.1";
 import {
   createNestingDiagnostics,
   scoreDecision,
-} from "./nesting-debug.js?v=0.26.0";
-import { compactPairClusters } from "./pair-cluster.js?v=0.26.0";
-import { profiled, count } from "./nesting-profile.js?v=0.26.0";
+} from "./nesting-debug.js?v=0.26.1";
+import { compactPairClusters } from "./pair-cluster.js?v=0.26.1";
+import { profiled, count } from "./nesting-profile.js?v=0.26.1";
 import {
   contactFromCandidate,
   replacePlacement,
   contactsAtPlacement,
-} from "./common-contact.js?v=0.26.0";
-import { commonEdgeCandidates } from "./common-edge.js?v=0.26.0";
-import { pocketTranslations } from "./pocket-search.js?v=0.26.0";
+} from "./common-contact.js?v=0.26.1";
+import { commonEdgeCandidates } from "./common-edge.js?v=0.26.1";
+import { pocketTranslations } from "./pocket-search.js?v=0.26.1";
 import {
   bounds,
   transformed,
   clearance,
   validateLayout,
-} from "./geometry.js?v=0.26.0";
-import { evaluateLayout, improves } from "./search.js?v=0.26.0";
+} from "./geometry.js?v=0.26.1";
+import { evaluateLayout, improves } from "./search.js?v=0.26.1";
 
 // Remove two parts together, keep several alternatives for the first, and
 // reinsert the second. Only complete, improved layouts leave this function.
@@ -206,6 +206,14 @@ export function compactLayout(parts, initial, settings, options = {}) {
       finalPlacements: result.placements,
     };
   return result;
+}
+// Fixed-work mode for tests and benchmarks: pass `now: fixedWorkClock()` and every
+// clock read advances time by `msPerRead`, so `milliseconds` becomes a budget of
+// clock reads (milliseconds / msPerRead) instead of wall time. The same input then
+// does the same work, and gives the same layout, on any machine.
+export function fixedWorkClock(msPerRead = 0.05) {
+  let elapsed = 0;
+  return () => (elapsed += msPerRead);
 }
 function compactLayoutImpl(parts, initial, settings, options) {
   const now = options.now || (() => performance.now());

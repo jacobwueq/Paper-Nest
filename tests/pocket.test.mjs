@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { pocketTranslations } from "../dist/pocket-search.js";
-import { compactLayout } from "../dist/compaction.js";
+import { compactLayout, fixedWorkClock } from "../dist/compaction.js";
 import {
   bounds,
   transformed,
@@ -84,9 +84,12 @@ test("concave-part layout relocates both arches out of the lower area", () => {
     allowMirror: false,
   };
   const before = evaluateLayout(parts, initial, settings);
+  // Fixed work (120 000 clock reads), not 6 s of wall time: the outcome must not
+  // depend on how fast the machine is.
   const result = compactLayout(parts, initial, settings, {
     milliseconds: 6000,
     passes: 2,
+    now: fixedWorkClock(0.05),
   });
   assert.deepEqual(validateLayout(parts, result.placements, settings), []);
   for (const id of ["A1", "A2"]) {

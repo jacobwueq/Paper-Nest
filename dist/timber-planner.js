@@ -1,5 +1,5 @@
-import { scheduleCuts, fenceOf } from './timber-cut-passes.js?v=0.26.0';
-import { simplifyTimberCuts } from './timber-cut-planner.js?v=0.26.0';
+import { scheduleCuts, fenceOf } from './timber-cut-passes.js?v=0.26.1';
+import { simplifyTimberCuts } from './timber-cut-planner.js?v=0.26.1';
 // Rectangular guillotine plans. Every cut spans its current workpiece.
 const EPS = 1e-7;
 const positive = (v) => Number.isFinite(v) && v > 0 && v <= 20000;

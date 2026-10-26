@@ -63,10 +63,15 @@ versions, benchmark baseline committed.
   holds today's numbers.
   Result: lists in `benchmarks/timber-lists.mjs` (shared with tests); the script compares
   sheets, steps, time ratio and exact plan signature with the baseline. Re-run: identical plans.
-- [ ] **0.3 Fixed-work laser test.**
+- [x] **0.3 Fixed-work laser test.**
   The concave-arch test runs for 6 s and fails here by 4 mm.
   Done when: compaction accepts a fixed step budget for tests, the test uses it,
   and it passes on every run.
+  Result: `fixedWorkClock()` in `compaction.js` turns `milliseconds` into a budget of
+  clock reads. With it the arches end at 179 mm and 236 mm (limit 245) on every run;
+  with the wall clock they ended at 249 mm. Five other test files still pass a
+  `milliseconds` budget on the real clock; they pass today and move to fixed work
+  when one of them is touched.
 - [ ] **0.4 Timber settings schema.**
   kerf, trim, direction, saw, hybridLimit, rotate, usePriorities are each handled
   in five places (validate, read, clean, render, sample).
@@ -133,3 +138,4 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
 | 2026-10-26 | Roadmap written | Baseline: 228/229 tests pass (concave-arch test fails by 4 mm); quick plan 2.9 s at 139 pieces |
 | 2026-10-26 | 0.1 One version | Five versions in use (0.13.0–0.25.8) → one (0.26.0); 229/230 tests pass |
 | 2026-10-26 | 0.2 Timber benchmark | Baseline saved: 21 runs; quick plan 2.6–2.7 s at 139 pieces on this machine |
+| 2026-10-26 | 0.3 Fixed-work test | `fixedWorkClock()`; concave-arch test passes 3/3 runs; 230/230 tests pass |
