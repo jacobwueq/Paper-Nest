@@ -1,4 +1,4 @@
-import { compactLayout } from "./compaction.js?v=0.26.2";
+import { compactLayout } from "./compaction.js?v=0.26.3";
 let offset = 0;
 let jobs = 0;
 let pairOffset = 0;

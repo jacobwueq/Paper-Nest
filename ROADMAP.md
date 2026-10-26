@@ -88,10 +88,16 @@ versions, benchmark baseline committed. **Passed 26 Oct 2026** (235/235).
 Check to finish the phase: the first plan for the 139-piece list takes under 1.5 s,
 and every Phase 1 UI fix is visible in the preview in both languages.
 
-- [ ] **1.1 Check sheets before ordering cuts.**
+- [x] **1.1 Check sheets before ordering cuts.**
   Done when: plans skip cut ordering for layouts already worse on unplaced parts,
   sheets or stock area; chosen plans are identical to before on all 21 benchmark
   runs; quick plan at 139 pieces ≤ 1.5 s (was 2.9 s).
+  Result: `primaryScore()` is known right after placement; `build()` returns a pruned
+  stand-in when it loses to the best plan (quick plan) or the 8th best (evolving search,
+  whose parents come from the best 8), so no ranking can change. 21/21 plans identical;
+  quick plan at 139 pieces 2.6 s → 1.0 s on this machine (all lists 0.27–0.98× time);
+  "Improve layout" tries in 4 s at 139 pieces 39 → 84. `planTimber(project, { pruning:
+  false })` keeps the old path for tests.
 - [ ] **1.2 Remember cut orders per sheet.**
   Done when: a sheet with the same parts in the same places reuses its cut order
   within a search; plans identical; tries per second up again (record it).
@@ -145,3 +151,4 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
 | 2026-10-26 | 0.2 Timber benchmark | Baseline saved: 21 runs; quick plan 2.6–2.7 s at 139 pieces on this machine |
 | 2026-10-26 | 0.3 Fixed-work test | `fixedWorkClock()`; concave-arch test passes 3/3 runs; 230/230 tests pass |
 | 2026-10-26 | 0.4 Settings schema | `timber-settings.js`; 235/235 tests; 21/21 plans identical; old-format project reopens in the browser. Phase 0 done |
+| 2026-10-26 | 1.1 Sheets-first pruning | 237/237 tests; 21/21 plans identical; 139 pieces 2.6 s → 1.0 s; 4 s search 39 → 84 tries |

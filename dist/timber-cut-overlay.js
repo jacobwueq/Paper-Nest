@@ -1,4 +1,4 @@
-import { t } from './locale.js?v=0.26.2';
+import { t } from './locale.js?v=0.26.3';
 const escapeHTML = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 const escWorkpiece = (s) => escapeHTML(s || '');

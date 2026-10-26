@@ -1,6 +1,6 @@
-import { scheduleCuts, fenceOf } from './timber-cut-passes.js?v=0.26.2';
-import { simplifyTimberCuts } from './timber-cut-planner.js?v=0.26.2';
-import { validateTimberSettings, settingValue } from './timber-settings.js?v=0.26.2';
+import { scheduleCuts, fenceOf } from './timber-cut-passes.js?v=0.26.3';
+import { simplifyTimberCuts } from './timber-cut-planner.js?v=0.26.3';
+import { validateTimberSettings, settingValue } from './timber-settings.js?v=0.26.3';
 // Rectangular guillotine plans. Every cut spans its current workpiece.
 const EPS = 1e-7;
 const positive = (v) => Number.isFinite(v) && v > 0 && v <= 20000;
@@ -70,7 +70,15 @@ function splitChoices(leaf, p, rotated, settings, policy) {
   const dirs = settings.direction === 'auto' ? policy === 'rip' ? ['rip'] : policy === 'cross' ? ['cross'] : ['rip', 'cross'] : [settings.direction];
   return dirs.map((direction) => ({ direction, rectangles: direction === 'rip' ? rip : cross }));
 }
-function build(project, order, strategy) {
+// The first rank of a plan: unplaced parts (by priority when used), unplaced area,
+// sheets, stock area. Known as soon as parts are placed, before any cut is ordered.
+function primaryScore(project, sheets, unplaced) {
+  const missing = project.settings.usePriorities ? [0, 1, 2].map((priority) => unplaced.filter((p) => p.priority === priority).length) : [unplaced.length];
+  return [...missing, unplaced.reduce((n, p) => n + p.length * p.width, 0), sheets.length, sheets.reduce((n, s) => n + s.stock.length * s.stock.width, 0)];
+}
+// cutoff: a primary score to beat. A layout already worse than it cannot rank, so its
+// cuts are not ordered (the slow part) and a pruned stand-in is returned instead.
+function build(project, order, strategy, cutoff = null) {
   const { settings } = project;
   const remaining = project.stocks.map((s) => s.qty), sheets = [], unplaced = [];
   const stockOrder = project.stocks.map((_, i) => i).sort((i, j) => materialKey(project.stocks[i]).localeCompare(materialKey(project.stocks[j])) || project.stocks[i].length - project.stocks[j].length || project.stocks[i].width - project.stocks[j].width);
@@ -120,6 +128,10 @@ function build(project, order, strategy) {
     }
     if (!best) { unplaced.push(p); continue; }
     insert(best.leaf, p, best.rotated, best.direction, settings.kerf);
+  }
+  if (cutoff) {
+    const primary = primaryScore(project, sheets, unplaced);
+    if (compareNumbers(primary, cutoff) > 0) return { pruned: true, score: primary, fitness: { primary }, sheets: [], unplaced };
   }
   const plan = finalizePlan(project, sheets, unplaced, order.length);
   plan.searchSeed = { order: order.map((p) => p.id), strategy };
@@ -174,11 +186,9 @@ function finalizePlan(project, sheets, unplaced, required) {
     sheet.area = sheet.stock.length * sheet.stock.width;
     sheet.yield = sheet.usedArea / sheet.area;
   }
-  const missing = project.settings.usePriorities ? [0, 1, 2].map((priority) => unplaced.filter((p) => p.priority === priority).length) : [unplaced.length];
-  const area = sheets.reduce((n, s) => n + s.area, 0);
   const reusableOffcuts = sheets.flatMap((s) => s.offcuts.map((r) => ({ ...r, sheet: s.number, area: r.w * r.h }))).filter((r) => Math.min(r.w, r.h) >= 50 - EPS).sort((a, b) => b.area - a.area || Math.min(b.w, b.h) - Math.min(a.w, a.h));
   const occupiedArea = sheets.reduce((total, s) => total + (Math.max(0, ...s.parts.map((p) => p.x + p.w)) - project.settings.trim) * (Math.max(0, ...s.parts.map((p) => p.y + p.h)) - project.settings.trim), 0);
-  const score = [...missing, unplaced.reduce((n, p) => n + p.length * p.width, 0), sheets.length, area];
+  const score = primaryScore(project, sheets, unplaced);
   const fitness = { primary: score, offcuts: reusableOffcuts.map((r) => r.area), occupiedArea, cutLength, cutCount: sheets.reduce((n, s) => n + s.cuts.length, 0), alignmentCost: sheets.reduce((n, s) => n + s.alignmentCost, 0), saw, widestCrosscut: saw === 'table' ? Math.max(0, ...sheets.map((s) => s.widestCrosscut)) : 0 };
   const remaining = project.stocks.map((s, i) => s.qty - sheets.filter((sheet) => sheet.stockIndex === i).length);
   return { sheets, unplaced, score, fitness, reusableOffcuts, remaining, settings: { ...project.settings }, required, placed: required - unplaced.length };
@@ -281,10 +291,14 @@ function randomFor(parts) {
   for (const c of parts.map((p) => `${materialKey(p)}:${p.length}:${p.width}:${p.grain}`).join(';')) seed = Math.imul(seed ^ c.charCodeAt(0), 16777619) >>> 0;
   return () => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return (seed >>> 0) / 4294967296; };
 }
-function* candidates(project, warm) {
+function* candidates(project, warm, { pruning = true, keep = 8 } = {}) {
   const expanded = expand(project), random = randomFor(expanded), population = [];
   const record = (order, strategy) => {
-    const plan = build(project, order, strategy);
+    // Only the best `keep` plans matter (8 for the evolving search, which picks parents
+    // from them; 1 for the quick plan, which never does), so a layout worse on sheets
+    // than the keep-th can change nothing: skip ordering its cuts.
+    const plan = build(project, order, strategy, pruning && population.length >= keep ? population[keep - 1].plan.fitness.primary : null);
+    if (plan.pruned) return plan;
     population.push({ order, strategy, plan }); population.sort((a, b) => compareTimberPlans(a.plan, b.plan));
     if (population.length > 8) population.length = 8;
     return plan;
@@ -323,31 +337,34 @@ function* candidates(project, warm) {
     yield record(order, strategy);
   }
 }
-export function planTimber(project) {
+// search.pruning (default on) skips cut ordering for layouts that cannot rank; off
+// gives the same plan more slowly, and is kept for tests and benchmarks.
+export function planTimber(project, { pruning = true } = {}) {
   validateProject(project);
-  let best, trials = 0;
-  for (const plan of candidates(project)) {
-    trials++; if (!best || compareTimberPlans(plan, best) < 0) best = plan;
+  let best, trials = 0, pruned = 0;
+  // Its 30 tries are fixed sorts and never draw parents from the population.
+  for (const plan of candidates(project, null, { pruning, keep: 1 })) {
+    trials++; if (plan.pruned) pruned++; else if (!best || compareTimberPlans(plan, best) < 0) best = plan;
     if (trials >= 30) break;
   }
-  best.searchKey = searchKey(project); best.search = { trials, complete: true };
+  best.searchKey = searchKey(project); best.search = { trials, pruned, complete: true };
   return best;
 }
-export async function optimizeTimber(project, { budgetMs = 1200, maxTrials = 256, initialPlan, onProgress = () => {}, shouldCancel = () => false } = {}) {
+export async function optimizeTimber(project, { budgetMs = 1200, maxTrials = 256, initialPlan, onProgress = () => {}, shouldCancel = () => false, pruning = true } = {}) {
   validateProject(project);
   const started = performance.now(), duration = Math.max(0, Math.min(10000, budgetMs));
-  let best, trials = 0, lastReport = started, improved = false;
-  for (const plan of candidates(project, initialPlan)) {
+  let best, trials = 0, pruned = 0, lastReport = started, improved = false;
+  for (const plan of candidates(project, initialPlan, { pruning })) {
     if (shouldCancel()) return null;
-    trials++;
-    if (!best || compareTimberPlans(plan, best) < 0) { best = plan; improved = true; }
-    best.searchKey = searchKey(project); best.search = { trials, complete: false };
+    trials++; if (plan.pruned) pruned++;
+    else if (!best || compareTimberPlans(plan, best) < 0) { best = plan; improved = true; }
+    best.searchKey = searchKey(project); best.search = { trials, pruned, complete: false };
     if (trials === 1 || (improved && performance.now() - lastReport > 100)) { onProgress(best); lastReport = performance.now(); improved = false; }
     if (trials >= Math.max(1, Math.min(2000, maxTrials)) || performance.now() - started >= duration) break;
     if (trials % 4 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
   }
   if (shouldCancel()) return null;
-  best.search = { trials, complete: true }; return best;
+  best.search = { trials, pruned, complete: true }; return best;
 }
 export function parseCSV(text) {
   const rows = []; let row = [], field = '', quoted = false;
