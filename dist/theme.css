@@ -30,6 +30,9 @@
   --warn: #8a5a12;
   --warn-soft: #fff5e5;
   --warn-line: #e9d5ad;
+  /* Hybrid timber: which machine a cut is on (same values as SAW_COLOURS in timber-cut-overlay.js) */
+  --saw-panel: #2f6f8f;
+  --saw-table: #8a4fb0;
 
   /* Workspace accents */
   --timber: #c2570c;

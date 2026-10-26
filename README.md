@@ -655,6 +655,11 @@ how the cutting guide orders and groups the cuts.
   says to move the pieces across. Plans compare total steps, then pieces held in line,
   then fence settings.
 
+In Hybrid, cut numbers and lines on the sheet (and in the PDF) use one colour per
+machine: steel blue for the panel saw, violet for the table saw. Filled = completed,
+outline = still to cut, red = current cut. The legend and the step list use the same
+colours.
+
 The ⓘ button beside **Saw** opens a floating explainer (`dist/timber-saw-help.js`): why
 the board-still / blade-still difference changes the cut order, with a small diagram
 of each saw (panel saw from the front, table saw from above, hybrid as long lines then

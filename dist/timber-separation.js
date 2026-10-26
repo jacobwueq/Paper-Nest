@@ -1,6 +1,6 @@
-import { cutSegments } from './timber-cut-passes.js?v=0.25.4';
-import { t } from './locale.js?v=0.25.4';
-import { timberCutOverlay } from './timber-cut-overlay.js?v=0.25.4';
+import { cutSegments } from './timber-cut-passes.js?v=0.25.8';
+import { t } from './locale.js?v=0.25.8';
+import { timberCutOverlay } from './timber-cut-overlay.js?v=0.25.8';
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const fmt = (n) => Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
 const colors = ['#e5d2af', '#d0dbbd', '#c7d8dd', '#dbcee0', '#e8c8b0'];

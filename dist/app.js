@@ -1,7 +1,7 @@
-import { saveFile } from './file-download.js?v=0.25.4';
+import { saveFile } from './file-download.js?v=0.25.8';
 import { installCutStrategy } from "./cut-strategy-ui.js?v=0.15.0";
 let cutStrategyUI = null;
-import { installWorkspace } from "./workspace-ui.js?v=0.25.4";
+import { installWorkspace } from "./workspace-ui.js?v=0.25.8";
 let workspaceUI = null;
 import { SHEET_PRESETS } from "./sheet-presets.js?v=0.13.0";
 import {

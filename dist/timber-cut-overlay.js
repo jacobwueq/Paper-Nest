@@ -1,10 +1,14 @@
-import { t } from './locale.js?v=0.25.4';
+import { t } from './locale.js?v=0.25.8';
 const escapeHTML = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 const escWorkpiece = (s) => escapeHTML(s || '');
 
+// In hybrid mode each machine keeps its own colour: filled = completed, outline = still to cut,
+// red = the current cut. Hex values because the same SVG goes into the PDF.
+export const SAW_COLOURS = { panel: '#2f6f8f', table: '#8a4fb0' };
 // Keep the entire cut order visible; selection only changes its emphasis.
 export function timberCutOverlay(sheet, selectedStep = 0, playback = null) {
+  const machineOf = (step) => sheet.saw === 'hybrid' ? SAW_COLOURS[sheet.cuts.find((c) => c.step === step)?.saw] : null;
   const L = sheet.stock.length, W = sheet.stock.width, size = Math.max(L, W);
   const radius = size * .018, margin = size * .045, spacing = radius * 2.3;
   let rightMargin = margin, overflow = 0;
@@ -42,11 +46,11 @@ export function timberCutOverlay(sheet, selectedStep = 0, playback = null) {
   const lines = segments.map(({ cut, x1, y1, x2, y2 }) => {
     const active = cut.step === selectedStep;
     const completed = playback?.active && cut.step <= playback.completedThrough;
-    return `<g data-cut-workpiece="${escWorkpiece(cut.workpiece)}"><line data-cut-line="${cut.step}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${completed ? '#4f805e' : active ? '#b3261e' : '#ad7057'}" stroke-width="${size / (active ? 450 : 950)}" opacity="${playback?.active && !active && !completed ? .4 : 1}" ${active || completed ? '' : `stroke-dasharray="${size / 260} ${size / 390}"`}/></g>`;
+    return `<g data-cut-workpiece="${escWorkpiece(cut.workpiece)}"><line data-cut-line="${cut.step}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${active ? '#b3261e' : machineOf(cut.step) || (completed ? '#4f805e' : '#ad7057')}" stroke-width="${size / (active ? 450 : 950)}" opacity="${playback?.active && !active && !completed ? .4 : 1}" ${active || completed ? '' : `stroke-dasharray="${size / 260} ${size / 390}"`}/></g>`;
   }).join('');
   const leaders = [];
   const labels = badges.map((badge) => {
-    const active = badge.step === selectedStep, completed = playback?.active && badge.step <= playback.completedThrough, color = completed ? '#4f805e' : active ? '#c64a31' : '#9a5e47';
+    const active = badge.step === selectedStep, completed = playback?.active && badge.step <= playback.completedThrough, color = active ? '#c64a31' : machineOf(badge.step) || (completed ? '#4f805e' : '#9a5e47');
     const leader = Math.hypot(badge.x - badge.anchorX, badge.y - badge.anchorY) > radius ? `<line x1="${badge.anchorX}" y1="${badge.anchorY}" x2="${badge.x}" y2="${badge.y}" stroke="${color}" stroke-width="${size / 1300}"/>` : '';
     const workpiece = sheet.cuts.find((cut) => cut.step === badge.step)?.workpiece;
     leaders.push(leader ? `<g data-cut-workpiece="${escWorkpiece(workpiece)}">${leader}</g>` : '');

@@ -26,3 +26,6 @@
 .sa-steel{fill:#5b6877}.sa-beam{fill:#8d99a6;opacity:.85}.sa-head{fill:#3b4958}.sa-blade{fill:#dfe3e8;stroke:#3b4958;stroke-width:1.2}.sa-board{fill:#e9d9bd;stroke:#b39470;stroke-width:1}.sa-grain{stroke:#cdb48f;stroke-width:.8;fill:none}
 .sa-table{fill:#eef1f4;stroke:#aab4bf;stroke-width:1}.sa-slot{fill:#3b4958}.sa-blade-line{stroke:var(--cut);stroke-width:2.4}.sa-cut{stroke:var(--cut);stroke-width:2}.sa-cut-next{stroke:var(--cut);stroke-width:1.4;stroke-dasharray:4 3}
 .sa-move{fill:none;stroke:var(--accent);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}.sa-label{font:600 10px Inter,-apple-system,"Segoe UI","Noto Sans TC",sans-serif;fill:var(--ink);paint-order:stroke;stroke:var(--surface);stroke-width:3px;stroke-linejoin:round}.sa-center{text-anchor:middle}
+.drawing-legend .legend-panel{border-color:var(--saw-panel);color:var(--saw-panel)}.drawing-legend .legend-table{border-color:var(--saw-table);color:var(--saw-table)}
+.cut-step[data-machine=panel] .step-number{border-color:var(--saw-panel);color:var(--saw-panel)}.cut-step[data-machine=table] .step-number{border-color:var(--saw-table);color:var(--saw-table)}
+.cut-step[data-machine]{box-shadow:inset 3px 0 0 transparent}.cut-step[data-machine=panel]{box-shadow:inset 3px 0 0 var(--saw-panel)}.cut-step[data-machine=table]{box-shadow:inset 3px 0 0 var(--saw-table)}
