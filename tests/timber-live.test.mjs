@@ -12,10 +12,13 @@ test('live preview worker returns revision-tagged plans and readable validation 
   const messages = []; globalThis.self = { postMessage: (data) => messages.push(data) };
   await import('../dist/timber-live-worker.js');
   const project = { settings: { kerf: 3.2, trim: 5, direction: 'auto', rotate: true }, stocks: [{ label: 'Sheet', material: 'Plywood', thickness: 18, length: 2440, width: 1220, qty: 2 }], parts: [{ label: 'Side', material: 'Plywood', thickness: 18, length: 720, width: 450, qty: 2, priority: 1, grain: false }] };
-  self.onmessage({ data: { revision: 7, project } });
+  const firstTask = self.onmessage({ data: { revision: 7, project } });
   assert.equal(messages[0].revision, 7); assert.equal(messages[0].plan.placed, 2);
   project.parts[0].width = 0;
-  self.onmessage({ data: { revision: 8, project } });
-  assert.equal(messages[1].revision, 8); assert.match(messages[1].error, /dimensions/); assert.equal(messages[1].plan, undefined);
+  await self.onmessage({ data: { revision: 8, project } });
+  await firstTask;
+  const failure = messages.find((m) => m.revision === 8);
+  assert.match(failure.error, /dimensions/); assert.equal(failure.plan, undefined);
+  assert.equal(messages.at(-1).revision, 8, 'cancelled search cannot publish an older final result');
   delete globalThis.self;
 });

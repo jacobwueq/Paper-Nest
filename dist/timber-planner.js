@@ -6,6 +6,7 @@ export function validateProject(project) {
   const { settings, stocks, parts } = project;
   if (!settings || ![settings.kerf, settings.trim].every((v) => Number.isFinite(v) && v >= 0 && v <= 100)) throw new Error('Kerf and edge trim must be between 0 and 100 mm.');
   if (!['auto', 'rip', 'cross'].includes(settings.direction)) throw new Error('Choose a valid cutting direction.');
+  if (settings.usePriorities !== undefined && typeof settings.usePriorities !== 'boolean') throw new Error('Part priorities must be enabled or disabled.');
   if (!Array.isArray(stocks) || !stocks.length || stocks.length > 50) throw new Error('Add between 1 and 50 stock rows.');
   if (!Array.isArray(parts) || !parts.length || parts.length > 100) throw new Error('Add between 1 and 100 part rows.');
   for (const [type, rows] of [['Stock', stocks], ['Part', parts]]) {
@@ -51,49 +52,77 @@ function orientations(p, settings) {
 function fits(node, p, rotated) {
   return (rotated ? p.width : p.length) <= node.w + EPS && (rotated ? p.length : p.width) <= node.h + EPS;
 }
-function build(project, order, variant) {
+function compareNumbers(a, b) {
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const d = (a[i] || 0) - (b[i] || 0);
+    if (Math.abs(d) > 1e-5) return d < 0 ? -1 : 1;
+  }
+  return 0;
+}
+function canonicalPart(a, b) {
+  return materialKey(a).localeCompare(materialKey(b)) || b.length - a.length || b.width - a.width || Number(b.grain) - Number(a.grain) || a.copy - b.copy;
+}
+function splitChoices(leaf, p, rotated, settings, policy) {
+  const w = rotated ? p.width : p.length, h = rotated ? p.length : p.width, k = settings.kerf;
+  const rip = [{ w: leaf.w, h: Math.max(0, leaf.h - h - k) }, { w: Math.max(0, leaf.w - w - k), h }];
+  const cross = [{ w: Math.max(0, leaf.w - w - k), h: leaf.h }, { w, h: Math.max(0, leaf.h - h - k) }];
+  const dirs = settings.direction === 'auto' ? policy === 'rip' ? ['rip'] : policy === 'cross' ? ['cross'] : ['rip', 'cross'] : [settings.direction];
+  return dirs.map((direction) => ({ direction, rectangles: direction === 'rip' ? rip : cross }));
+}
+function build(project, order, strategy) {
   const { settings } = project;
   const remaining = project.stocks.map((s) => s.qty), sheets = [], unplaced = [];
-  for (const p of order) {
+  const stockOrder = project.stocks.map((_, i) => i).sort((i, j) => materialKey(project.stocks[i]).localeCompare(materialKey(project.stocks[j])) || project.stocks[i].length - project.stocks[j].length || project.stocks[i].width - project.stocks[j].width);
+  for (let index = 0; index < order.length; index++) {
+    const p = order[index];
+    const choose = (sheet, leaf, rotated, stockIndex = null) => {
+      const w = rotated ? p.width : p.length, h = rotated ? p.length : p.width;
+      let best;
+      for (const split of splitChoices(leaf, p, rotated, settings, strategy.split)) {
+        const areas = split.rectangles.map((r) => r.w * r.h).sort((a, b) => b - a);
+        const short = Math.min(leaf.w - w, leaf.h - h), long = Math.max(leaf.w - w, leaf.h - h);
+        let base = strategy.slot === 'short' ? short : strategy.slot === 'long' ? long : strategy.slot === 'remnant' ? -areas[0] : leaf.w * leaf.h - w * h;
+        if (strategy.slot === 'lookahead') {
+          const future = order.slice(index + 1, index + 13).filter((q) => materialKey(q) === materialKey(p));
+          const fitting = future.filter((q) => split.rectangles.some((r) => orientations(q, settings).some((turn) => fits(r, q, turn)))).length;
+          base = -fitting;
+        }
+        const score = [base, -areas[0], -areas[1], short, long, leaf.y, leaf.x];
+        if (!best || compareNumbers(score, best.score) < 0) best = { sheet, leaf, rotated, direction: split.direction, stockIndex, score };
+      }
+      return best;
+    };
     let best;
     for (const sheet of sheets) {
       if (materialKey(sheet.stock) !== materialKey(p)) continue;
       for (const leaf of leaves(sheet.root)) for (const rotated of orientations(p, settings)) {
         if (!fits(leaf, p, rotated)) continue;
-        const w = rotated ? p.width : p.length, h = rotated ? p.length : p.width;
-        const score = leaf.w * leaf.h - w * h + Math.min(leaf.w - w, leaf.h - h) / 100000;
-        if (!best || score < best.score) best = { sheet, leaf, rotated, score };
+        const candidate = choose(sheet, leaf, rotated);
+        if (!best || compareNumbers(candidate.score, best.score) < 0) best = candidate;
       }
     }
     if (!best) {
-      let stockChoice;
-      for (let i = 0; i < project.stocks.length; i++) {
+      for (const i of stockOrder) {
         const stock = project.stocks[i];
         if (!remaining[i] || materialKey(stock) !== materialKey(p)) continue;
         const root = { kind: 'free', x: settings.trim, y: settings.trim, w: stock.length - 2 * settings.trim, h: stock.width - 2 * settings.trim };
-        for (const rotated of orientations(p, settings)) if (fits(root, p, rotated)) {
-          const score = stock.length * stock.width;
-          if (!stockChoice || score < stockChoice.score) stockChoice = { stock, stockIndex: i, root, rotated, score };
+        for (const rotated of orientations(p, settings)) {
+          if (!fits(root, p, rotated)) continue;
+          const candidate = choose({ stock, stockIndex: i, root }, root, rotated, i);
+          candidate.score.unshift(stock.length * stock.width * (strategy.stock === 'large' ? -1 : 1));
+          if (!best || compareNumbers(candidate.score, best.score) < 0) best = candidate;
         }
       }
-      if (stockChoice) {
-        const { stock, stockIndex, root, rotated } = stockChoice;
-        remaining[stockIndex]--;
-        const sheet = { stock, stockIndex, number: sheets.length + 1, root, parts: [] };
-        sheets.push(sheet); best = { sheet, leaf: root, rotated };
+      if (best) {
+        remaining[best.stockIndex]--; best.sheet.number = sheets.length + 1; sheets.push(best.sheet);
       }
     }
     if (!best) { unplaced.push(p); continue; }
-    let direction = settings.direction;
-    if (direction === 'auto') {
-      const w = best.rotated ? p.width : p.length, h = best.rotated ? p.length : p.width;
-      const ripRemnant = Math.max(best.leaf.w * Math.max(0, best.leaf.h - h - settings.kerf), Math.max(0, best.leaf.w - w - settings.kerf) * h);
-      const crossRemnant = Math.max(Math.max(0, best.leaf.w - w - settings.kerf) * best.leaf.h, w * Math.max(0, best.leaf.h - h - settings.kerf));
-      direction = (ripRemnant > crossRemnant || (ripRemnant === crossRemnant && variant)) ? 'rip' : 'cross';
-    }
-    insert(best.leaf, p, best.rotated, direction, settings.kerf);
+    insert(best.leaf, p, best.rotated, best.direction, settings.kerf);
   }
-  return finalizePlan(project, sheets, unplaced, order.length);
+  const plan = finalizePlan(project, sheets, unplaced, order.length);
+  plan.searchSeed = { order: order.map((p) => p.id), strategy };
+  return plan;
 }
 function finalizePlan(project, sheets, unplaced, required) {
   let cutLength = 0;
@@ -118,11 +147,14 @@ function finalizePlan(project, sheets, unplaced, required) {
     sheet.area = sheet.stock.length * sheet.stock.width;
     sheet.yield = sheet.usedArea / sheet.area;
   }
-  const missing = [0, 1, 2].map((priority) => unplaced.filter((p) => p.priority === priority).length);
+  const missing = project.settings.usePriorities ? [0, 1, 2].map((priority) => unplaced.filter((p) => p.priority === priority).length) : [unplaced.length];
   const area = sheets.reduce((n, s) => n + s.area, 0);
-  const score = [...missing, area, sheets.length, cutLength];
+  const reusableOffcuts = sheets.flatMap((s) => s.offcuts.map((r) => ({ ...r, sheet: s.number, area: r.w * r.h }))).filter((r) => Math.min(r.w, r.h) >= 50 - EPS).sort((a, b) => b.area - a.area || Math.min(b.w, b.h) - Math.min(a.w, a.h));
+  const occupiedArea = sheets.reduce((total, s) => total + (Math.max(0, ...s.parts.map((p) => p.x + p.w)) - project.settings.trim) * (Math.max(0, ...s.parts.map((p) => p.y + p.h)) - project.settings.trim), 0);
+  const score = [...missing, unplaced.reduce((n, p) => n + p.length * p.width, 0), sheets.length, area];
+  const fitness = { primary: score, offcuts: reusableOffcuts.map((r) => r.area), occupiedArea, cutLength, cutCount: sheets.reduce((n, s) => n + s.cuts.length, 0) };
   const remaining = project.stocks.map((s, i) => s.qty - sheets.filter((sheet) => sheet.stockIndex === i).length);
-  return { sheets, unplaced, score, remaining, settings: { ...project.settings }, required, placed: required - unplaced.length };
+  return { sheets, unplaced, score, fitness, reusableOffcuts, remaining, settings: { ...project.settings }, required, placed: required - unplaced.length };
 }
 export function timberFreeRegions(board) { return leaves(board.root).map(({ x, y, w, h }) => ({ x, y, w, h })); }
 export function manualTimber(project, commands = []) {
@@ -150,22 +182,110 @@ export function manualTimber(project, commands = []) {
   const plan = finalizePlan(project, used, expanded.filter((p) => !placed.has(p.id)), expanded.length);
   return { ...plan, boards, manual: true };
 }
+export function compareTimberPlans(a, b) {
+  const primary = compareNumbers(a.fitness.primary, b.fitness.primary);
+  if (primary) return primary;
+  // Like Laser: R1 wins before R2, then R3. Small scraps cannot buy a smaller R1.
+  const offcuts = compareNumbers(a.fitness.offcuts, b.fitness.offcuts);
+  if (offcuts) return -offcuts;
+  return compareNumbers([a.fitness.occupiedArea, a.fitness.cutLength, a.fitness.cutCount], [b.fitness.occupiedArea, b.fitness.cutLength, b.fitness.cutCount]);
+}
+function expand(project) {
+  return project.parts.flatMap((p, row) => Array.from({ length: p.qty }, (_, copy) => ({ ...p, row, copy: copy + 1, id: `P${row + 1}.${copy + 1}`, label: p.label || `Part ${row + 1}` }))).sort(canonicalPart);
+}
+const strategies = [
+  { slot: 'area', split: 'auto', stock: 'small' },
+  { slot: 'short', split: 'auto', stock: 'small' },
+  { slot: 'area', split: 'rip', stock: 'small' },
+  { slot: 'area', split: 'cross', stock: 'small' },
+  { slot: 'area', split: 'auto', stock: 'large' },
+  { slot: 'long', split: 'auto', stock: 'small' },
+  { slot: 'remnant', split: 'auto', stock: 'small' },
+  { slot: 'lookahead', split: 'auto', stock: 'small' },
+];
+const sorts = [
+  (a, b) => b.length * b.width - a.length * a.width,
+  (a, b) => Math.max(b.length, b.width) - Math.max(a.length, a.width),
+  (a, b) => b.width - a.width || b.length - a.length,
+  (a, b) => b.length - a.length || b.width - a.width,
+  (a, b) => Math.min(b.length, b.width) - Math.min(a.length, a.width),
+  (a, b) => Number(b.grain) - Number(a.grain) || b.length * b.width - a.length * a.width,
+];
+const priorityOrder = (project, sorter) => (a, b) => (project.settings.usePriorities ? a.priority - b.priority : 0) || sorter(a, b) || canonicalPart(a, b);
+function searchKey(project) {
+  return JSON.stringify([project.settings, project.stocks.map((s) => [materialKey(s), s.length, s.width, s.qty]), project.parts.map((p) => [materialKey(p), p.length, p.width, p.qty, p.grain, project.settings.usePriorities ? p.priority : null])]);
+}
+function randomFor(parts) {
+  let seed = 2166136261;
+  for (const c of parts.map((p) => `${materialKey(p)}:${p.length}:${p.width}:${p.grain}`).join(';')) seed = Math.imul(seed ^ c.charCodeAt(0), 16777619) >>> 0;
+  return () => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return (seed >>> 0) / 4294967296; };
+}
+function* candidates(project, warm) {
+  const expanded = expand(project), random = randomFor(expanded), population = [];
+  const record = (order, strategy) => {
+    const plan = build(project, order, strategy);
+    population.push({ order, strategy, plan }); population.sort((a, b) => compareTimberPlans(a.plan, b.plan));
+    if (population.length > 8) population.length = 8;
+    return plan;
+  };
+  if (warm?.searchKey === searchKey(project) && warm.searchSeed) {
+    const byId = new Map(expanded.map((p) => [p.id, p]));
+    const order = warm.searchSeed.order.map((id) => byId.get(id));
+    if (order.length === expanded.length && order.every(Boolean) && new Set(order).size === expanded.length) yield record(order, warm.searchSeed.strategy);
+  }
+  // Evaluate complementary sorts and split directions, independently of row order.
+  for (let i = 0; i < 24; i++) {
+    const sort = sorts[Math.floor(i / 4)];
+    const strategy = strategies[(i % 4 + Math.floor(i / 4) * 3) % strategies.length];
+    yield record([...expanded].sort(priorityOrder(project, sort)), strategy);
+  }
+  for (let i = 0; ; i++) {
+    if (i < 24) {
+      const strategy = strategies[Math.floor(i / sorts.length) + 4];
+      yield record([...expanded].sort(priorityOrder(project, sorts[i % sorts.length])), strategy);
+      continue;
+    }
+    const parent = population[Math.floor(random() * population.length)];
+    let order = [...parent.order];
+    if (i % 9 === 0) {
+      for (let n = order.length - 1; n > 0; n--) { const j = Math.floor(random() * (n + 1)); [order[n], order[j]] = [order[j], order[n]]; }
+    } else {
+      for (let n = 0; n < 1 + i % 4; n++) {
+        const a = Math.floor(random() * order.length), b = Math.floor(random() * order.length);
+        if (i % 3 === 0) { const [part] = order.splice(a, 1); order.splice(b, 0, part); }
+        else [order[a], order[b]] = [order[b], order[a]];
+      }
+    }
+    if (project.settings.usePriorities) order.sort((a, b) => a.priority - b.priority);
+    const strategy = i % 3 === 0 ? parent.strategy : strategies[Math.floor(random() * strategies.length)];
+    yield record(order, strategy);
+  }
+}
 export function planTimber(project) {
   validateProject(project);
-  const expanded = project.parts.flatMap((p, row) => Array.from({ length: p.qty }, (_, copy) => ({ ...p, row, copy: copy + 1, id: `P${row + 1}.${copy + 1}`, label: p.label || `Part ${row + 1}` })));
-  const sorts = [
-    (a, b) => b.length * b.width - a.length * a.width,
-    (a, b) => Math.max(b.length, b.width) - Math.max(a.length, a.width),
-    (a, b) => b.width - a.width || b.length - a.length,
-    (a, b) => b.length - a.length || b.width - a.width,
-  ];
-  let best;
-  for (const sorter of sorts) for (const variant of [false, true]) {
-    const order = [...expanded].sort((a, b) => a.priority - b.priority || sorter(a, b) || a.row - b.row || a.copy - b.copy);
-    const plan = build(project, order, variant);
-    if (!best || plan.score.some((s, i) => s !== best.score[i] && plan.score.slice(0, i).every((v, j) => v === best.score[j]) && s < best.score[i])) best = plan;
+  let best, trials = 0;
+  for (const plan of candidates(project)) {
+    trials++; if (!best || compareTimberPlans(plan, best) < 0) best = plan;
+    if (trials >= 24) break;
   }
+  best.searchKey = searchKey(project); best.search = { trials, complete: true };
   return best;
+}
+export async function optimizeTimber(project, { budgetMs = 1200, maxTrials = 256, initialPlan, onProgress = () => {}, shouldCancel = () => false } = {}) {
+  validateProject(project);
+  const started = performance.now(), duration = Math.max(0, Math.min(10000, budgetMs));
+  let best, trials = 0, lastReport = started, improved = false;
+  for (const plan of candidates(project, initialPlan)) {
+    if (shouldCancel()) return null;
+    trials++;
+    if (!best || compareTimberPlans(plan, best) < 0) { best = plan; improved = true; }
+    best.searchKey = searchKey(project); best.search = { trials, complete: false };
+    if (trials === 1 || (improved && performance.now() - lastReport > 100)) { onProgress(best); lastReport = performance.now(); improved = false; }
+    if (trials >= Math.max(1, Math.min(2000, maxTrials)) || performance.now() - started >= duration) break;
+    if (trials % 4 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  if (shouldCancel()) return null;
+  best.search = { trials, complete: true }; return best;
 }
 export function parseCSV(text) {
   const rows = []; let row = [], field = '', quoted = false;

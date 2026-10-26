@@ -1,5 +1,5 @@
-import { planTimber, validateProject, parseCSV, toCSV } from './timber-planner.js?v=0.17.0';
-import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.17.1';
+import { planTimber, validateProject, parseCSV, toCSV } from './timber-planner.js?v=0.18.0';
+import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.18.0';
 import { timberCutOverlay } from './timber-cut-overlay.js?v=0.17.2';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
@@ -12,7 +12,7 @@ for (const label of document.querySelectorAll('.file-label')) {
 }
 const sample = () => ({
   schema: 'paper-nest-timber-v1', name: 'Workshop cabinet',
-  settings: { kerf: 3.2, trim: 5, direction: 'auto', rotate: true },
+  settings: { kerf: 3.2, trim: 5, direction: 'auto', rotate: true, usePriorities: false },
   stocks: [{ label: 'Plywood sheet', material: 'Plywood', thickness: 18, length: 2440, width: 1220, qty: 2 }],
   parts: [
     { label: 'Side panel', material: 'Plywood', thickness: 18, length: 720, width: 450, qty: 2, priority: 0, grain: true },
@@ -39,7 +39,7 @@ function readRows(type) {
   });
 }
 function readProject() {
-  return { schema: 'paper-nest-timber-v1', name: $('project-name').value, settings: { kerf: Number($('kerf').value), trim: Number($('trim').value), direction: $('direction').value, rotate: $('rotate').checked }, stocks: readRows('stocks'), parts: readRows('parts'), ...(visualUI ? { visual: visualUI.getDraft() } : {}) };
+  return { schema: 'paper-nest-timber-v1', name: $('project-name').value, settings: { kerf: Number($('kerf').value), trim: Number($('trim').value), direction: $('direction').value, rotate: $('rotate').checked, usePriorities: $('use-priorities').checked }, stocks: readRows('stocks'), parts: readRows('parts'), ...(visualUI ? { visual: visualUI.getDraft() } : {}) };
 }
 function cleanProject(p, allowDraft = false) {
   if (!p || p.schema !== 'paper-nest-timber-v1' || typeof p.name !== 'string' || p.name.length > 100) throw new Error('Choose a Paper Nest timber project JSON file.');
@@ -50,12 +50,12 @@ function cleanProject(p, allowDraft = false) {
       for (const r of p[key]) if (!r || !['length', 'width', 'qty', 'thickness'].every((k) => Number.isFinite(r[k])) || typeof r.label !== 'string' || r.label.length > 100 || typeof r.material !== 'string' || r.material.length > 80 || (key === 'parts' && ![0, 1, 2].includes(r.priority))) throw new Error('Invalid saved row.');
     }
   } else validateProject(p);
-  if (typeof p.settings.rotate !== 'boolean' || p.parts.some((part) => typeof part.grain !== 'boolean')) throw new Error('Project rotation and grain values must be true or false.');
+  if ((p.settings.usePriorities !== undefined && typeof p.settings.usePriorities !== 'boolean') || typeof p.settings.rotate !== 'boolean' || p.parts.some((part) => typeof part.grain !== 'boolean')) throw new Error('Project rotation and grain values must be true or false.');
   const rows = (values, isPart) => values.map((r) => ({ label: r.label, material: r.material, thickness: r.thickness, length: r.length, width: r.width, qty: r.qty, ...(isPart ? { priority: r.priority, grain: r.grain } : {}) }));
-  return { schema: p.schema, name: p.name, settings: { kerf: p.settings.kerf, trim: p.settings.trim, direction: p.settings.direction, rotate: p.settings.rotate }, stocks: rows(p.stocks, false), parts: rows(p.parts, true), visual: normalizeVisualDraft(p.visual) };
+  return { schema: p.schema, name: p.name, settings: { kerf: p.settings.kerf, trim: p.settings.trim, direction: p.settings.direction, rotate: p.settings.rotate, usePriorities: p.settings.usePriorities === true }, stocks: rows(p.stocks, false), parts: rows(p.parts, true), visual: normalizeVisualDraft(p.visual) };
 }
 function renderInputs(p) {
-  $('project-name').value = p.name; $('kerf').value = p.settings.kerf; $('trim').value = p.settings.trim; $('direction').value = p.settings.direction; $('rotate').checked = p.settings.rotate;
+  $('project-name').value = p.name; $('kerf').value = p.settings.kerf; $('trim').value = p.settings.trim; $('direction').value = p.settings.direction; $('rotate').checked = p.settings.rotate; $('use-priorities').checked = p.settings.usePriorities === true;
   $('stocks').innerHTML = p.stocks.map((r, i) => rowHTML(r, 'stocks', i)).join('');
   $('parts').innerHTML = p.parts.map((r, i) => rowHTML(r, 'parts', i)).join('');
   visualUI?.restore(p.visual);
@@ -111,7 +111,7 @@ function renderPlan() {
   $('results').hidden = false; $('empty-plan').hidden = true;
   const area = plan.sheets.reduce((n, s) => n + s.area, 0), used = plan.sheets.reduce((n, s) => n + s.usedArea, 0);
   const cuts = plan.sheets.reduce((n, s) => n + s.cuts.length, 0);
-  $('plan-caption').textContent = `${plannedProject.name || 'Untitled project'} · Kerf ${fmt(plan.settings.kerf)} mm · Edge trim ${fmt(plan.settings.trim)} mm · ${plan.settings.direction === 'auto' ? 'Automatic cut direction' : plan.settings.direction === 'rip' ? 'Rip first' : 'Crosscut first'}`;
+  $('plan-caption').textContent = `${plannedProject.name || 'Untitled project'} · Kerf ${fmt(plan.settings.kerf)} mm · Edge trim ${fmt(plan.settings.trim)} mm · ${plan.settings.usePriorities ? 'Optional part priorities enabled' : 'Whole-list optimisation · not input order'} · ${plan.settings.direction === 'auto' ? 'Automatic cut direction' : plan.settings.direction === 'rip' ? 'Rip first' : 'Crosscut first'}`;
   $('metrics').innerHTML = `<div class="metric"><span>Stock sheets used</span><strong>${plan.sheets.length}<small>of ${plannedProject.stocks.reduce((n, s) => n + s.qty, 0)} available</small></strong></div><div class="metric"><span>Parts placed</span><strong>${plan.placed}<small>/ ${plan.required}</small></strong></div><div class="metric"><span>Finished-part yield</span><strong>${area ? (used / area * 100).toFixed(1) : '0.0'}%<small>of used stock</small></strong></div><div class="metric"><span>Cutting steps</span><strong>${cuts}<small>+ edge preparation</small></strong></div>`;
   $('unplaced').hidden = plan.unplaced.length === 0;
   if (plan.unplaced.length) {
@@ -148,11 +148,11 @@ $('timber-form').addEventListener('submit', (event) => {
   const currentRevision = revision; $('calculate').disabled = true; $('calculate').textContent = 'Calculating…';
   setTimeout(() => {
     try {
-      const result = planTimber(project);
+      const result = visualUI?.bestAutomaticPlan() || planTimber(project);
       if (revision !== currentRevision) { notify('Inputs changed. Calculate again to use the latest list.'); return; }
-      plan = result; plannedProject = project; renderPlan(); $('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      visualUI?.showAutomaticPlan(result); plan = result; plannedProject = project; renderPlan(); $('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (error) { notify(error.message, true); }
-    finally { $('calculate').disabled = false; $('calculate').innerHTML = 'Calculate cutting plan <span aria-hidden="true">→</span>'; }
+    finally { $('calculate').disabled = false; $('calculate').innerHTML = 'Optimise cutting plan <span aria-hidden="true">→</span>'; }
   }, 20);
 });
 $('sheet-select').onchange = () => { activeSheet = Number($('sheet-select').value); activeStep = 1; renderSheet(); };

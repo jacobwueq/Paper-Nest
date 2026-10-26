@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { planTimber, manualTimber, timberFreeRegions, validateProject, parseCSV, toCSV } from '../dist/timber-planner.js';
+import { planTimber, optimizeTimber, compareTimberPlans, manualTimber, timberFreeRegions, validateProject, parseCSV, toCSV } from '../dist/timber-planner.js';
 
 const stock = (extra = {}) => ({ label: 'Sheet', material: 'Plywood', thickness: 18, length: 100, width: 100, qty: 1, ...extra });
 const part = (extra = {}) => ({ label: 'Panel', material: 'Plywood', thickness: 18, length: 40, width: 40, qty: 1, priority: 1, grain: false, ...extra });
@@ -58,7 +58,9 @@ test('stock material and thickness must match, ignoring material case and whites
   assert.equal(p.placed, 1); assert.equal(p.unplaced.length, 2); verifyPlan(p);
 });
 test('high-priority parts receive scarce stock before larger low-priority parts', () => {
-  const p = planTimber(project({ parts: [part({ label: 'Low', length: 100, width: 100, priority: 2 }), part({ label: 'High', length: 80, width: 80, priority: 0 })] }));
+  const request = project({ parts: [part({ label: 'Low', length: 100, width: 100, priority: 2 }), part({ label: 'High', length: 80, width: 80, priority: 0 })] });
+  request.settings.usePriorities = true;
+  const p = planTimber(request);
   assert.equal(p.sheets[0].parts[0].label, 'High'); assert.equal(p.unplaced[0].label, 'Low'); verifyPlan(p);
 });
 test('edge preparation reduces usable dimensions on every side', () => {
@@ -132,4 +134,41 @@ test('replaying saved manual commands is deterministic, and undo frees the last 
   assert.equal(manualTimber(p, []).placed, 0);
   assert.throws(() => manualTimber(p, [{ ...first, board: 9 }]), /invalid/);
   assert.throws(() => manualTimber(p, [{ ...first, partId: 'P1.999' }]), /invalid/);
+});
+
+test('default optimisation ignores row sequence and legacy per-part priorities', () => {
+  const p = project({ stocks: [stock({ length: 2440, width: 1220, qty: 4 })], parts: [[800,300,2,true], [400,800,2,false], [1100,300,2,false], [1000,100,1,false], [300,300,1,false]].map(([length,width,qty,grain], i) => part({ length,width,qty,grain,priority:i % 3 })) });
+  p.settings.kerf = 3.2; p.settings.trim = 5;
+  const geometry = (r) => r.sheets.map((s) => s.parts.map(({ x,y,w,h }) => [x,y,w,h]).sort((a,b) => a[0]-b[0] || a[1]-b[1] || a[2]-b[2] || a[3]-b[3]));
+  const a = planTimber(p); verifyPlan(a);
+  p.parts.reverse(); p.parts.forEach((r, i) => { r.priority = (i + 1) % 3; });
+  const b = planTimber(p); verifyPlan(b);
+  assert.deepEqual(geometry(a), geometry(b));
+  assert.equal(a.sheets.length, 1); assert.ok(a.reusableOffcuts[0].area >= 553873.44 - 1e-5, 'keep the large remnant rather than the old fragmented layout');
+});
+test('whole-list optimisation chooses one larger stock sheet over two smaller sheets', () => {
+  const p = project({ stocks: [stock({ length:800,width:800,qty:2 }), stock({ length:1600,width:800,qty:1 })], parts: [part({ length:800,width:800,qty:2 })] }); p.settings.kerf=0;
+  const result=planTimber(p); assert.equal(result.placed,2); assert.equal(result.sheets.length,1); verifyPlan(result);
+});
+test('mixed 20-piece regression fits two sheets instead of the old three-sheet layout', () => {
+  const rows=[[700,200,1,false],[600,200,2,false],[200,200,1,false],[1100,300,2,true],[600,300,3,true],[400,800,2,false],[900,100,2,false],[300,500,2,true],[1100,200,3,true],[1200,600,2,false]];
+  const p=project({stocks:[stock({length:2440,width:1220,qty:8})],parts:rows.map(([length,width,qty,grain],i)=>part({length,width,qty,grain,priority:i%3}))});
+  p.settings.kerf=3.2;p.settings.trim=5;
+  const result=planTimber(p);assert.equal(result.placed,20);assert.equal(result.sheets.length,2);verifyPlan(result);
+});
+test('one large reusable remnant beats the same free area split into smaller pieces', () => {
+  const p=project({stocks:[stock({length:1200,width:1000})],parts:[part({length:500,width:500,qty:2})]}); p.settings.kerf=0;
+  const start={partId:'P1.1',board:0,x:0,y:0,rotated:false};
+  const compact=manualTimber(p,[start,{partId:'P1.2',board:0,x:0,y:500,rotated:false}]);
+  const fragmented=manualTimber(p,[start,{partId:'P1.2',board:0,x:500,y:0,rotated:false}]);
+  verifyPlan(compact); verifyPlan(fragmented);
+  assert.equal(compact.reusableOffcuts[0].area,700000); assert.ok(compareTimberPlans(compact,fragmented)<0);
+  const result=planTimber(p); assert.equal(result.reusableOffcuts[0].area,700000); verifyPlan(result);
+});
+test('continued optimisation preserves the best layout and cancellation stops results', async () => {
+  const p=project({stocks:[stock({length:2440,width:1220,qty:3})],parts:[part({length:800,width:300,qty:5}),part({length:1200,width:400,qty:2}),part({length:600,width:500,qty:3})]});
+  const initial=planTimber(p); let previous=initial;
+  const best=await optimizeTimber(p,{budgetMs:10000,maxTrials:80,initialPlan:initial,onProgress(next){assert.ok(compareTimberPlans(next,previous)<=0);previous=next;}});
+  assert.ok(compareTimberPlans(best,initial)<=0); assert.equal(best.search.trials,80); verifyPlan(best);
+  assert.equal(await optimizeTimber(p,{shouldCancel:()=>true}),null);
 });

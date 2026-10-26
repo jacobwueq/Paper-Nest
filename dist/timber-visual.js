@@ -1,4 +1,4 @@
-import { planTimber, manualTimber, timberFreeRegions, validateProject } from './timber-planner.js?v=0.17.0';
+import { planTimber, optimizeTimber, compareTimberPlans, manualTimber, timberFreeRegions, validateProject } from './timber-planner.js?v=0.18.0';
 const escapeHTML = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const fmt = (n) => Number.isFinite(n) ? Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 }) : '—';
 const colors = ['#e5d2af', '#c8d8b9', '#bed6de', '#d9c7df', '#e9c4ac', '#becadb'];
@@ -10,7 +10,7 @@ export function normalizeVisualDraft(value) {
 export function installTimberVisual({ readProject, changePart, changeStock, addPart, removePart, applyPlan, onDraftChange }) {
   const root = document.getElementById('timber-visual');
   root.innerHTML = `
-    <div class="visual-heading"><div><p class="eyebrow">LIVE MATERIAL WORKSPACE · 即時可視化</p><h2>See every piece as you type.<small>一路輸入，一路睇到。</small></h2></div><div class="visual-mode" role="group" aria-label="Planning mode"><button type="button" data-mode="preview" aria-pressed="true">Live preview · 即時預覽</button><button type="button" data-mode="manual" aria-pressed="false">Place parts · 手動放置</button></div></div>
+    <div class="visual-heading"><div><p class="eyebrow">LIVE MATERIAL WORKSPACE · 即時可視化</p><h2>See every piece as you type.<small>一路輸入，一路睇到。</small></h2></div><div class="visual-mode" role="group" aria-label="Planning mode"><button type="button" data-mode="preview" aria-pressed="true">Auto optimise · 自動排料</button><button type="button" data-mode="manual" aria-pressed="false">Place parts · 手動放置</button></div></div>
     <div class="visual-stats" id="visual-stats" role="status" aria-live="polite"></div>
     <div class="visual-workspace">
       <aside class="visual-parts"><div class="visual-parts-heading"><div><h3>Parts tray <small>零件區</small></h3><span>Click a part to edit / 點選修改尺寸</span></div><button type="button" id="visual-add" aria-label="Add part">＋</button></div><div id="visual-tray" class="visual-tray"></div>
@@ -21,29 +21,39 @@ export function installTimberVisual({ readProject, changePart, changeStock, addP
         <div id="visual-canvas" class="visual-canvas"></div><div class="visual-board-caption"><span id="visual-board-label"></span><span>Grain → · 木紋 / mm</span></div><div class="visual-instruction" id="visual-instruction" role="status" aria-live="polite"></div>
         <div class="visual-bottom"><div class="visual-legend"><span><i class="part-key"></i>Part · 零件</span><span><i class="free-key"></i>Free area · 可用空位</span><span><i class="selected-key"></i>Selected · 已選</span></div><div class="visual-history"><button type="button" id="visual-undo">↶ Undo · 撤銷</button><button type="button" id="visual-reset">Clear placements · 清空排位</button></div></div>
       </div>
-    </div><div class="visual-footer"><p id="visual-plan-note">Live preview is an estimate. Confirm the layout to get the cut sequence.</p><button type="button" id="visual-confirm" class="primary-button">Use layout & cut guide · 確認排位及切割指引 →</button></div>`;
+    </div><div class="visual-footer"><p id="visual-plan-note">Live preview is an estimate. Confirm the layout to get the cut sequence.</p><button type="button" id="visual-improve" class="quiet-button">Improve layout · 繼續優化</button><button type="button" id="visual-confirm" class="primary-button">Use layout & cut guide · 確認排位及切割指引 →</button></div>`;
   const $ = (id) => document.getElementById(id);
-  let project, draft = normalizeVisualDraft(null), estimate = null, manual = null, error = '', notice = '', modeSignature = '', timer, worker, workerFailed = false, revision = 0, activeBoard = 0, stockRow = 0, rotated = false, iso = false, zoom = 1;
+  let project, draft = normalizeVisualDraft(null), estimate = null, manual = null, error = '', notice = '', modeSignature = '', timer, worker, workerFailed = false, revision = 0, activeBoard = 0, stockRow = 0, rotated = false, iso = false, zoom = 1, optimizing = false, searchTrials = 0;
   const signature = (p) => JSON.stringify({ settings: p.settings, stocks: p.stocks.map(({ label, ...s }) => s), parts: p.parts.map(({ label, priority, ...part }) => part) });
   const notify = (message) => { notice = message; $('visual-instruction').textContent = message; };
-  const scheduleResult = ({ revision: resultRevision, plan, error: resultError }) => {
+  const scheduleResult = ({ revision: resultRevision, plan, error: resultError, optimizing: running = false }) => {
     if (resultRevision !== revision || !root.isConnected) return;
-    estimate = plan || null; error = resultError || ''; render();
+    if (plan && (!estimate || compareTimberPlans(plan, estimate) < 0)) estimate = plan;
+    optimizing = running; searchTrials = plan?.search?.trials || searchTrials;
+    error = resultError || ''; render();
   };
-  const runPreview = (p, token) => {
-    if (worker) { worker.postMessage({ project: p, revision: token }); return; }
-    setTimeout(() => { try { scheduleResult({ revision: token, plan: planTimber(p) }); } catch (e) { scheduleResult({ revision: token, error: e.message }); } }, 0);
+  const runPreview = (p, token, budgetMs = 1200) => {
+    optimizing = true; render();
+    if (worker) { worker.postMessage({ project: p, revision: token, budgetMs, initialPlan: estimate }); return; }
+    setTimeout(async () => {
+      try {
+        const initial = planTimber(p), warm = estimate || initial;
+        scheduleResult({ revision: token, plan: initial, optimizing: true });
+        const best = await optimizeTimber(p, { budgetMs, initialPlan: warm, maxTrials: budgetMs > 1500 ? 1500 : 256, shouldCancel: () => token !== revision || !root.isConnected, onProgress: (plan) => scheduleResult({ revision: token, plan, optimizing: true }) });
+        if (best) scheduleResult({ revision: token, plan: best, optimizing: false });
+      } catch (e) { scheduleResult({ revision: token, error: e.message }); }
+    }, 0);
   };
   try {
     if (typeof Worker !== 'undefined') {
-      worker = new Worker(new URL('./timber-live-worker.js?v=0.17.0', import.meta.url), { type: 'module' });
+      worker = new Worker(new URL('./timber-live-worker.js?v=0.18.0', import.meta.url), { type: 'module' });
       worker.onmessage = ({ data }) => scheduleResult(data);
       worker.onerror = () => { worker.terminate(); worker = null; if (!workerFailed) { workerFailed = true; runPreview(project, revision); } };
     }
   } catch { worker = null; }
   function restore(value) { draft = normalizeVisualDraft(value); modeSignature = ''; rotated = false; activeBoard = 0; }
   function update(p) {
-    project = p; revision++; clearTimeout(timer); estimate = null; error = '';
+    project = p; revision++; clearTimeout(timer); worker?.postMessage({ cancel: true }); estimate = null; error = ''; optimizing = false; searchTrials = 0;
     const nextSignature = signature(p);
     if (modeSignature && modeSignature !== nextSignature && draft.commands.length) {
       draft.commands = []; notice = '尺寸或清單已更改，手動排位已重設。重新點選零件放入板材。';
@@ -118,7 +128,7 @@ export function installTimberVisual({ readProject, changePart, changeStock, addP
     renderTray();
     const result = draft.mode === 'manual' ? manual : estimate;
     const total = project.parts.reduce((n, p) => n + (Number.isFinite(p.qty) ? p.qty : 0), 0);
-    $('visual-stats').innerHTML = `<span><strong>${project.parts.length}</strong> part types · 種零件</span><span><strong>${fmt(total)}</strong> pieces · 件</span><span><strong>${result ? result.sheets.length : '—'}</strong> ${draft.mode === 'manual' ? 'sheets used · 已用板' : 'sheets estimated · 預計用板'}</span><span class="${result?.unplaced.length ? 'has-unplaced' : ''}"><strong>${result ? result.unplaced.length : '—'}</strong> ${draft.mode === 'manual' ? 'to place · 待放入' : 'unplaced · 未能放入'}</span>`;
+    $('visual-stats').innerHTML = `<span><strong>${project.parts.length}</strong> part types · 種零件</span><span><strong>${fmt(total)}</strong> pieces · 件</span><span><strong>${result ? result.sheets.length : '—'}</strong> ${draft.mode === 'manual' ? 'sheets used · 已用板' : 'sheets estimated · 預計用板'}</span><span class="${result?.unplaced.length ? 'has-unplaced' : ''}"><strong>${result ? result.unplaced.length : '—'}</strong> ${draft.mode === 'manual' ? 'to place · 待放入' : 'unplaced · 未能放入'}</span><span class="remnant-stat"><strong>${result?.reusableOffcuts?.[0] ? `${fmt(result.reusableOffcuts[0].w)} × ${fmt(result.reusableOffcuts[0].h)}` : '—'}</strong>mm · 最大餘料</span>`;
     root.querySelectorAll('[data-mode]').forEach((e) => e.setAttribute('aria-pressed', String(e.dataset.mode === draft.mode)));
     $('visual-stock-type').innerHTML = project.stocks.map((s, i) => `<option value="${i}" ${i === stockRow ? 'selected' : ''}>${escapeHTML(s.material)} / ${fmt(s.thickness)} mm · ${escapeHTML(s.label || `Stock ${i + 1}`)}</option>`).join('');
     for (const e of root.querySelectorAll('[data-visual-stock]')) if (document.activeElement !== e) e.value = project.stocks[stockRow]?.[e.dataset.visualStock] ?? '';
@@ -127,8 +137,10 @@ export function installTimberVisual({ readProject, changePart, changeStock, addP
     draw(currentBoard());
     $('visual-undo').disabled = draft.mode !== 'manual' || !draft.commands.length; $('visual-reset').disabled = draft.mode !== 'manual' || !draft.commands.length;
     $('visual-confirm').disabled = !result?.placed || !!error;
+    $('visual-improve').disabled = !!error;
+    $('visual-improve').textContent = draft.mode === 'manual' ? 'Auto optimise all · 全部自動排料' : optimizing ? 'Stop optimisation · 停止' : 'Improve layout · 繼續優化';
     $('visual-view').setAttribute('aria-pressed', String(iso)); $('visual-view').textContent = iso ? 'Top view · 平面' : 'Isometric · 立體';
-    const description = !project.parts.length ? 'Parts tray is empty. Use ＋ to add a part · 零件區已清空，按 ＋ 新增。' : error ? `完成尺寸後繼續預覽 · ${error}` : notice || (draft.mode === 'manual' ? '① 點選左邊零件  ② 點綠色空位放入。自動靠邊對齊，預留鋸縫。' : estimate ? '即時預覽已更新。點選零件修改尺寸，或切換「手動放置」逐件放入板材。' : '正在更新預覽 · Updating layout…');
+    const description = !project.parts.length ? 'Parts tray is empty. Use ＋ to add a part · 零件區已清空，按 ＋ 新增。' : error ? `完成尺寸後繼續預覽 · ${error}` : notice || (draft.mode === 'manual' ? '① 點選左邊零件  ② 點綠色空位放入。自動靠邊對齊，預留鋸縫。' : estimate ? '自動比較整份清單，不跟輸入先後；先放齊、減少用板，再保留最大餘料。' : '正在更新預覽 · Updating layout…');
     $('visual-instruction').textContent = description;
     $('visual-plan-note').textContent = draft.mode === 'manual' ? 'Manual layout · 手動排位。空位會按直線切割分區；確認後產生對應切割次序。' : 'Live estimate · 即時預計，受可用板材數量限制。確認後產生切割指引。';
     if (result?.sheets.length) {
@@ -136,9 +148,11 @@ export function installTimberVisual({ readProject, changePart, changeStock, addP
       for (const board of result.sheets) { const label = `${board.stock.material} ${fmt(board.stock.thickness)} mm`; groups.set(label, (groups.get(label) || 0) + 1); }
       $('visual-plan-note').textContent += ' 各物料用板：' + [...groups].map(([label, qty]) => `${label} × ${qty} 張`).join('；');
     }
+    if (draft.mode === 'preview') $('visual-plan-note').textContent += ` ${optimizing ? '正在比較排位' : '已比較'} ${searchTrials} 個方案；先放齊、減少用板，再保留最大餘料。`;
   }
   function select(row) { draft.selected = row; rotated = false; notice = ''; render(); onDraftChange(false); }
-  function setMode(mode) { draft.mode = mode; activeBoard = 0; notice = ''; render(); onDraftChange(); }
+  function stopSearch() { revision++; clearTimeout(timer); worker?.postMessage({ cancel: true }); optimizing = false; }
+  function setMode(mode) { draft.mode = mode; activeBoard = 0; notice = ''; if (mode === 'manual') stopSearch(); else if (!estimate && !error) runPreview(project, ++revision); render(); onDraftChange(); }
   function place(regionIndex) {
     if (!manual || error) return;
     const board = currentBoard(), selected = project.parts[draft.selected]; if (!board || !selected) return;
@@ -185,6 +199,7 @@ export function installTimberVisual({ readProject, changePart, changeStock, addP
   const replay = () => { manual = manualTimber(project, draft.commands); notice = ''; render(); onDraftChange(); };
   $('visual-undo').onclick = () => { draft.commands.pop(); replay(); };
   $('visual-reset').onclick = () => { draft.commands = []; replay(); };
-  $('visual-confirm').onclick = () => { const result = draft.mode === 'manual' ? manual : estimate; if (result?.placed && !error) applyPlan(result, draft.mode); };
-  return { update, restore, getDraft: () => structuredClone(draft), select };
+  $('visual-confirm').onclick = () => { const result = draft.mode === 'manual' ? manual : estimate; if (result?.placed && !error) { stopSearch(); render(); applyPlan(result, draft.mode); } };
+  $('visual-improve').onclick = () => { if (draft.mode === 'manual') { draft.mode = 'preview'; activeBoard = 0; notice = ''; onDraftChange(); runPreview(project, ++revision, 6000); } else if (optimizing) { stopSearch(); render(); } else { notice = ''; onDraftChange(); runPreview(project, ++revision, 6000); } };
+  return { update, restore, getDraft: () => structuredClone(draft), select, bestAutomaticPlan: () => estimate, showAutomaticPlan(result) { stopSearch(); estimate = result; draft.mode = 'preview'; render(); onDraftChange(false); } };
 }

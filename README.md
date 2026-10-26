@@ -11,9 +11,10 @@ The timber workspace handles rectangular **sheet timber and panels** (plywood,
 MDF, etc.), in millimetres. Enter finite stock quantities and required finished
 part sizes. Material names (ignoring case/outer whitespace) and thickness must
 match. Grain follows stock length; grain-locked parts cannot rotate. Saw kerf
-and per-edge trim are separate settings. High-priority parts receive stock
-before Normal and Low priorities. Rip-first, crosscut-first and automatic split
-directions are supported.
+and per-edge trim are separate settings. Automatic planning ignores input order
+and per-part priorities by default. Enable **Use part priorities** explicitly to
+allocate scarce stock to High before Normal and Low. Rip-first, crosscut-first
+and automatic split directions are supported.
 
 ### Live visual timber workspace / 即時可視化
 
@@ -38,13 +39,26 @@ modelling editor. Isometric view is a visualization of the same 2D cutting plan.
 for the existing cutting guide, CSV and print outputs. Geometry changes reset
 manual placements to avoid stale cuts; renaming parts does not. Manual placement
 commands and selected part are included in local storage and project JSON files.
-Live automatic preview runs in a module Web Worker, with a synchronous fallback
+Live automatic preview runs in a module Web Worker, with a yielding fallback
 when workers are unavailable; revision checks discard stale preview responses.
+It returns an initial plan, then continues comparing alternatives in the background
+for a bounded budget. **Improve layout** starts a longer search from the current
+best; **Stop optimisation** stops it. Confirming a layout freezes that exact plan
+for the cutting guide. Starting another search invalidates the old cutting guide.
+The largest reusable remnant's dimensions are shown next to the sheet counts.
 
 `dist/timber-planner.js` generates guillotine cut trees with kerf-aware residual
-rectangles. It tries eight combinations of placement order and split tie-breaks,
-then compares unplaced counts by priority, used stock area, sheet count and cut
-length. It is a bounded heuristic and does not guarantee the global optimum.
+rectangles. Its initial pass compares 24 combinations of canonical part sorts,
+placement fits, stock sizes, orientations and split directions; background search
+then explores more strategies and mutations of the best candidate orders. Input
+row order does not control placement. Candidate comparison is lexicographic:
+unplaced count (or explicitly enabled priorities), unplaced area, used sheet count,
+used stock area, then descending reusable remnant areas R1, R2, R3, etc. A larger
+collection of small scraps cannot compensate for a smaller R1. Remnants must have
+both edges at least 50 mm, matching the display. Compact occupied bounds and cut
+length only break remaining ties. This follows the laser workspace's material
+preservation approach while retaining timber's guillotine-cut constraints.
+It is a bounded heuristic and does not guarantee the global optimum.
 Numbered cuts respect parent-workpiece dependencies. The guide measures from a
 workpiece's left/top edge to the finished edge, with the blade on the waste side.
 Edge preparation precedes the numbered sequence. Confirm machine capacity,
