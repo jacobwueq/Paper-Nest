@@ -93,6 +93,9 @@ function build(project, order, variant) {
     }
     insert(best.leaf, p, best.rotated, direction, settings.kerf);
   }
+  return finalizePlan(project, sheets, unplaced, order.length);
+}
+function finalizePlan(project, sheets, unplaced, required) {
   let cutLength = 0;
   for (const sheet of sheets) {
     sheet.cuts = []; sheet.parts = []; sheet.offcuts = [];
@@ -118,7 +121,34 @@ function build(project, order, variant) {
   const missing = [0, 1, 2].map((priority) => unplaced.filter((p) => p.priority === priority).length);
   const area = sheets.reduce((n, s) => n + s.area, 0);
   const score = [...missing, area, sheets.length, cutLength];
-  return { sheets, unplaced, score, remaining, settings: { ...settings }, required: order.length, placed: order.length - unplaced.length };
+  const remaining = project.stocks.map((s, i) => s.qty - sheets.filter((sheet) => sheet.stockIndex === i).length);
+  return { sheets, unplaced, score, remaining, settings: { ...project.settings }, required, placed: required - unplaced.length };
+}
+export function timberFreeRegions(board) { return leaves(board.root).map(({ x, y, w, h }) => ({ x, y, w, h })); }
+export function manualTimber(project, commands = []) {
+  validateProject(project);
+  if (!Array.isArray(commands) || commands.length > 500) throw new Error('Invalid manual placement list.');
+  const boards = project.stocks.flatMap((stock, stockIndex) => Array.from({ length: stock.qty }, () => ({ stock, stockIndex, root: { kind: 'free', x: project.settings.trim, y: project.settings.trim, w: stock.length - 2 * project.settings.trim, h: stock.width - 2 * project.settings.trim } })));
+  boards.forEach((board, i) => { board.number = i + 1; board.parts = []; });
+  const expanded = project.parts.flatMap((p, row) => Array.from({ length: p.qty }, (_, copy) => ({ ...p, row, copy: copy + 1, id: `P${row + 1}.${copy + 1}`, label: p.label || `Part ${row + 1}` })));
+  const placed = new Set(), byId = new Map(expanded.map((p) => [p.id, p]));
+  for (const [index, c] of commands.entries()) {
+    const p = c && byId.get(c.partId), board = c && boards[c.board];
+    if (!p || !board || placed.has(c.partId) || !Number.isInteger(c.board) || ![c.x, c.y].every(Number.isFinite) || typeof c.rotated !== 'boolean') throw new Error(`Manual placement ${index + 1} is invalid.`);
+    if (materialKey(p) !== materialKey(board.stock)) throw new Error('Choose stock with matching material and thickness.');
+    if (c.rotated && (!project.settings.rotate || p.grain)) throw new Error('Grain-locked parts cannot rotate.');
+    const leaf = leaves(board.root).find((r) => Math.abs(r.x - c.x) < EPS && Math.abs(r.y - c.y) < EPS);
+    if (!leaf || !fits(leaf, p, c.rotated)) throw new Error('This part does not fit that free region, including saw kerf.');
+    let direction = project.settings.direction;
+    if (direction === 'auto') {
+      const w = c.rotated ? p.width : p.length, h = c.rotated ? p.length : p.width, k = project.settings.kerf;
+      direction = Math.max(leaf.w * Math.max(0, leaf.h - h - k), Math.max(0, leaf.w - w - k) * h) > Math.max(Math.max(0, leaf.w - w - k) * leaf.h, w * Math.max(0, leaf.h - h - k)) ? 'rip' : 'cross';
+    }
+    insert(leaf, p, c.rotated, direction, project.settings.kerf); placed.add(p.id);
+  }
+  const used = boards.filter((board) => leaves(board.root).length !== 1 || board.root.kind !== 'free');
+  const plan = finalizePlan(project, used, expanded.filter((p) => !placed.has(p.id)), expanded.length);
+  return { ...plan, boards, manual: true };
 }
 export function planTimber(project) {
   validateProject(project);

@@ -15,6 +15,32 @@ and per-edge trim are separate settings. High-priority parts receive stock
 before Normal and Low priorities. Rip-first, crosscut-first and automatic split
 directions are supported.
 
+### Live visual timber workspace / 即時可視化
+
+The timber page opens with a parts tray and a scaled sheet canvas (default stock
+2440 × 1220 mm). Edit the selected part's size, quantity, material and grain lock
+in the inspector; tray shapes update immediately and the live nesting estimate
+updates after a short debounce. Stock dimensions and quantity can be edited next
+to the canvas. Live stats show part types, total pieces, estimated used sheets
+and unplaced pieces, plus used-sheet counts by material/thickness. Estimates
+respect available stock; unplaced counts remain visible when stock is insufficient.
+The detailed stock/cutting-list tables and CSV import are under an expandable panel.
+
+Use **Place parts** for manual placement: select a part and click a green free
+region, or use **Place one**. Placements snap to the free region's top-left corner
+and split it into guillotine regions, preserving kerf, grain constraints and valid
+cutting dependencies. Undo removes the last placement; Clear removes manual
+placements. Optional 90° rotation respects grain locks. Top/isometric views,
+zoom and Fit are available. This is a rectangular cutting workspace, not a 3D
+modelling editor. Isometric view is a visualization of the same 2D cutting plan.
+
+**Use layout & cut guide** confirms the currently shown automatic or manual plan
+for the existing cutting guide, CSV and print outputs. Geometry changes reset
+manual placements to avoid stale cuts; renaming parts does not. Manual placement
+commands and selected part are included in local storage and project JSON files.
+Live automatic preview runs in a module Web Worker, with a synchronous fallback
+when workers are unavailable; revision checks discard stale preview responses.
+
 `dist/timber-planner.js` generates guillotine cut trees with kerf-aware residual
 rectangles. It tries eight combinations of placement order and split tie-breaks,
 then compares unplaced counts by priority, used stock area, sheet count and cut

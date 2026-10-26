@@ -1,4 +1,5 @@
-import { planTimber, validateProject, parseCSV, toCSV } from './timber-planner.js?v=0.16.0';
+import { planTimber, validateProject, parseCSV, toCSV } from './timber-planner.js?v=0.17.0';
+import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.17.0';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const fmt = (n) => Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
@@ -19,7 +20,7 @@ const sample = () => ({
     { label: 'Plinth', material: 'Plywood', thickness: 18, length: 764, width: 80, qty: 2, priority: 2, grain: false },
   ],
 });
-let plan = null, plannedProject = null, activeSheet = 0, activeStep = 1, revision = 0;
+let plan = null, plannedProject = null, activeSheet = 0, activeStep = 1, revision = 0, visualUI = null;
 function notify(text, error = false) { $('message').textContent = text; $('message').classList.toggle('error', error); $('message').hidden = !text; }
 function input(row, key, kind, label) {
   const type = kind === 'number' ? 'number' : 'text';
@@ -37,7 +38,7 @@ function readRows(type) {
   });
 }
 function readProject() {
-  return { schema: 'paper-nest-timber-v1', name: $('project-name').value, settings: { kerf: Number($('kerf').value), trim: Number($('trim').value), direction: $('direction').value, rotate: $('rotate').checked }, stocks: readRows('stocks'), parts: readRows('parts') };
+  return { schema: 'paper-nest-timber-v1', name: $('project-name').value, settings: { kerf: Number($('kerf').value), trim: Number($('trim').value), direction: $('direction').value, rotate: $('rotate').checked }, stocks: readRows('stocks'), parts: readRows('parts'), ...(visualUI ? { visual: visualUI.getDraft() } : {}) };
 }
 function cleanProject(p, allowDraft = false) {
   if (!p || p.schema !== 'paper-nest-timber-v1' || typeof p.name !== 'string' || p.name.length > 100) throw new Error('Choose a Paper Nest timber project JSON file.');
@@ -50,12 +51,13 @@ function cleanProject(p, allowDraft = false) {
   } else validateProject(p);
   if (typeof p.settings.rotate !== 'boolean' || p.parts.some((part) => typeof part.grain !== 'boolean')) throw new Error('Project rotation and grain values must be true or false.');
   const rows = (values, isPart) => values.map((r) => ({ label: r.label, material: r.material, thickness: r.thickness, length: r.length, width: r.width, qty: r.qty, ...(isPart ? { priority: r.priority, grain: r.grain } : {}) }));
-  return { schema: p.schema, name: p.name, settings: { kerf: p.settings.kerf, trim: p.settings.trim, direction: p.settings.direction, rotate: p.settings.rotate }, stocks: rows(p.stocks, false), parts: rows(p.parts, true) };
+  return { schema: p.schema, name: p.name, settings: { kerf: p.settings.kerf, trim: p.settings.trim, direction: p.settings.direction, rotate: p.settings.rotate }, stocks: rows(p.stocks, false), parts: rows(p.parts, true), visual: normalizeVisualDraft(p.visual) };
 }
 function renderInputs(p) {
   $('project-name').value = p.name; $('kerf').value = p.settings.kerf; $('trim').value = p.settings.trim; $('direction').value = p.settings.direction; $('rotate').checked = p.settings.rotate;
   $('stocks').innerHTML = p.stocks.map((r, i) => rowHTML(r, 'stocks', i)).join('');
   $('parts').innerHTML = p.parts.map((r, i) => rowHTML(r, 'parts', i)).join('');
+  visualUI?.restore(p.visual);
   invalidate();
 }
 function invalidate() {
@@ -63,9 +65,10 @@ function invalidate() {
   $('results').hidden = true; $('empty-plan').hidden = false;
   document.querySelectorAll('.print-sheet').forEach((e) => e.remove());
   const p = readProject();
+  visualUI?.update(p);
   const count = p.parts.reduce((n, row) => n + (Number.isFinite(row.qty) ? row.qty : 0), 0);
   $('parts-count').textContent = `${p.parts.length} rows / ${fmt(count)} parts`;
-  try { localStorage.setItem(STORAGE, JSON.stringify(p)); $('save-state').textContent = 'Saved in this browser · timber project only'; }
+  try { localStorage.setItem(STORAGE, JSON.stringify(readProject())); $('save-state').textContent = 'Saved in this browser · timber project & manual layout'; }
   catch { $('save-state').textContent = 'Browser saving unavailable. Use Save project to keep your work.'; }
 }
 function download(contents, name, type) {
@@ -114,7 +117,7 @@ function renderPlan() {
   if (plan.unplaced.length) {
     const counts = new Map();
     for (const p of plan.unplaced) { const key = `${p.label} (${fmt(p.length)} × ${fmt(p.width)} mm, ${p.material} ${fmt(p.thickness)} mm)`; counts.set(key, (counts.get(key) || 0) + 1); }
-    $('unplaced').textContent = `${plan.unplaced.length} part(s) could not be placed: ${[...counts].map(([label, count]) => `${label} × ${count}`).join('; ')}. Check stock quantity, usable dimensions, material/thickness matches and grain locks. This heuristic may leave parts unplaced even if a different layout could fit.`;
+    $('unplaced').textContent = plan.manual ? `${plan.unplaced.length} part(s) not yet placed · 尚未放入：${[...counts].map(([label, count]) => `${label} × ${count}`).join('; ')}. Continue placing them in the visual workspace.` : `${plan.unplaced.length} part(s) could not be placed: ${[...counts].map(([label, count]) => `${label} × ${count}`).join('; ')}. Check stock quantity, usable dimensions, material/thickness matches and grain locks. This heuristic may leave parts unplaced even if a different layout could fit.`;
   }
   $('sheet-select').innerHTML = plan.sheets.map((s, i) => `<option value="${i}">Sheet ${s.number}</option>`).join('');
   activeSheet = 0; activeStep = 1;
@@ -122,8 +125,8 @@ function renderPlan() {
   renderSheet();
   $('finished-parts').innerHTML = plan.sheets.flatMap((s) => s.parts.map((p) => ({ ...p, sheet: s.number }))).sort((a, b) => a.row - b.row || a.copy - b.copy).map((p) => `<tr><td>${esc(p.id)}</td><td>${esc(p.label)}</td><td>${fmt(p.length)} × ${fmt(p.width)}${p.rotated ? ' ↻' : ''}</td><td>${esc(p.material)} / ${fmt(p.thickness)} mm</td><td class="${p.priority === 0 ? 'priority-high' : ''}">${priorityNames[p.priority]}</td><td>S${p.sheet} / ${esc(p.workpiece)}</td></tr>`).join('');
 }
-$('timber-form').addEventListener('input', () => { invalidate(); notify(''); });
-$('timber-form').addEventListener('change', () => { invalidate(); notify(''); });
+$('timber-form').addEventListener('input', (event) => { if (event.target.closest('#timber-visual')) return; invalidate(); notify(''); });
+$('timber-form').addEventListener('change', (event) => { if (event.target.closest('#timber-visual')) return; invalidate(); notify(''); });
 for (const type of ['stocks', 'parts']) $(type).addEventListener('click', (event) => {
   const remove = event.target.closest('[data-remove]'); if (!remove) return;
   if ($(type).rows.length <= 1) { notify('Keep at least one row. Edit it to enter your stock or part.', true); return; }
@@ -137,10 +140,10 @@ $('add-part').onclick = () => {
   const p = readProject(); if (p.parts.length >= 100) { notify('Use up to 100 part rows.', true); return; }
   const stock = p.stocks[0]; p.parts.push({ label: 'Part ' + (p.parts.length + 1), material: stock?.material || 'Plywood', thickness: stock?.thickness || 18, length: 600, width: 300, qty: 1, priority: 1, grain: false }); renderInputs(p); $('parts').lastElementChild.querySelector('input').focus();
 };
-$('sample').onclick = () => { renderInputs(sample()); notify('Sample cabinet loaded. Edit the list or calculate the plan.'); };
+$('sample').onclick = () => { renderInputs(sample()); notify('Sample cabinet loaded. Edit a part to see the live preview · 修改尺寸即時預覽。'); };
 $('timber-form').addEventListener('submit', (event) => {
   event.preventDefault(); notify('');
-  if (!$('timber-form').reportValidity()) return;
+  if (!$('timber-form').checkValidity()) { document.querySelector('.visual-details').open = true; $('timber-form').reportValidity(); return; }
   let project; try { project = cleanProject(readProject()); } catch (error) { notify(error.message, true); return; }
   const currentRevision = revision; $('calculate').disabled = true; $('calculate').textContent = 'Calculating…';
   setTimeout(() => {
@@ -168,7 +171,7 @@ async function readFile(input, kind) {
   try {
     if (file.size > 1024 * 1024) throw new Error('Choose a file smaller than 1 MB.');
     const text = await file.text();
-    if (kind === 'project') { renderInputs(cleanProject(JSON.parse(text))); notify('Timber project opened. Calculate to generate its cutting plan.'); }
+    if (kind === 'project') { renderInputs(cleanProject(JSON.parse(text))); notify('Timber project opened. The live workspace is ready · 已開啟即時工作區。'); }
     else {
       const parts = parseCSV(text), p = readProject(); p.parts = parts; cleanProject(p); renderInputs(p); notify(`Imported ${parts.length} cutting-list rows. Material defaults to Plywood and thickness to 18 mm when omitted.`);
     }
@@ -201,9 +204,9 @@ $('export-guide').onclick = () => {
 $('print-plan').onclick = () => {
   if (!plan) return;
   document.querySelectorAll('.print-sheet').forEach((e) => e.remove());
-  for (const s of plan.sheets) {
+  for (const [printIndex, s] of plan.sheets.entries()) {
     const section = document.createElement('section'); section.className = 'print-sheet';
-    section.innerHTML = `<h3>${esc(plannedProject.name)} · Sheet ${s.number} / ${plan.sheets.length}</h3><p>${esc(s.stock.material)} / ${fmt(s.stock.thickness)} mm · Stock ${fmt(s.stock.length)} × ${fmt(s.stock.width)} mm · Kerf ${fmt(plan.settings.kerf)} mm</p><div class="trim-guide">${esc(trimText(s))}</div>${sheetSVG(s)}<h4>Cutting sequence · measurements to finished edge, kerf on waste side</h4>${s.cuts.map((c) => `<p class="print-step"><strong>${c.step}. ${cutDescription(c)}</strong> · ${esc(cutDetail(c))}</p>`).join('') || '<p>No cuts needed after edge preparation.</p>'}<p>Offcuts: ${s.offcuts.map((o) => `${esc(o.id)}: ${fmt(o.w)} × ${fmt(o.h)} mm`).join('; ') || 'None'}</p><p>Geometric cut sequence. Check machine setup, blade allowances and workpiece support before cutting.</p>`;
+    section.innerHTML = `<h3>${esc(plannedProject.name)} · Sheet ${printIndex + 1} / ${plan.sheets.length} · S${s.number}</h3><p>${esc(s.stock.material)} / ${fmt(s.stock.thickness)} mm · Stock ${fmt(s.stock.length)} × ${fmt(s.stock.width)} mm · Kerf ${fmt(plan.settings.kerf)} mm</p><div class="trim-guide">${esc(trimText(s))}</div>${sheetSVG(s)}<h4>Cutting sequence · measurements to finished edge, kerf on waste side</h4>${s.cuts.map((c) => `<p class="print-step"><strong>${c.step}. ${cutDescription(c)}</strong> · ${esc(cutDetail(c))}</p>`).join('') || '<p>No cuts needed after edge preparation.</p>'}<p>Offcuts: ${s.offcuts.map((o) => `${esc(o.id)}: ${fmt(o.w)} × ${fmt(o.h)} mm`).join('; ') || 'None'}</p><p>Geometric cut sequence. Check machine setup, blade allowances and workpiece support before cutting.</p>`;
     $('results').insertBefore(section, document.querySelector('.finished-panel'));
   }
   window.print();
@@ -211,4 +214,32 @@ $('print-plan').onclick = () => {
 let initial = sample(), restored = false;
 try { const saved = localStorage.getItem(STORAGE); if (saved) { initial = cleanProject(JSON.parse(saved), true); restored = true; } } catch { /* Use the sample when saved state is unavailable or structurally invalid. */ }
 renderInputs(initial);
-if (restored) notify('Your saved timber project has been restored. Calculate to regenerate the plan.');
+visualUI = installTimberVisual({
+  readProject,
+  changePart(row, field, value) {
+    const input = $('parts').rows[row]?.querySelector(`[data-field="${field}"]`);
+    if (!input) return;
+    if (input.type === 'checkbox') input.checked = value; else input.value = value;
+    invalidate(); notify('');
+  },
+  changeStock(row, field, value) {
+    const input = $('stocks').rows[row]?.querySelector(`[data-field="${field}"]`);
+    if (input) { input.value = value; invalidate(); notify(''); }
+  },
+  addPart() { $('add-part').click(); },
+  applyPlan(result, mode) {
+    try {
+      const project = cleanProject(readProject()); plan = result; plannedProject = project;
+      renderPlan();
+      if (mode === 'manual') $('plan-caption').textContent = 'Manual layout · 手動排位 · ' + $('plan-caption').textContent;
+      $('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (error) { notify(error.message, true); }
+  },
+  onDraftChange(changed = true) {
+    if (changed) { revision++; plan = null; plannedProject = null; $('results').hidden = true; document.querySelectorAll('.print-sheet').forEach((e) => e.remove()); }
+    try { localStorage.setItem(STORAGE, JSON.stringify(readProject())); } catch { $('save-state').textContent = 'Use Save project to keep your work.'; }
+  },
+});
+visualUI.restore(initial.visual); visualUI.update(readProject());
+try { localStorage.setItem(STORAGE, JSON.stringify(readProject())); } catch { /* The visible save status already offers project download. */ }
+if (restored) notify('Your saved timber project has been restored · 已還原。The visual preview updates as you edit.');

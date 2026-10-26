@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { planTimber, validateProject, parseCSV, toCSV } from '../dist/timber-planner.js';
+import { planTimber, manualTimber, timberFreeRegions, validateProject, parseCSV, toCSV } from '../dist/timber-planner.js';
 
 const stock = (extra = {}) => ({ label: 'Sheet', material: 'Plywood', thickness: 18, length: 100, width: 100, qty: 1, ...extra });
 const part = (extra = {}) => ({ label: 'Panel', material: 'Plywood', thickness: 18, length: 40, width: 40, qty: 1, priority: 1, grain: false, ...extra });
@@ -100,4 +100,36 @@ test('CSV imports quoted commas, escaped quotes, BOM, CRLF and grain priorities'
 test('CSV export quotes values and neutralizes spreadsheet formulas', () => {
   const out = toCSV([['label', 'qty'], ['=HYPERLINK("bad")', 2], ['Plain, panel', 1]]);
   assert.ok(out.startsWith('\uFEFF')); assert.match(out, /'\=HYPERLINK/); assert.match(out, /"Plain, panel"/);
+});
+
+test('manual workspace starts with all finite stock sheets and an unplaced tray', () => {
+  const p = manualTimber(project({ stocks: [stock({ qty: 2 })], parts: [part({ qty: 3 })] }));
+  assert.equal(p.boards.length, 2); assert.equal(p.sheets.length, 0); assert.equal(p.placed, 0); assert.equal(p.unplaced.length, 3);
+  assert.deepEqual(timberFreeRegions(p.boards[0]), [{ x: 0, y: 0, w: 100, h: 100 }]);
+});
+test('manual placement snaps to guillotine free regions and retains cut dependencies', () => {
+  const p = project({ parts: [part({ qty: 4 })] });
+  const commands = [{ partId: 'P1.1', board: 0, x: 0, y: 0, rotated: false }];
+  let result = manualTimber(p, commands); verifyPlan(result);
+  const free = timberFreeRegions(result.boards[0]).find((r) => r.w >= 40 && r.h >= 40);
+  commands.push({ partId: 'P1.2', board: 0, x: free.x, y: free.y, rotated: false });
+  result = manualTimber(p, commands); assert.equal(result.placed, 2); assert.equal(result.unplaced.length, 2); verifyPlan(result);
+  assert.throws(() => manualTimber(p, [...commands, commands[0]]), /invalid/);
+  assert.throws(() => manualTimber(p, [{ ...commands[0], x: 2 }]), /does not fit/);
+});
+test('manual placement respects grain, material, thickness, trim and stock identity', () => {
+  const p = project({ stocks: [stock({ material: 'MDF' }), stock()], parts: [part({ grain: true })] }); p.settings.trim = 5;
+  assert.throws(() => manualTimber(p, [{ partId: 'P1.1', board: 0, x: 5, y: 5, rotated: false }]), /matching material/);
+  assert.throws(() => manualTimber(p, [{ partId: 'P1.1', board: 1, x: 5, y: 5, rotated: true }]), /cannot rotate/);
+  const result = manualTimber(p, [{ partId: 'P1.1', board: 1, x: 5, y: 5, rotated: false }]);
+  assert.equal(result.sheets.length, 1); assert.equal(result.sheets[0].number, 2); assert.equal(result.sheets[0].stockIndex, 1); assert.deepEqual(result.remaining, [1, 0]); verifyPlan(result);
+});
+test('replaying saved manual commands is deterministic, and undo frees the last region', () => {
+  const p = project({ parts: [part({ qty: 2 })] });
+  const first = { partId: 'P1.1', board: 0, x: 0, y: 0, rotated: false };
+  const one = manualTimber(p, [first]);
+  assert.deepEqual(manualTimber(p, JSON.parse(JSON.stringify([first]))), one);
+  assert.equal(manualTimber(p, []).placed, 0);
+  assert.throws(() => manualTimber(p, [{ ...first, board: 9 }]), /invalid/);
+  assert.throws(() => manualTimber(p, [{ ...first, partId: 'P1.999' }]), /invalid/);
 });
