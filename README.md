@@ -1,5 +1,42 @@
 # Paper Nest / 紙材排料
 
+## Workspaces / 工作模式
+
+The start page now offers **Timber cutting** (`timber.html`) or **Laser cutting**
+(`laser.html`). Sites sign-in and audience rules are unchanged. Both workspaces
+have a link back to the chooser. The original DXF/SVG laser application, nesting
+engine and exporters remain in the laser workspace.
+
+The timber workspace handles rectangular **sheet timber and panels** (plywood,
+MDF, etc.), in millimetres. Enter finite stock quantities and required finished
+part sizes. Material names (ignoring case/outer whitespace) and thickness must
+match. Grain follows stock length; grain-locked parts cannot rotate. Saw kerf
+and per-edge trim are separate settings. High-priority parts receive stock
+before Normal and Low priorities. Rip-first, crosscut-first and automatic split
+directions are supported.
+
+`dist/timber-planner.js` generates guillotine cut trees with kerf-aware residual
+rectangles. It tries eight combinations of placement order and split tie-breaks,
+then compares unplaced counts by priority, used stock area, sheet count and cut
+length. It is a bounded heuristic and does not guarantee the global optimum.
+Numbered cuts respect parent-workpiece dependencies. The guide measures from a
+workpiece's left/top edge to the finished edge, with the blade on the waste side.
+Edge preparation precedes the numbered sequence. Confirm machine capacity,
+blade setup and workpiece support before using a plan in the workshop.
+
+Results include per-sheet SVG previews, selectable highlighted cuts, offcuts,
+part labels/workpiece references, CSV cutting lists and cut guides, and a print
+view containing every used sheet (also suitable for browser Save as PDF).
+Cutting lists support CSV import with `length,width,qty` columns; optional
+`label,material,thickness,priority,grain` columns use the downloadable template.
+CSV defaults are Plywood, 18 mm, Normal priority and unlocked grain. A CSV import
+replaces the part list. Exported per-piece lists use compatible dimension headers.
+Projects save in browser local storage independently from the laser workspace;
+JSON project download/open allows portable backups. There is no server project
+storage. Limits: 100 part rows, 500 pieces, 50 stock rows and 200 sheets.
+
+Run the timber correctness tests with `node tests/timber-planner.test.mjs`.
+
 
 ## Current sheet, docking and offcut controls / 現行板材、接合及餘料設定
 

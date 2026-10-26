@@ -18,6 +18,9 @@
   --line: #dfe4ec;
   --muted: #687385;
 }
+.workspace-home { color: #d8e3fb; text-decoration: none; font-size: 13px; white-space: nowrap; }
+.workspace-home:hover { text-decoration: underline; }
+@media (max-width: 900px) { .topbar { height: auto !important; min-height: 74px; flex-wrap: wrap; padding: 15px !important; gap: 12px !important; } .topbar .version { display: none; } }
 * {
   box-sizing: border-box;
 }
