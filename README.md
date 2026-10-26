@@ -561,3 +561,40 @@ grain, cut dependencies, area conservation, search budget fallback, cut priority
 manual replay and bilingual keep-both instructions. DOM interaction checks cover
 shared-cut numbering, animation, exports, language switching and the four-step
 workflow. Full browser visual QA is unavailable in this environment.
+
+
+## Continuous shared cutting passes (0.24)
+
+The cutting model now separates individual workpiece splits from physical saw
+passes. Root-cut alternatives and whole-line sweep trees are compared by scheduled pass count, alignment
+work, then the earlier cut/offcut criteria. The scheduler waits for matching
+collinear workpieces to become available instead of cutting the first one early.
+It groups them into one pass only when no other uncut workpiece blocks the path.
+This remains a bounded heuristic, without a guarantee of a global optimum.
+
+The user's 2440 × 1220 screenshot is a regression fixture. At the same finished
+part positions, the upper 764 × 450 panels now receive one horizontal cut at
+450 mm across the remaining 2298.4 mm panel after removing the right-hand strip,
+before column separation. This matches the order proposed in the screenshot. The layout needs
+eight shared passes instead of the previous ten steps. One pass can split more
+than one workpiece, so the former n−1 binary-split lower bound is no longer a
+lower bound on physical passes. An exact 2 × 2 grid needs two registered passes.
+
+Shared passes require the listed workpieces to remain aligned in their original
+sheet positions; completed parts and offcuts outside the pass are set aside.
+These conditions appear in English and Traditional Chinese instructions, playback
+notes, print and PDF guides. No stacking is assumed. One number labels each pass;
+all its member segments are drawn and the saw trace advances across them in order.
+The simulation opens every member split at the end of that pass. Material/kerf
+accounting uses all member segments rather than counting only the representative.
+
+CSV has one row per pass, lists all input/output workpiece IDs, and adds
+alignment_required and segments_json. Measurements that differ between members
+are left blank in the common columns and recorded per workpiece in the detailed
+instructions and JSON. PDF guides paginate long shared-pass instructions.
+
+Validation: all 28 Node test files passed, including the screenshot, live-frontier
+availability, blocking workpieces, material area, kerf, numbering, trace sequencing,
+separation, manual replay and existing laser regressions. DOM checks cover the
+same eight-pass fixture, CSV/print/PDF agreement, Traditional Chinese, playback and
+four-step navigation. Full browser visual QA is unavailable in this environment.

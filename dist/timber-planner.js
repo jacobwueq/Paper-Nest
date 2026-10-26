@@ -1,4 +1,5 @@
-import { simplifyTimberCuts } from './timber-cut-planner.js?v=0.23.0';
+import { scheduleTimberPasses } from './timber-cut-passes.js?v=0.24.0';
+import { simplifyTimberCuts } from './timber-cut-planner.js?v=0.24.0';
 // Rectangular guillotine plans. Every cut spans its current workpiece.
 const EPS = 1e-7;
 const positive = (v) => Number.isFinite(v) && v > 0 && v <= 20000;
@@ -132,26 +133,38 @@ function finalizePlan(project, sheets, unplaced, required) {
     return { ...sheet, root: simplified.root, cutReduction: simplified.before - simplified.after, originalCutCount: simplified.before };
   });
   for (const sheet of sheets) {
-    sheet.cuts = []; sheet.parts = []; sheet.offcuts = [];
+    sheet.cuts = []; sheet.cutSegments = []; sheet.parts = []; sheet.offcuts = [];
+    const records = new Map();
     let nextWorkpiece = 1;
     const descendants = (node) => node.kind === 'part' ? [node.part] : [...(node.first ? descendants(node.first) : []), ...(node.second ? descendants(node.second) : [])];
-    const visit = (node, id, prerequisite = null) => {
+    const visit = (node, id, parentWorkpiece = null) => {
       node.id = id;
       if (node.kind === 'cut') {
-        const step = sheet.cuts.length + 1;
+        const step = 0;
         const first = `S${sheet.number}-W${nextWorkpiece++}`;
         const second = node.second ? `S${sheet.number}-W${nextWorkpiece++}` : null;
         const edge = node[node.axis] + node.amount, size = node.axis === 'x' ? 'w' : 'h';
         const edgeParts = descendants(node).filter((p) => Math.abs(p[node.axis] + p[size] - edge) < EPS || Math.abs(p[node.axis] - edge - node.kerf) < EPS).map((p) => p.id);
         const releasedParts = [node.first, node.second].filter((child) => child?.kind === 'part').map((child) => child.part.id);
-        sheet.cuts.push({ edgeParts, releasedParts, firstPartCount: descendants(node.first).length, secondPartCount: node.second ? descendants(node.second).length : 0, step, workpiece: id, prerequisite, x: node.x, y: node.y, w: node.w, h: node.h, axis: node.axis, offset: node.amount, kerf: node.kerf, first, second });
-        cutLength += node.axis === 'x' ? node.h : node.w;
-        visit(node.first, first, step);
-        if (node.second) visit(node.second, second, step);
+        const record = { edgeParts, releasedParts, firstPartCount: descendants(node.first).length, secondPartCount: node.second ? descendants(node.second).length : 0, step, workpiece: id, parentWorkpiece, prerequisite: null, x: node.x, y: node.y, w: node.w, h: node.h, axis: node.axis, offset: node.amount, kerf: node.kerf, first, second };
+        records.set(node, record); sheet.cutSegments.push(record);
+
+        visit(node.first, first, id);
+        if (node.second) visit(node.second, second, id);
       } else if (node.kind === 'part') sheet.parts.push({ ...node.part, workpiece: id });
       else sheet.offcuts.push({ ...node, id });
     };
     visit(sheet.root, `S${sheet.number}`);
+    const schedule = scheduleTimberPasses(sheet.root), byId = new Map(sheet.cutSegments.map((c) => [c.workpiece, c]));
+    sheet.alignmentCost = schedule.alignmentCost; cutLength += schedule.length;
+    sheet.cuts = schedule.passes.map((nodes, index) => {
+      const segments = nodes.map((node) => records.get(node)), step = index + 1;
+      for (const c of segments) { c.step = step; c.prerequisite = c.parentWorkpiece ? byId.get(c.parentWorkpiece).step : null; }
+      const representative = segments[Math.floor(segments.length / 2)];
+      return { ...representative, step, segments, alignmentRequired: segments.length > 1,
+        prerequisite: Math.max(0, ...segments.map((c) => c.prerequisite || 0)) || null,
+        edgeParts: [...new Set(segments.flatMap((c) => c.edgeParts))], releasedParts: [...new Set(segments.flatMap((c) => c.releasedParts))] };
+    });
     sheet.usedArea = sheet.parts.reduce((n, p) => n + p.w * p.h, 0);
     sheet.area = sheet.stock.length * sheet.stock.width;
     sheet.yield = sheet.usedArea / sheet.area;
@@ -161,7 +174,7 @@ function finalizePlan(project, sheets, unplaced, required) {
   const reusableOffcuts = sheets.flatMap((s) => s.offcuts.map((r) => ({ ...r, sheet: s.number, area: r.w * r.h }))).filter((r) => Math.min(r.w, r.h) >= 50 - EPS).sort((a, b) => b.area - a.area || Math.min(b.w, b.h) - Math.min(a.w, a.h));
   const occupiedArea = sheets.reduce((total, s) => total + (Math.max(0, ...s.parts.map((p) => p.x + p.w)) - project.settings.trim) * (Math.max(0, ...s.parts.map((p) => p.y + p.h)) - project.settings.trim), 0);
   const score = [...missing, unplaced.reduce((n, p) => n + p.length * p.width, 0), sheets.length, area];
-  const fitness = { primary: score, offcuts: reusableOffcuts.map((r) => r.area), occupiedArea, cutLength, cutCount: sheets.reduce((n, s) => n + s.cuts.length, 0) };
+  const fitness = { primary: score, offcuts: reusableOffcuts.map((r) => r.area), occupiedArea, cutLength, cutCount: sheets.reduce((n, s) => n + s.cuts.length, 0), alignmentCost: sheets.reduce((n, s) => n + s.alignmentCost, 0) };
   const remaining = project.stocks.map((s, i) => s.qty - sheets.filter((sheet) => sheet.stockIndex === i).length);
   return { sheets, unplaced, score, fitness, reusableOffcuts, remaining, settings: { ...project.settings }, required, placed: required - unplaced.length };
 }
@@ -222,7 +235,9 @@ export function compareTimberPlans(a, b) {
   // After placement and sheet use, fewer saw strokes win before offcut size.
   const cuts = a.fitness.cutCount - b.fitness.cutCount;
   if (cuts) return cuts;
-  // For equal cut counts, preserve R1 before R2, then R3.
+  const alignment = (a.fitness.alignmentCost || 0) - (b.fitness.alignmentCost || 0);
+  if (alignment) return alignment;
+  // For equally simple cutting plans, preserve R1 before R2, then R3.
   const offcuts = compareNumbers(a.fitness.offcuts, b.fitness.offcuts);
   if (offcuts) return -offcuts;
   return compareNumbers([a.fitness.occupiedArea, a.fitness.cutLength], [b.fitness.occupiedArea, b.fitness.cutLength]);

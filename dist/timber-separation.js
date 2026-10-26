@@ -1,5 +1,6 @@
-import { t } from './locale.js?v=0.23.0';
-import { timberCutOverlay } from './timber-cut-overlay.js?v=0.23.0';
+import { cutSegments } from './timber-cut-passes.js?v=0.24.0';
+import { t } from './locale.js?v=0.24.0';
+import { timberCutOverlay } from './timber-cut-overlay.js?v=0.24.0';
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const fmt = (n) => Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
 const colors = ['#e5d2af', '#d0dbbd', '#c7d8dd', '#dbcee0', '#e8c8b0'];
@@ -7,7 +8,7 @@ const geometryCache = new WeakMap(), domCache = new WeakMap();
 
 function geometry(sheet) {
   let cached = geometryCache.get(sheet); if (cached) return cached;
-  const nodes = [], byWorkpiece = new Map(sheet.cuts.map((cut) => [cut.workpiece, cut]));
+  const nodes = [], byWorkpiece = new Map(cutSegments(sheet).map((cut) => [cut.workpiece, cut]));
   const visit = (node) => { nodes.push(node); if (node.first) visit(node.first); if (node.second) visit(node.second); };
   visit(sheet.root);
   const size = Math.max(sheet.stock.length, sheet.stock.width);
@@ -81,7 +82,7 @@ export function updateBoardSeparation(svg, sheet, state) {
       pieces: [...svg.querySelectorAll('[data-sim-piece]')],
       overlays: [...svg.querySelectorAll('[data-cut-workpiece]')],
       contexts: [...svg.querySelectorAll('[data-cut-context]')],
-      lines: [...svg.querySelectorAll('[data-cut-line]')].map((el) => ({ el, cut: sheet.cuts.find((c) => c.step === Number(el.dataset.cutLine)) })),
+      lines: [...svg.querySelectorAll('[data-cut-line]')].map((el) => ({ el, cut: cutSegments(sheet).find((c) => c.workpiece === el.parentElement.dataset.cutWorkpiece) })),
     }; domCache.set(svg, elements);
   }
   const layout = timberSeparationLayout(sheet, state);

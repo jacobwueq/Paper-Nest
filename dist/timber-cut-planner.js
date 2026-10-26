@@ -1,3 +1,4 @@
+import { scheduleTimberPasses } from './timber-cut-passes.js?v=0.24.0';
 // Re-slice a fixed layout so aligned part edges can share one full-workpiece cut.
 // A bounded memoised search always retains the original valid slicing tree.
 const EPS = 1e-7;
@@ -30,8 +31,9 @@ export function simplifyTimberCuts(root, kerf, { direction = 'auto', maxStates =
     originals.set(key(node), entry); return entry;
   };
   const baseline = index(root);
-  if (baseline.count <= Math.max(0, parts.length - 1)) return { root: copy(root), before: baseline.count, after: baseline.count };
+  if (baseline.count <= Math.max(0, parts.length - 1)) { const schedule = scheduleTimberPasses(root); return { root: copy(root), before: baseline.count, after: schedule.count, splitCount: baseline.count, alignmentCost: schedule.alignmentCost }; }
   let states = 0;
+  const roots = [baseline];
   function solve(region, inside, isRoot = false) {
     if (!inside.length) return result({ ...region, kind: 'free' });
     if (inside.length === 1) {
@@ -72,11 +74,53 @@ export function simplifyTimberCuts(root, kerf, { direction = 'auto', maxStates =
       if (secondSize > EPS && !second) continue;
       const node = { ...region, kind: 'cut', axis: c.axis, amount: c.position - region[c.axis], kerf: c.consumed, first: first.node, ...(second ? { second: second.node } : {}) };
       const candidate = result(node, first, second);
+      if (isRoot) roots.push(candidate);
       if (!best || compare(candidate, best) < 0) best = candidate;
       if (best.count === inside.length - 1) break; // Binary cuts cannot release n parts in fewer than n−1 strokes.
     }
     memo.set(id, best); return best;
   }
-  const best = solve(rectangle(root), parts, true) || baseline;
-  return { root: copy(best.node), before: baseline.count, after: best.count };
+  // Compare whole-line sweeps as well as locally efficient slicing trees.
+  // Coverage favours a shared height across a row before narrow column cuts.
+  function sweep(region, inside, bias, forced = null) {
+    if (!inside.length) return result({ ...region, kind: 'free' });
+    if (inside.length === 1) { const p = inside[0]; if (close(p.x,region.x) && close(p.y,region.y) && close(p.w,region.w) && close(p.h,region.h)) return result({ ...region, kind:'part', part:p }); }
+    const choices = [];
+    for (const axis of ['x','y']) {
+      const size = axis === 'x' ? 'w' : 'h', across = axis === 'x' ? 'y' : 'x', extent = axis === 'x' ? 'h' : 'w';
+      for (const position of new Set(inside.flatMap((p) => [p[axis]+p[size],p[axis]-kerf]))) {
+        if (position <= region[axis]+EPS || position >= region[axis]+region[size]-EPS) continue;
+        if (forced && (forced.axis !== axis || !close(forced.amount,position-region[axis]))) continue;
+        const consumed = Math.min(kerf,region[axis]+region[size]-position), first=[],second=[], intervals=[];
+        let valid=true;
+        for(const p of inside){
+          if(p[axis]+p[size]<=position+EPS) first.push(p); else if(p[axis]>=position+consumed-EPS) second.push(p); else {valid=false;break;}
+          if(close(p[axis]+p[size],position)||close(p[axis],position+consumed)) intervals.push([p[across],p[across]+p[extent]]);
+        }
+        if(!valid)continue;
+        intervals.sort((a,b)=>a[0]-b[0]);let coverage=0,end=-Infinity;
+        for(const [a,b] of intervals){coverage+=Math.max(0,b-Math.max(a,end));end=Math.max(end,b);}
+        choices.push({axis,size,position,consumed,first,second,coverage:coverage/region[extent],aligned:intervals.length});
+      }
+    }
+    choices.sort((a,b)=>b.coverage-a.coverage || Number(b.axis===bias)-Number(a.axis===bias) || b.aligned-a.aligned || Math.abs(a.first.length-a.second.length)-Math.abs(b.first.length-b.second.length) || a.position-b.position);
+    for(const c of choices){
+      const a=sweep({...region,[c.size]:c.position-region[c.axis]},c.first,bias);if(!a)continue;
+      const remaining=region[c.axis]+region[c.size]-c.position-c.consumed;
+      const b=remaining>EPS?sweep({...region,[c.axis]:c.position+c.consumed,[c.size]:remaining},c.second,bias):null;if(remaining>EPS&&!b)continue;
+      return result({...region,kind:'cut',axis:c.axis,amount:c.position-region[c.axis],kerf:c.consumed,first:a.node,...(b?{second:b.node}:{})},a,b);
+    }
+    return originals.get(key(region)) || null;
+  }
+  solve(rectangle(root), parts, true);
+  if (maxStates > 0) {
+    const starts = [...new Map(roots.filter((entry)=>entry.node.kind==='cut').map((entry)=>[`${entry.node.axis}:${entry.node.amount.toFixed(7)}`,entry.node])).values()];
+    for(const start of starts.slice(0,parts.length>80?1:12)) for(const bias of ['y','x']) {
+      const entry=sweep(rectangle(root),parts,bias,start);if(entry)roots.push(entry);
+    }
+  }
+  const candidates = roots.map((entry) => ({ entry, schedule: scheduleTimberPasses(entry.node) }));
+  candidates.sort((a, b) => a.schedule.count - b.schedule.count || a.schedule.alignmentCost - b.schedule.alignmentCost || compare(a.entry, b.entry));
+  const best = candidates[0];
+  return { root: copy(best.entry.node), before: baseline.count, after: best.schedule.count, splitCount: best.entry.count, alignmentCost: best.schedule.alignmentCost };
 }

@@ -1,13 +1,13 @@
-import { planTimber, validateProject, parseCSV, toCSV } from './timber-planner.js?v=0.23.0';
-import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.23.0';
-import { installTimberWorkflow } from './timber-workflow.js?v=0.23.0';
-import { timberCutOverlay } from './timber-cut-overlay.js?v=0.23.0';
-import { installCutPlayback } from './timber-playback.js?v=0.23.0';
-import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.23.0';
-import { t, getLanguage, onLanguageChange } from './locale.js?v=0.23.0';
-import { saveFile } from './file-download.js?v=0.23.0';
-import { createTimberPDF, loadPDFTools } from './timber-pdf.js?v=0.23.0';
-import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency } from './timber-text.js?v=0.23.0';
+import { planTimber, validateProject, parseCSV, toCSV } from './timber-planner.js?v=0.24.0';
+import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.24.0';
+import { installTimberWorkflow } from './timber-workflow.js?v=0.24.0';
+import { timberCutOverlay, updateCutTrace } from './timber-cut-overlay.js?v=0.24.0';
+import { installCutPlayback } from './timber-playback.js?v=0.24.0';
+import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.24.0';
+import { t, getLanguage, onLanguageChange } from './locale.js?v=0.24.0';
+import { saveFile } from './file-download.js?v=0.24.0';
+import { createTimberPDF, loadPDFTools } from './timber-pdf.js?v=0.24.0';
+import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency } from './timber-text.js?v=0.24.0';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const fmt = (n) => Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
@@ -203,10 +203,18 @@ $('export-list').onclick = () => {
 };
 $('export-guide').onclick = () => {
   if (!plan) return;
-  const rows = [['sheet', 'step', 'workpiece', 'operation', 'measurement_from', 'offset_mm', 'workpiece_length_mm', 'workpiece_width_mm', 'kerf_mm', 'first_result', 'second_result', 'prerequisite_step', 'shared_part_edges', 'released_parts', 'instructions']];
+  const rows = [['sheet', 'step', 'workpiece', 'operation', 'measurement_from', 'offset_mm', 'workpiece_length_mm', 'workpiece_width_mm', 'kerf_mm', 'first_result', 'second_result', 'prerequisite_step', 'shared_part_edges', 'released_parts', 'instructions', 'alignment_required', 'segments_json']];
   for (const s of plan.sheets) {
-    rows.push([s.number, t('Prepare','準備'), `S${s.number}`, trimText(s), '', plan.settings.trim, s.stock.length, s.stock.width, plan.settings.kerf, `S${s.number}`, '', '', '', '', '']);
-    for (const c of s.cuts) rows.push([s.number, c.step, c.workpiece, cutDescription(c), c.axis === 'x' ? t('left finished edge','左側完成邊') : t('top finished edge','上側完成邊'), c.offset, c.w, c.h, c.kerf, c.first, c.second || t('kerf waste','鋸縫廢料'), c.prerequisite || t('Prepare','準備'), (c.edgeParts || []).join(' + '), (c.releasedParts || []).join(' + '), cutDetail(c) + ' ' + cutRetain(c)]);
+    rows.push([s.number, t('Prepare','準備'), `S${s.number}`, trimText(s), '', plan.settings.trim, s.stock.length, s.stock.width, plan.settings.kerf, `S${s.number}`, '', '', '', '', '', '', '']);
+    for (const c of s.cuts) {
+      const members = c.segments || [c];
+      const same = (key) => members.every((m) => Math.abs(m[key] - members[0][key]) < 1e-7) ? members[0][key] : '';
+      rows.push([s.number, c.step, members.map((m) => m.workpiece).join(' + '), cutDescription(c),
+        c.axis === 'x' ? t('each workpiece: left finished edge','各板件：左側完成邊') : t('each workpiece: top finished edge','各板件：上側完成邊'),
+        same('offset'), same('w'), same('h'), same('kerf'), members.map((m) => m.first).join(' + '), members.map((m) => m.second || t('kerf waste','鋸縫廢料')).join(' + '),
+        c.prerequisite || t('Prepare','準備'), (c.edgeParts || []).join(' + '), (c.releasedParts || []).join(' + '), cutDetail(c) + ' ' + cutRetain(c),
+        c.alignmentRequired ? 'yes' : 'no', JSON.stringify(members.map(({workpiece,x,y,w,h,axis,offset,kerf,first,second,prerequisite}) => ({workpiece,x,y,w,h,axis,offset,kerf,first,second,prerequisite})))]);
+    }
   }
   download(toCSV(rows), filename('-cut-guide.csv'), 'text/csv;charset=utf-8');
 };
@@ -253,11 +261,7 @@ cutPlayback = installCutPlayback({
   },
   onFrame(cut, state) {
     if (state.separatePieces && plan?.sheets[activeSheet]) updateBoardSeparation($('sheet-drawing').querySelector('svg'), plan.sheets[activeSheet], state);
-    const trace = $('sheet-drawing').querySelector('[data-cut-trace]'), head = $('sheet-drawing').querySelector('[data-cut-head]');
-    if (!trace || !head || !cut) return;
-    const x = cut.x + (cut.axis === 'x' ? cut.offset : cut.w * state.progress);
-    const y = cut.y + (cut.axis === 'y' ? cut.offset : cut.h * state.progress);
-    trace.setAttribute('x2', x); trace.setAttribute('y2', y); head.setAttribute('cx', x); head.setAttribute('cy', y);
+    updateCutTrace($('sheet-drawing').querySelector('svg'), cut, state);
   },
 });
 let initial = sample(), restored = false;

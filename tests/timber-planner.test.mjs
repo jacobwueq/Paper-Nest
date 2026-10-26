@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { planTimber, optimizeTimber, compareTimberPlans, manualCommandsFromPlan, manualTimber, timberFreeRegions, validateProject, parseCSV, toCSV } from '../dist/timber-planner.js';
 
 import { simplifyTimberCuts } from '../dist/timber-cut-planner.js';
+import { cutSegments } from '../dist/timber-cut-passes.js';
 import { cutDetail, cutRetain } from '../dist/timber-text.js';
 
 const stock = (extra = {}) => ({ label: 'Sheet', material: 'Plywood', thickness: 18, length: 100, width: 100, qty: 1, ...extra });
@@ -13,7 +14,7 @@ const close = (a, b) => assert.ok(Math.abs(a - b) < 1e-5, `${a} differs from ${b
 function verifyPlan(plan) {
   for (const sheet of plan.sheets) {
     const usedIds = new Set([`S${sheet.number}`]);
-    for (const c of sheet.cuts) {
+    for (const operation of sheet.cuts) for (const c of operation.segments || [operation]) {
       assert.ok(usedIds.has(c.workpiece), 'workpiece exists before it is cut');
       usedIds.delete(c.workpiece); usedIds.add(c.first); if (c.second) usedIds.add(c.second);
       assert.ok(!c.prerequisite || c.prerequisite < c.step);
@@ -32,7 +33,7 @@ function verifyPlan(plan) {
       assert.ok(a.x + a.w + k <= b.x + 1e-6 || b.x + b.w + k <= a.x + 1e-6 || a.y + a.h + k <= b.y + 1e-6 || b.y + b.h + k <= a.y + 1e-6, 'parts have full saw clearance');
     }
     let area = sheet.parts.reduce((n, p) => n + p.w * p.h, 0) + sheet.offcuts.reduce((n, o) => n + o.w * o.h, 0);
-    area += sheet.cuts.reduce((n, c) => n + c.kerf * (c.axis === 'x' ? c.h : c.w), 0);
+    area += cutSegments(sheet).reduce((n, c) => n + c.kerf * (c.axis === 'x' ? c.h : c.w), 0);
     close(area, sheet.root.w * sheet.root.h);
   }
   assert.equal(plan.placed + plan.unplaced.length, plan.required);
@@ -147,7 +148,8 @@ test('default optimisation ignores row sequence and legacy per-part priorities',
   p.parts.reverse(); p.parts.forEach((r, i) => { r.priority = (i + 1) % 3; });
   const b = planTimber(p); verifyPlan(b);
   assert.deepEqual(geometry(a), geometry(b));
-  assert.equal(a.sheets.length, 1); assert.ok(a.reusableOffcuts[0].area >= 553873.44 - 1e-5, 'keep the large remnant rather than the old fragmented layout');
+  assert.equal(a.sheets.length, 1); assert.ok(a.fitness.cutCount <= 10, 'shared passes take priority over the former large-offcut-only layout');
+  assert.deepEqual(a.fitness, b.fitness);
 });
 test('whole-list optimisation chooses one larger stock sheet over two smaller sheets', () => {
   const p = project({ stocks: [stock({ length:800,width:800,qty:2 }), stock({ length:1600,width:800,qty:1 })], parts: [part({ length:800,width:800,qty:2 })] }); p.settings.kerf=0;
@@ -199,7 +201,7 @@ test('one shared straight cut prepares two matching parts before they are separa
   assert.deepEqual(new Set(sheet.cuts[1].releasedParts), new Set(['P1.1', 'P1.2']));
   assert.deepEqual(timberFreeRegions(result.boards[0]), [{ x: 0, y: 43, w: 40, h: 57 }, { x: 43, y: 43, w: 40, h: 57 }], 'manual editing retains its saved placement regions');
 });
-test('a repeated four-part grid needs five cuts rather than seven individual trims', () => {
+test('a repeated four-part grid shares four straight passes rather than seven individual trims', () => {
   const p = project({ parts: [part({ qty: 4, grain: true })] }); p.settings.rotate = false;
   const result = manualTimber(p, [
     { partId: 'P1.1', board: 0, x: 0, y: 0, rotated: false, direction: 'rip' },
@@ -207,8 +209,8 @@ test('a repeated four-part grid needs five cuts rather than seven individual tri
     { partId: 'P1.3', board: 0, x: 0, y: 43, rotated: false, direction: 'cross' },
     { partId: 'P1.4', board: 0, x: 43, y: 43, rotated: false, direction: 'rip' },
   ]);
-  assert.equal(result.sheets[0].originalCutCount, 7); assert.equal(result.fitness.cutCount, 5); verifyPlan(result);
-  const automatic = planTimber(p); assert.equal(automatic.fitness.cutCount, 5); verifyPlan(automatic);
+  assert.equal(result.sheets[0].originalCutCount, 7); assert.equal(result.fitness.cutCount, 4); verifyPlan(result);
+  const automatic = planTimber(p); assert.equal(automatic.fitness.cutCount, 4); verifyPlan(automatic);
 });
 test('parts with different lengths can share the same width-setting cut', () => {
   const p = project({ stocks: [stock({ length: 73 })], parts: [part({ grain: true }), part({ length: 30, grain: true })] });
@@ -230,7 +232,7 @@ test('shared cuts never cross a part interior or its required saw clearance', ()
   p.settings.trim = 5; p.settings.kerf = 3.2;
   const plan = planTimber(p); verifyPlan(plan);
   for (const sheet of plan.sheets) {
-    for (const c of sheet.cuts) for (const p of sheet.parts) {
+    for (const c of cutSegments(sheet)) for (const p of sheet.parts) {
       const inRegion = p.x >= c.x - 1e-7 && p.y >= c.y - 1e-7 && p.x + p.w <= c.x + c.w + 1e-7 && p.y + p.h <= c.y + c.h + 1e-7;
       if (!inRegion) continue;
       const position = c[c.axis] + c.offset, size = c.axis === 'x' ? 'w' : 'h';
@@ -248,7 +250,7 @@ test('an exhausted cut-search budget keeps a valid, separate copy of the origina
   const manual = manualTimber(p, [{ partId: 'P1.1', board: 0, x: 0, y: 0, rotated: false, direction: 'cross' }, { partId: 'P1.2', board: 0, x: 43, y: 0, rotated: false, direction: 'cross' }]);
   const root = manual.boards[0].root, before = JSON.stringify(root);
   const limited = simplifyTimberCuts(root, 3, { maxStates: 0 });
-  assert.equal(limited.before, 3); assert.equal(limited.after, 3);
+  assert.equal(limited.before, 3); assert.equal(limited.after, 2);
   assert.notEqual(limited.root, root); assert.notEqual(limited.root.first, root.first);
   assert.equal(JSON.stringify(root), before); assert.deepEqual(limited.root, root);
 });

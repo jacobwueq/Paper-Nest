@@ -1,16 +1,21 @@
-import { getLanguage } from './locale.js?v=0.23.0';
+import { getLanguage } from './locale.js?v=0.24.0';
 const n = (value) => Number(value.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
 const choose = (lang, en, zh) => lang === 'zh-Hant' ? zh : en;
 export function cutDescription(c, lang = getLanguage()) {
+  if (c.segments?.length > 1) return choose(lang, `Shared ${c.axis === 'x' ? 'vertical' : 'horizontal'} pass · ${c.segments.length} aligned workpieces`, `共用${c.axis === 'x' ? '垂直' : '水平'}切割 · 對齊 ${c.segments.length} 件板件`);
   return choose(lang, `${c.axis === 'x' ? 'Crosscut' : 'Rip cut'} at ${n(c.offset)} mm from ${c.axis === 'x' ? 'left' : 'top'} edge`, `${c.axis === 'x' ? '橫紋切割' : '順紋切割'}：由${c.axis === 'x' ? '左邊' : '上邊'}量 ${n(c.offset)} 毫米`);
 }
 export function cutDetail(c, lang = getLanguage()) {
   const edgeList = c.edgeParts?.slice(0, 6).join(', ') + (c.edgeParts?.length > 6 ? choose(lang, ` … (+${c.edgeParts.length - 6} more)`, `…（另有 ${c.edgeParts.length - 6} 件）`) : '');
   const shared = c.edgeParts?.length > 1 ? choose(lang, ` One straight cut sets matching edges for ${edgeList}.`, ` 一刀直線切割，同時完成 ${edgeList} 嘅對齊邊。`) : '';
   const released = c.releasedParts?.length > 1 ? choose(lang, ` This cut releases ${c.releasedParts.join(' + ')} together.`, ` 呢一刀同時分出 ${c.releasedParts.join(' ＋ ')}。`) : '';
+  if (c.segments?.length > 1) return choose(lang,
+    `Keep ${c.segments.map((s) => s.workpiece).join(', ')} aligned in their original sheet positions and cut in one straight pass. Set aside finished parts and offcuts outside this pass. Measurements: ${c.segments.map((s) => `${s.workpiece}: ${n(s.offset)} mm from ${s.axis === 'x' ? 'left' : 'top'} edge`).join('; ')}. Ready after step ${c.prerequisite}.`,
+    `將 ${c.segments.map((s) => s.workpiece).join('、')} 按原板材位置對齊，一次直線切過；先移開本刀以外已完成嘅零件及餘料。各板件量度：${c.segments.map((s) => `${s.workpiece}：由${s.axis === 'x' ? '左' : '上'}邊量 ${n(s.offset)} 毫米`).join('；')}。先完成第 ${c.prerequisite} 刀。`) + shared + released;
   return choose(lang, `Workpiece ${c.workpiece} (${n(c.w)} × ${n(c.h)} mm) → ${c.first}${c.second ? ' + ' + c.second : ' + kerf waste'}. ${c.prerequisite ? 'Available after step ' + c.prerequisite + '.' : 'Start from the trimmed sheet.'}`, `板件 ${c.workpiece}（${n(c.w)} × ${n(c.h)} 毫米）→ ${c.first}${c.second ? ' ＋ ' + c.second : ' ＋ 鋸縫廢料'}。${c.prerequisite ? '先完成第 ' + c.prerequisite + ' 刀。' : '由修邊後嘅整張板開始。'}`) + shared + released;
 }
 export function cutRetain(c, lang = getLanguage()) {
+  if (c.segments?.length > 1) return c.segments.map((segment) => `${segment.workpiece}: ${cutRetain(segment, lang)}`).join(' ');
   const w = c.axis === 'x' ? c.offset : c.w, h = c.axis === 'y' ? c.offset : c.h;
   const secondW = c.axis === 'x' ? c.w - c.offset - c.kerf : c.w;
   const secondH = c.axis === 'y' ? c.h - c.offset - c.kerf : c.h;
@@ -29,9 +34,9 @@ export function trimGuide(sheet, settings, lang = getLanguage()) {
 }
 
 export function cutEfficiency(sheet, lang = getLanguage()) {
-  const shared = sheet.cuts.filter((c) => c.edgeParts?.length > 1).length;
+  const shared = sheet.cuts.filter((c) => c.segments?.length > 1).length;
   const saved = sheet.cutReduction || 0;
   return choose(lang,
-    `Fewer cuts first · ${shared} straight cuts serve matching part edges.${saved ? ` ${saved} redundant cuts removed from the initial placement sequence.` : ''}`,
-    `優先減少切割 · ${shared} 刀直線切割共用對齊邊。${saved ? `較原本逐件排位次序減少 ${saved} 刀。` : ''}`);
+    `Fewer cuts first · ${shared} shared passes across aligned workpieces.${saved ? ` ${saved} redundant cuts removed from the initial placement sequence.` : ''}`,
+    `優先減少切割 · ${shared} 刀共用直線切割，指定板件需按原位置對齊。${saved ? `較原本逐件排位次序減少 ${saved} 刀。` : ''}`);
 }

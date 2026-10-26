@@ -1,3 +1,4 @@
+import { cutSegments } from '../dist/timber-cut-passes.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { planTimber, manualTimber } from '../dist/timber-planner.js';
@@ -7,7 +8,7 @@ const project = {settings:{kerf:3.2,trim:5,direction:'auto',rotate:true},stocks:
 const state = (step, extra = {}) => ({active:true,finished:false,step,completedThrough:step-1,splitReady:false,separation:0,...extra});
 function validateFrontier(sheet, layout, completedThrough) {
   const visible=[...layout.pieces.values()].filter(p=>p.visible);
-  const expected=sheet.root.w*sheet.root.h-sheet.cuts.filter(c=>c.step<=completedThrough).reduce((n,c)=>n+c.kerf*(c.axis==='x'?c.h:c.w),0);
+  const expected=sheet.root.w*sheet.root.h-cutSegments(sheet).filter(c=>c.step<=completedThrough).reduce((n,c)=>n+c.kerf*(c.axis==='x'?c.h:c.w),0);
   const area=visible.reduce((n,p)=>n+p.node.w*p.node.h,0);assert.ok(Math.abs(area-expected)<1e-4,'separation preserves all uncut material except actual kerf');
   for(let i=0;i<visible.length;i++){
     const a=visible[i];assert.ok(a.x>=sheet.root.x-1e-6 && a.y>=sheet.root.y-1e-6);
@@ -22,7 +23,7 @@ test('pieces stay joined until the stroke finishes, then separate without overla
     validateFrontier(sheet,timberSeparationLayout(sheet,state(c.step)),c.step-1);
     for(const fraction of [0,.5,1]){
       const layout=timberSeparationLayout(sheet,state(c.step,{splitReady:true,separation:fraction}));validateFrontier(sheet,layout,c.step);
-      if(c.second){const first=layout.pieces.get(c.first),second=layout.pieces.get(c.second);const actual=c.axis==='x'?second.x-first.x-first.w:second.y-first.y-first.h;assert.ok(Math.abs(actual-c.kerf-layout.gap*fraction)<1e-5);}
+      for(const member of c.segments || [c]) if(member.second){const c=member;const first=layout.pieces.get(c.first),second=layout.pieces.get(c.second);const actual=c.axis==='x'?second.x-first.x-first.w:second.y-first.y-first.h;assert.ok(Math.abs(actual-c.kerf-layout.gap*fraction)<1e-5);}
     }
   }
   const final=timberSeparationLayout(sheet,state(sheet.cuts.length,{finished:true,completedThrough:sheet.cuts.length,splitReady:true,separation:1}));
