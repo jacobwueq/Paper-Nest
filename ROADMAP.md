@@ -188,7 +188,7 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
   Spike: resume each beam child's histogram from the first row its new rectangle
   touches (exact), or a coarse first pass that only re-scores close calls. Done when
   `benchmark-laser64.mjs` gives the same signature at least 2× faster.
-  Result: Exact shortcut in the remnant beam (`keptAlternatives()` in `offcut.js`): adding a rectangle only removes free space, so if the parent has another equal-best rectangle clear of the added rectangle's cells, the child's best value is unchanged and its equal-best set is the parent's minus those touching it — no grid pass. About 95 % of child analyses are skipped. `benchmark-laser64.mjs` at fixed work: 57.5 s → 12.2 s (4.7×), same result signature 3529331495. A verify mode re-runs the full pass for every reuse; thousands of checks, no mismatch.
+  Result: Exact shortcut in the remnant beam (`keptAlternatives()` in `offcut.js`): adding a rectangle only removes free space, so if the parent has another equal-best rectangle clear of the added rectangle's cells, the child's best value is unchanged and its equal-best set is the parent's minus those touching it — no grid pass. About 95 % of child analyses are skipped. `benchmark-laser64.mjs` at fixed work: 57.5 s → 12.2 s (4.7×), same result signature 3529331495. A verify mode re-runs the full pass for every reuse; thousands of checks, no mismatch. Follow-up: the duplicate-state check re-formatted every rectangle of every state; keys are now built once per rectangle and kept sorted — 12.2 s → 7.7 s (57.5 s → 7.7 s overall, 7.5×), same signature.
 
 ## Log / 紀錄
 
@@ -217,3 +217,4 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
 | 2026-10-27 | 3.3 Part-in-part | 274/274 tests; sample walls hold parts in their openings; off by default |
 | 2026-10-27 | 3.4 No-fit cache | 275/275 tests; no-fit time ÷3–7; exact on 45 cases |
 | 2026-10-27 | 3.6 Faster offcut scoring | 276/276 tests; laser64 4.7× faster, identical result |
+| 2026-10-27 | 3.6 follow-up | duplicate keys built once: laser64 7.7 s (from 57.5 s), same signature |

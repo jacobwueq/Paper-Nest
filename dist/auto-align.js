@@ -1,10 +1,10 @@
 import {
   magneticSnapCandidates,
   rebuildContacts,
-} from "./manual-layout.js?v=0.31.2";
-import { contactComponents } from "./cluster-docking.js?v=0.31.2";
-import { evaluateLayout, improves } from "./search.js?v=0.31.2";
-import { count } from "./nesting-profile.js?v=0.31.2";
+} from "./manual-layout.js?v=0.31.3";
+import { contactComponents } from "./cluster-docking.js?v=0.31.3";
+import { evaluateLayout, improves } from "./search.js?v=0.31.3";
+import { count } from "./nesting-profile.js?v=0.31.3";
 
 // Give nearby zero-clearance and endpoint events a turn before expensive
 // orientation search. Use the manual geometry and the normal global score.

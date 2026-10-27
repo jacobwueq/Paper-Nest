@@ -249,6 +249,7 @@
     for (var r of kept) if (Math.min(r.w, r.h) > Math.min(best.w, best.h)) best = r;
     return { alternatives: kept, rectangle: { ...best, area: best.w * best.h } };
   }
+  const rectangleKeys = new WeakMap();
   function collect(polygons, sheet, padding = 0, minSide = 20, options = {}) {
     const context = {
       baseCount: polygons.length,
@@ -287,7 +288,13 @@
               );
         for (const r of retained) {
           const blocked = [...state.blocked, points(r)];
+          // Sorted rectangle keys, built once per rectangle and kept in order, so
+          // the duplicate check below does not re-format every state (3.6).
+          let key = rectangleKeys.get(r);
+          if (!key) rectangleKeys.set(r, (key = [r.x, r.y, r.w, r.h].map((v) => v.toFixed(7)).join(",")));
+          const keys = [...(state.keys || []), key].sort();
           next.push({
+            keys,
             rectangles: [...state.rectangles, r],
             blocked,
             next: null,
@@ -299,10 +306,7 @@
       }
       const seen = new Set();
       next = next.filter((s) => {
-        const key = s.rectangles
-          .map((r) => [r.x, r.y, r.w, r.h].map((v) => v.toFixed(7)).join(","))
-          .sort()
-          .join(";");
+        const key = (s.keys || []).join(";");
         if (seen.has(key)) {
           context.count?.("offcutDuplicateStatesAvoided");
           return false;

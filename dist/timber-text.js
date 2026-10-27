@@ -1,4 +1,4 @@
-import { getLanguage } from './locale.js?v=0.31.2';
+import { getLanguage } from './locale.js?v=0.31.3';
 const n = (value) => Number(value.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
 const choose = (lang, en, zh) => lang === 'zh-Hant' ? zh : en;
 const edgeZh = { left: '左', right: '右', top: '上', bottom: '下' };
