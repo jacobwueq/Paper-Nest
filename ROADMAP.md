@@ -174,7 +174,9 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
 
 - [x] **3.1 Sheet-by-sheet filling with re-weighting** (sequential value correction).
   Result: Spike: one round of sheet-by-sheet filling already gives 17 sheets at 139 pieces on all saws (whole-list greedy: 18). Built as `valueCorrection()` + `finishSheets()` (each sheet's own parts re-laid for fewest cuts) on a new `place()` split out of `build()` (plans unchanged, 21/21). Runs inside Improve layout from half the time/tries, at most 8 rounds or 15 % of the time, only when sheets > area bound, all parts fit and priorities are off; kept only if it ranks better; the usual search then resumes. Fixed-tries comparison: 0 of 21 runs worse, 3 save a sheet (50/41: 18 → 17 on panel/table/hybrid, +12–24 cuts). Manual Adjust can replay these plans. The phase-2 sheet target is met here.
-- [ ] **3.2 Stage limit and stock cost** (multistage along length/width; cheapest material).
+- [x] **3.2 Stage limit and stock cost** (multistage along length/width; cheapest material).
+  Result: **Stock cost done; stage limit split off as 3.2b.** Spike found that offcut rows in stock (e.g. from 1.4 "Add to stock") were never used: each counted as one more sheet. Plans now rank stock area before the number of sheets (`primaryScore`); with one stock size the order is unchanged (21/21 plans identical). With three offcut rows added, 6/11, 15/21 and 30/32 each cut one fewer new full sheet; an offcut that saves nothing stays in stock. Area stands in for price; a per-row price can be added if wanted. Stage limit: not built — mainly matters for production saws; kept as 3.2b until a workshop need is confirmed.
+- [ ] **3.2b Stage limit** (2- or 3-stage guillotine: strips, then crosscuts, then trims). Only if the workshop asks for it; spike first.
 - [ ] **3.3 Laser part-in-part** (parts inside holes). Done when the sample walls hold
   parts inside their openings.
 - [ ] **3.4 Keep no-fit polygons between runs.**
@@ -208,3 +210,4 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
 | 2026-10-27 | 2.6 Laser collision grid | closed: scoring is 98 % of laser time, collisions < 2 %; benchmark added; work moved to 3.6 |
 | 2026-10-27 | 2.7 Table-saw note | 264/264 tests; note checked for table/hybrid/panel, EN/中文. Phase 2 done |
 | 2026-10-27 | 3.1 Sheet-by-sheet filling | 267/267 tests; 139 pieces 18 → 17 sheets on all saws; 0/21 worse at fixed tries |
+| 2026-10-27 | 3.2 Stock area before sheet count | 270/270 tests; offcut rows now replace a new full sheet; single-size plans unchanged |

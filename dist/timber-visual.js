@@ -1,5 +1,5 @@
-import { t, onLanguageChange } from './locale.js?v=0.30.0';
-import { planTimber, optimizeTimber, compareTimberPlans, manualCommandsFromPlan, manualTimber, timberFreeRegions, validateProject } from './timber-planner.js?v=0.30.0';
+import { t, onLanguageChange } from './locale.js?v=0.30.1';
+import { planTimber, optimizeTimber, compareTimberPlans, manualCommandsFromPlan, manualTimber, timberFreeRegions, validateProject } from './timber-planner.js?v=0.30.1';
 const escapeHTML = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const fmt = (n) => Number.isFinite(n) ? Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 }) : '—';
 const colors = ['#e5d2af', '#c8d8b9', '#bed6de', '#d9c7df', '#e9c4ac', '#becadb'];
@@ -47,7 +47,7 @@ export function installTimberVisual({ readProject, changePart, changeStock, addP
   };
   try {
     if (typeof Worker !== 'undefined') {
-      worker = new Worker(new URL('./timber-live-worker.js?v=0.30.0', import.meta.url), { type: 'module' });
+      worker = new Worker(new URL('./timber-live-worker.js?v=0.30.1', import.meta.url), { type: 'module' });
       worker.onmessage = ({ data }) => scheduleResult(data);
       worker.onerror = () => { worker.terminate(); worker = null; if (!workerFailed) { workerFailed = true; runPreview(project, revision); } };
     }
@@ -149,7 +149,7 @@ export function installTimberVisual({ readProject, changePart, changeStock, addP
       for (const board of result.sheets) { const label = `${board.stock.material} ${fmt(board.stock.thickness)} mm`; groups.set(label, (groups.get(label) || 0) + 1); }
       $('visual-plan-note').textContent += t(' Sheets by material: ',' 各物料用板：') + [...groups].map(([label, qty]) => `${label} × ${qty}${t(qty === 1 ? ' sheet' : ' sheets',' 張')}`).join('；');
     }
-    if (draft.mode === 'preview') $('visual-plan-note').textContent += t(` ${optimizing ? 'Comparing' : 'Compared'} ${searchTrials} layouts; prioritise all parts, fewer sheets, then fewer cuts and usable offcuts.`, ` ${optimizing ? '正在比較排位' : '已比較'} ${searchTrials} 個方案；先放齊、減少用板，再減少切割及保留可用餘料。`);
+    if (draft.mode === 'preview') $('visual-plan-note').textContent += t(` ${optimizing ? 'Comparing' : 'Compared'} ${searchTrials} layouts; prioritise all parts, least stock (smaller offcut rows before a new sheet), then fewer cuts and usable offcuts.`, ` ${optimizing ? '正在比較排位' : '已比較'} ${searchTrials} 個方案；先放齊、用最少板材（先用較細嘅餘料板，再開新板），再減少切割及保留可用餘料。`);
     onStatusChange();
   }
   onLanguageChange(render);

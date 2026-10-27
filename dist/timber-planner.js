@@ -1,6 +1,6 @@
-import { scheduleCuts, fenceOf } from './timber-cut-passes.js?v=0.30.0';
-import { cachedSimplifyTimberCuts } from './timber-cut-planner.js?v=0.30.0';
-import { validateTimberSettings, settingValue } from './timber-settings.js?v=0.30.0';
+import { scheduleCuts, fenceOf } from './timber-cut-passes.js?v=0.30.1';
+import { cachedSimplifyTimberCuts } from './timber-cut-planner.js?v=0.30.1';
+import { validateTimberSettings, settingValue } from './timber-settings.js?v=0.30.1';
 // Rectangular guillotine plans. Every cut spans its current workpiece.
 const EPS = 1e-7;
 const positive = (v) => Number.isFinite(v) && v > 0 && v <= 20000;
@@ -71,10 +71,13 @@ function splitChoices(leaf, p, rotated, settings, policy) {
   return dirs.map((direction) => ({ direction, rectangles: direction === 'rip' ? rip : cross }));
 }
 // The first rank of a plan: unplaced parts (by priority when used), unplaced area,
-// sheets, stock area. Known as soon as parts are placed, before any cut is ordered.
+// stock area used, then number of sheets. Known as soon as parts are placed, before
+// any cut is ordered. Stock area comes before the sheet count (roadmap 3.2) so a few
+// small offcut rows win over cutting into a new full sheet; with one stock size the
+// two orders are the same.
 function primaryScore(project, sheets, unplaced) {
   const missing = project.settings.usePriorities ? [0, 1, 2].map((priority) => unplaced.filter((p) => p.priority === priority).length) : [unplaced.length];
-  return [...missing, unplaced.reduce((n, p) => n + p.length * p.width, 0), sheets.length, sheets.reduce((n, s) => n + s.stock.length * s.stock.width, 0)];
+  return [...missing, unplaced.reduce((n, p) => n + p.length * p.width, 0), sheets.reduce((n, s) => n + s.stock.length * s.stock.width, 0), sheets.length];
 }
 // cutoff: a primary score to beat. A layout already worse than it cannot rank, so its
 // cuts are not ordered (the slow part) and a pruned stand-in is returned instead.
