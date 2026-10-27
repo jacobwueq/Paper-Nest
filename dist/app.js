@@ -1,31 +1,32 @@
-import { saveFile } from './file-download.js?v=0.30.1';
-import { t as tr, onLanguageChange } from './locale.js?v=0.30.1';
-import { installCutStrategy } from "./cut-strategy-ui.js?v=0.30.1";
+import { saveFile } from './file-download.js?v=0.31.0';
+import { t as tr, onLanguageChange } from './locale.js?v=0.31.0';
+import { installCutStrategy } from "./cut-strategy-ui.js?v=0.31.0";
 let cutStrategyUI = null;
-import { installWorkspace } from "./workspace-ui.js?v=0.30.1";
+import { installWorkspace } from "./workspace-ui.js?v=0.31.0";
 let workspaceUI = null;
-import { SHEET_PRESETS } from "./sheet-presets.js?v=0.30.1";
+import { SHEET_PRESETS } from "./sheet-presets.js?v=0.31.0";
 import {
   remnantPlan,
   visibleRemnantRectangles,
-} from "./remnant-policy.js?v=0.30.1";
-import { extractPartEdges } from "./common-edge.js?v=0.30.1";
+} from "./remnant-policy.js?v=0.31.0";
+import { extractPartEdges } from "./common-edge.js?v=0.31.0";
 import {
   sampleParts,
   partSVG,
   pathPoints,
   esc,
   validateLayout,
-} from "./geometry.js?v=0.30.1";
-import { parseDXF, parseSVG } from "./importers.js?v=0.30.1";
-import { exportSVG, exportDXF } from "./exporters.js?v=0.30.1";
+  partHoles,
+} from "./geometry.js?v=0.31.0";
+import { parseDXF, parseSVG } from "./importers.js?v=0.31.0";
+import { exportSVG, exportDXF } from "./exporters.js?v=0.31.0";
 import {
   ROTATIONS,
   searchSettings,
   evaluateLayout,
   improves,
   searchSeed,
-} from "./search.js?v=0.30.1";
+} from "./search.js?v=0.31.0";
 const $ = (id) => document.getElementById(id);
 const state = {
   parts: sampleParts(),
@@ -67,6 +68,7 @@ const readSettings = () => ({
   rotations: Number($("rotation").value),
   scale: Number($("scale").value) / 100,
   allowMirror: $("allow-mirror").checked,
+  partInPart: $("part-in-part").checked,
   commonEdgeMode: $("common-edge").checked,
   pairClusters: $("common-edge").checked && $("pair-clusters").checked,
   commonEdgeWeight: Number($("common-edge-weight").value),
@@ -302,6 +304,7 @@ function render() {
     "rotation",
     "scale",
     "allow-mirror",
+    "part-in-part",
     "min-offcut-side",
     "offcut-shape-weight",
     "units",
@@ -428,7 +431,7 @@ function updateSearchStatus() {
 function startEngine() {
   const run = ++state.run;
   compactor = new Worker(
-    new URL("./compaction-worker.js?v=0.30.1", import.meta.url),
+    new URL("./compaction-worker.js?v=0.31.0", import.meta.url),
     { type: "module" },
   );
   compactor.onmessage = ({ data }) => {
@@ -488,7 +491,7 @@ function startEngine() {
       location.origin,
     );
   };
-  frame.src = "engine/index.html?v=0.30.1";
+  frame.src = "engine/index.html?v=0.31.0";
   document.body.append(frame);
   stopTimer = setTimeout(() => {
     stop();
@@ -542,6 +545,7 @@ function scheduleCompaction() {
       id: p.id,
       outer: p.outer,
       edges: extractPartEdges(p),
+      ...(runSettings.partInPart === true ? { holes: partHoles(p) } : {}),
       ...(runSettings.commonEdgeMode === true
         ? { entities: p.entities, origin: p.origin }
         : {}),
@@ -742,6 +746,7 @@ for (const id of [
   "rotation",
   "scale",
   "allow-mirror",
+  "part-in-part",
   "min-offcut-side",
   "offcut-shape-weight",
   "common-edge",

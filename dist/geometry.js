@@ -1,15 +1,15 @@
-import { preservedRemnants } from "./remnant-policy.js?v=0.30.1";
+import { preservedRemnants } from "./remnant-policy.js?v=0.31.0";
 import {
   cached,
   objectKey,
   poseKey,
   count,
-} from "./nesting-profile.js?v=0.30.1";
+} from "./nesting-profile.js?v=0.31.0";
 import {
   commonContactClearance,
   sharedJunctions,
   junctionClearance,
-} from "./common-contact.js?v=0.30.1";
+} from "./common-contact.js?v=0.31.0";
 // Geometry is expressed in millimetres, with screen Y pointing down.
 export const TOL = 0.02;
 export const near = (a, b, e = 1e-5) => Math.hypot(a.x - b.x, a.y - b.y) <= e;
@@ -152,6 +152,51 @@ export function clearance(a, b, limit) {
   }
   return true;
 }
+// Part-in-part (roadmap 3.3). A hole is a closed loop inside the outline on the same
+// layer as the outline, in part-local coordinates like `outer`. Another part may sit in
+// a hole when it is wholly inside it with the part gap to every hole edge; the hole's
+// slug is then cut away around it. Off unless settings.partInPart is true.
+const HOLES = new WeakMap();
+export function partHoles(p) {
+  if (Array.isArray(p.holes)) return p.holes; // precomputed, e.g. sent to a worker
+  if (HOLES.has(p)) return HOLES.get(p);
+  const o = p.origin || { x: 0, y: 0 }, ob = bounds(p.outer), loops = [];
+  for (const e of p.entities || []) {
+    if (!e.closed && e.kind !== "circle") continue;
+    const pts = entityPoints(e).map((q) => ({ x: q.x - o.x, y: q.y - o.y }));
+    if (pts.length < 3) continue;
+    const b = bounds(pts);
+    const isOuter = Math.abs(b.x - ob.x) < 1e-4 && Math.abs(b.y - ob.y) < 1e-4 && Math.abs(b.w - ob.w) < 1e-4 && Math.abs(b.h - ob.h) < 1e-4;
+    loops.push({ e, pts, b, isOuter });
+  }
+  const outer = loops.find((l) => l.isOuter);
+  const holes = loops
+    .filter((l) => !l.isOuter && (!outer || (l.e.layer || "0") === (outer.e.layer || "0")) && l.b.w * l.b.h > 1 && containsPolygon(p.outer, l.pts))
+    .map((l) => l.pts);
+  HOLES.set(p, holes);
+  return holes;
+}
+function segmentGap(a, b, c, d) {
+  if (segmentsCross(a, b, c, d)) return 0;
+  return Math.min(segmentDistance(a, c, d), segmentDistance(b, c, d), segmentDistance(c, a, b), segmentDistance(d, a, b));
+}
+// `poly` lies inside `hole` with at least `gap` to every hole edge.
+export function insideHole(hole, poly, gap) {
+  const hb = bounds(hole), pb = bounds(poly);
+  if (pb.x < hb.x + gap - 1e-5 || pb.y < hb.y + gap - 1e-5 || pb.x + pb.w > hb.x + hb.w - gap + 1e-5 || pb.y + pb.h > hb.y + hb.h - gap + 1e-5) return false;
+  if (!poly.every((q) => pointIn(q, hole))) return false;
+  for (let i = 0; i < poly.length; i++)
+    for (let j = 0; j < hole.length; j++)
+      if (segmentGap(poly[i], poly[(i + 1) % poly.length], hole[j], hole[(j + 1) % hole.length]) < gap - 1e-5) return false;
+  return true;
+}
+// Two placed parts are far enough apart, or one sits in a hole of the other.
+export function separated(a, b, gap, settings) {
+  if (clearance(a.poly, b.poly, gap)) return true;
+  if (settings?.partInPart !== true) return false;
+  return partHoles(a.p).some((h) => insideHole(transformed(h, a.t), b.poly, gap)) ||
+    partHoles(b.p).some((h) => insideHole(transformed(h, b.t), a.poly, gap));
+}
 export function validateLayout(parts, placements, settings) {
   const errors = [],
     ids = new Set();
@@ -234,7 +279,7 @@ export function validateLayout(parts, placements, settings) {
           settings.commonEdgeMode === true
             ? commonContactClearance(a.p, a.t, b.p, b.t, settings.gap)
             : {
-                valid: clearance(a.poly, b.poly, settings.gap),
+                valid: separated(a, b, settings.gap, settings),
                 reason: "clearance",
               };
         if (!result.valid) failures.push({ a, b, result });

@@ -1,25 +1,27 @@
-import { alignNearby } from "./auto-align.js?v=0.30.1";
-import { compactMultiPartClusters } from "./multi-cluster.js?v=0.30.1";
+import { alignNearby } from "./auto-align.js?v=0.31.0";
+import { compactMultiPartClusters } from "./multi-cluster.js?v=0.31.0";
 import {
   createNestingDiagnostics,
   scoreDecision,
-} from "./nesting-debug.js?v=0.30.1";
-import { compactPairClusters } from "./pair-cluster.js?v=0.30.1";
-import { profiled, count } from "./nesting-profile.js?v=0.30.1";
+} from "./nesting-debug.js?v=0.31.0";
+import { compactPairClusters } from "./pair-cluster.js?v=0.31.0";
+import { profiled, count } from "./nesting-profile.js?v=0.31.0";
 import {
   contactFromCandidate,
   replacePlacement,
   contactsAtPlacement,
-} from "./common-contact.js?v=0.30.1";
-import { commonEdgeCandidates } from "./common-edge.js?v=0.30.1";
-import { pocketTranslations } from "./pocket-search.js?v=0.30.1";
+} from "./common-contact.js?v=0.31.0";
+import { commonEdgeCandidates } from "./common-edge.js?v=0.31.0";
+import { pocketTranslations } from "./pocket-search.js?v=0.31.0";
 import {
   bounds,
   transformed,
   clearance,
   validateLayout,
-} from "./geometry.js?v=0.30.1";
-import { evaluateLayout, improves } from "./search.js?v=0.30.1";
+  partHoles,
+  insideHole,
+} from "./geometry.js?v=0.31.0";
+import { evaluateLayout, improves } from "./search.js?v=0.31.0";
 
 // Remove two parts together, keep several alternatives for the first, and
 // reinsert the second. Only complete, improved layouts leave this function.
@@ -311,6 +313,11 @@ function compactLayoutImpl(parts, initial, settings, options) {
         (p, i) => i !== index && placements[i].sheet === current.sheet,
       );
       const neighbourBounds = neighbours.map(bounds);
+      // Part-in-part (3.3): holes of the other parts, in sheet coordinates.
+      const holesOn = settings.partInPart === true;
+      const neighbourHoles = holesOn
+        ? placements.filter((t, i) => i !== index && t.sheet === current.sheet).map((t) => partHoles(byId.get(t.id)).map((h) => transformed(h, t)))
+        : [];
       const seen = new Set(),
         exactSeen = new Set();
       let best = null;
@@ -331,7 +338,7 @@ function compactLayoutImpl(parts, initial, settings, options) {
             a.y + a.h + gap < b.y
           )
             return true;
-          return clearance(poly, other, gap);
+          return clearance(poly, other, gap) || (holesOn && neighbourHoles[i].some((h) => insideHole(h, poly, gap)));
         });
       }
       function consider(t, known = false, contact = null) {
@@ -507,6 +514,21 @@ function compactLayoutImpl(parts, initial, settings, options) {
         }
       }
 
+      // Part-in-part candidates: the corners and centre of every hole of the other parts,
+      // at the current angle and the half turn.
+      if (holesOn)
+        for (const holes of neighbourHoles)
+          for (const hole of holes) {
+            const hb = bounds(hole);
+            for (const angle of pocketAngles) {
+              if (now() >= deadline) break;
+              const base = { ...current, x: 0, y: 0, angle }, pb = bounds(transformed(source, base));
+              if (pb.w > hb.w - 2 * gap || pb.h > hb.h - 2 * gap) continue;
+              const xs = [hb.x + gap + guard, hb.x + hb.w - gap - guard - pb.w, hb.x + (hb.w - pb.w) / 2];
+              const ys = [hb.y + gap + guard, hb.y + hb.h - gap - guard - pb.h, hb.y + (hb.h - pb.h) / 2];
+              for (const x of xs) for (const y of ys) consider({ ...base, x: x - pb.x, y: y - pb.y });
+            }
+          }
       function slide(t, dir) {
         const p = transformed(source, t),
           b = bounds(p);

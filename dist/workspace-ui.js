@@ -5,16 +5,16 @@ import {
   magneticSnap,
   rotationSuggestion,
   rebuildContacts,
-} from "./manual-layout.js?v=0.30.1";
-import { cuttingMetrics } from "./cut-metrics.js?v=0.30.1";
-import { evaluateLayout } from "./search.js?v=0.30.1";
+} from "./manual-layout.js?v=0.31.0";
+import { cuttingMetrics } from "./cut-metrics.js?v=0.31.0";
+import { evaluateLayout } from "./search.js?v=0.31.0";
 import {
   validateLayout,
   bounds,
   transformed,
   esc,
   area,
-} from "./geometry.js?v=0.30.1";
+} from "./geometry.js?v=0.31.0";
 export function installWorkspace({
   state,
   readSettings,
@@ -99,7 +99,7 @@ export function installWorkspace({
   const scaleHelp = [...sections[1].querySelectorAll(".help")].find((p) =>
     /100% keeps/.test(p.textContent),
   );
-  for (const id of ["rotation", "scale", "allow-mirror", "min-offcut-side"]) {
+  for (const id of ["rotation", "scale", "allow-mirror", "part-in-part", "min-offcut-side"]) {
     const input = $(id);
     adjust.append(input.closest(".field") || input.closest("label") || input);
     if (id === "scale" && scaleHelp) adjust.append(scaleHelp);

@@ -528,6 +528,16 @@ Area percentage measures part footprint divided by sheet area, so moving the sam
 With enhanced common-edge nesting enabled, each compaction job first checks nearby shared edges and endpoint alignments for individual parts and existing contact groups. This pass has a bounded share of the search budget and only accepts improvements under the existing global score; it does not increase common-edge weight or relax spacing. Manual rejection messages retain the actual validator reason after release. Clearance simplification deduplicates consecutive vertices before removing collinear points, preserving genuine corners in imported and sample contours.
 
 
+## Parts inside openings (0.31) / 細件放入開口
+
+More options → **Place small parts inside openings** (off by default). A hole is a
+closed loop inside a part's outline on the same layer as the outline. With the option
+on, compaction also tries each hole's corners and centre for smaller parts, and a part
+may sit in a hole when it keeps the part gap to every hole edge. Holes are sent to
+the compaction worker precomputed. Cut the inner parts before the opening around them
+(most laser software cuts inner shapes first; check that setting).
+「細件可放入其他零件嘅開口」預設關閉；開啟後細件可以放入開口，但要同開口邊保持零件間距。切割時請先切內件。
+
 ## Four-step workflow and separation strategy
 
 1. Setup: import/review groups, set sheet, spacing, margin, rotation and common-edge/remnant rules. Material is a descriptive choice, not a machine preset. Separation kerf only protects parts from added recovery cuts; it does not offset part outlines.

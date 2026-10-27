@@ -177,8 +177,9 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
 - [x] **3.2 Stage limit and stock cost** (multistage along length/width; cheapest material).
   Result: **Stock cost done; stage limit split off as 3.2b.** Spike found that offcut rows in stock (e.g. from 1.4 "Add to stock") were never used: each counted as one more sheet. Plans now rank stock area before the number of sheets (`primaryScore`); with one stock size the order is unchanged (21/21 plans identical). With three offcut rows added, 6/11, 15/21 and 30/32 each cut one fewer new full sheet; an offcut that saves nothing stays in stock. Area stands in for price; a per-row price can be added if wanted. Stage limit: not built — mainly matters for production saws; kept as 3.2b until a workshop need is confirmed.
 - [ ] **3.2b Stage limit** (2- or 3-stage guillotine: strips, then crosscuts, then trims). Only if the workshop asks for it; spike first.
-- [ ] **3.3 Laser part-in-part** (parts inside holes). Done when the sample walls hold
+- [x] **3.3 Laser part-in-part** (parts inside holes). Done when the sample walls hold
   parts inside their openings.
+  Result: Spike then build, behind a setting (More options → "Place small parts inside openings", off by default). `partHoles()` finds closed loops inside the outline on the outline's layer (sample walls: one 28 × 53 mm opening each; score lines ignored). `insideHole()`/`separated()` allow a part wholly inside a hole with the gap to every hole edge; compaction adds hole corner/centre candidates; holes are sent precomputed to the worker. Test: three 20 × 40 tabs move into the sample walls' openings (used height 139 → 105 mm). Browser: an imported drawing of two frames moved two squares into an opening. Option off: laser benchmark signature unchanged.
 - [ ] **3.4 Keep no-fit polygons between runs.**
 - [ ] **3.5 Fast discretised placement** as the laser search's inner loop (spike first).
 - [ ] **3.6 Faster offcut scoring for the laser search** (from 2.6). Scoring is 98 % of
@@ -211,3 +212,4 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
 | 2026-10-27 | 2.7 Table-saw note | 264/264 tests; note checked for table/hybrid/panel, EN/中文. Phase 2 done |
 | 2026-10-27 | 3.1 Sheet-by-sheet filling | 267/267 tests; 139 pieces 18 → 17 sheets on all saws; 0/21 worse at fixed tries |
 | 2026-10-27 | 3.2 Stock area before sheet count | 270/270 tests; offcut rows now replace a new full sheet; single-size plans unchanged |
+| 2026-10-27 | 3.3 Part-in-part | 274/274 tests; sample walls hold parts in their openings; off by default |
