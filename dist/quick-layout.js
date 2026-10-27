@@ -1,4 +1,4 @@
-import { transformed, bounds, partHoles, containsPolygon, insideHole, pointIn, clearance } from "./geometry.js?v=0.32.3";
+import { transformed, bounds, partHoles, containsPolygon, insideHole, pointIn, clearance, separated } from "./geometry.js?v=0.33.0";
 // A first layout in milliseconds, before the nesting engine answers (found with the
 // 80-part A2 stress test: the engine had not placed even 20 irregular parts after its
 // 20 s budget). Bounding boxes are packed largest first (MaxRects), turned 90° when
@@ -148,6 +148,99 @@ function edgeDistance(q, poly) {
   return best;
 }
 const polygonArea = (p) => p.reduce((n, a, i) => { const b = p[(i + 1) % p.length]; return n + a.x * b.y - b.x * a.y; }, 0) / 2;
+// A second instant layout that uses the parts' real outlines instead of their boxes,
+// so small parts go into the inside corner of an L or the mouth of a C (the box
+// packing above cannot: a box covers the pocket). Largest part first, each at the
+// leftmost free spot on the earliest sheet, keeping the free strip on the right as
+// one piece. The same raster screen as fillHole() keeps it fast; every accepted
+// position passes the exact clearance test. With part-in-part on, an opening's
+// usable inside stays free, so smaller parts can land in it too.
+export function outlineLayout(parts, settings) {
+  const gap = settings.gap, g2 = gap + 0.05, margin = settings.margin;
+  const uw = settings.width - 2 * margin, uh = settings.height - 2 * margin;
+  const c = Math.max(1, Math.min(uw, uh) / 150);
+  const nx = Math.max(1, Math.ceil(uw / c)), ny = Math.max(1, Math.ceil(uh / c));
+  const angleStep = Math.max(90, 360 / Math.max(1, settings.rotations));
+  const holesOn = settings.partInPart === true;
+  const sheets = [], placements = [];
+  const sheetGrid = (k) => (sheets[k] ??= { free: new Uint8Array(nx * ny).fill(1), hole: new Uint8Array(nx * ny), openings: [], placed: [] });
+  const order = parts.map((p) => ({ p, b: bounds(p.outer) }))
+    .sort((a, b) => b.b.w * b.b.h - a.b.w * a.b.h || (a.p.id < b.p.id ? -1 : 1));
+  for (const { p } of order) {
+    const shapes = [];
+    for (let angle = 0; angle < 360; angle += angleStep) {
+      const t0 = { id: p.id, x: 0, y: 0, angle, scale: settings.scale ?? 1, mirrored: false, sheet: 0 };
+      const base = transformed(p.outer, t0), bb = bounds(base);
+      const cw = Math.ceil(bb.w / c - 1e-9), ch = Math.ceil(bb.h / c - 1e-9);
+      if (bb.w > uw + 1e-6 || bb.h > uh + 1e-6) continue;
+      const cells = [];
+      for (let v = 0; v < ch; v++) for (let u = 0; u < cw; u++)
+        if (pointIn({ x: bb.x + (u + 0.5) * c, y: bb.y + (v + 0.5) * c }, base)) cells.push(v * nx + u);
+      shapes.push({ t0, base, bb, cw, ch, cells });
+    }
+    if (!shapes.length) continue;
+    for (let k = 0; ; k++) {
+      const grid = sheetGrid(k);
+      let best = null;
+      // An opening costs no sheet, so a part that fits in one goes there first.
+      const tryAt = (sh, i, j, onlyHole) => {
+        const at = j * nx + i;
+        if (!sh.cells.every((n) => grid.free[at + n] && (!onlyHole || grid.hole[at + n]))) return null;
+        const t = { ...sh.t0, sheet: k, x: margin + i * c - sh.bb.x, y: margin + j * c - sh.bb.y };
+        const item = { p, t, poly: sh.base.map((q) => ({ x: q.x + t.x, y: q.y + t.y })) };
+        return grid.placed.every((o) => separated(o, item, g2, settings)) ? item : null;
+      };
+      for (const r of grid.openings) {
+        for (const sh of shapes) {
+          for (let j = r.j0; j + sh.ch <= r.j1 + 1 && !best; j++)
+            for (let i = r.i0; i + sh.cw <= r.i1 + 1; i++) {
+              const item = tryAt(sh, i, j, true);
+              if (item) { best = { item }; break; }
+            }
+          if (best) break;
+        }
+        if (best) break;
+      }
+      if (!best) for (const sh of shapes) {
+        // Leftmost column first, then topmost row.
+        scan: for (let i = 0; i < nx; i++) {
+          const x = margin + i * c;
+          if (x + sh.bb.w > settings.width - margin + 1e-6) break;
+          if (best && x + sh.bb.w >= best.right - 1e-9) break;
+          for (let j = 0; j < ny; j++) {
+            const y = margin + j * c;
+            if (y + sh.bb.h > settings.height - margin + 1e-6) break;
+            const item = tryAt(sh, i, j, false);
+            if (!item) continue;
+            best = { item, right: x + sh.bb.w };
+            break scan;
+          }
+        }
+      }
+      if (!best && !grid.placed.length) break; // does not fit an empty sheet
+      if (!best) continue;
+      const { item } = best;
+      grid.placed.push(item); placements.push(item.t);
+      const pb = bounds(item.poly), holes = holesOn ? partHoles(p).map((h) => transformed(h, item.t)) : [];
+      for (let j = Math.max(0, Math.floor((pb.y - g2 - margin) / c)); j < Math.min(ny, Math.ceil((pb.y + pb.h + g2 - margin) / c)); j++)
+        for (let i = Math.max(0, Math.floor((pb.x - g2 - margin) / c)); i < Math.min(nx, Math.ceil((pb.x + pb.w + g2 - margin) / c)); i++) {
+          if (!grid.free[j * nx + i]) continue;
+          const q = { x: margin + (i + 0.5) * c, y: margin + (j + 0.5) * c };
+          if (edgeDistance(q, item.poly) < gap) { grid.free[j * nx + i] = 0; continue; }
+          if (!pointIn(q, item.poly)) continue;
+          if (holes.some((h) => pointIn(q, h) && edgeDistance(q, h) >= gap)) grid.hole[j * nx + i] = 1;
+          else grid.free[j * nx + i] = 0;
+        }
+      for (const h of holes) {
+        const hb = bounds(h);
+        grid.openings.push({ i0: Math.max(0, Math.floor((hb.x - margin) / c)), j0: Math.max(0, Math.floor((hb.y - margin) / c)),
+          i1: Math.min(nx - 1, Math.ceil((hb.x + hb.w - margin) / c)), j1: Math.min(ny - 1, Math.ceil((hb.y + hb.h - margin) / c)) });
+      }
+      break;
+    }
+  }
+  return placements;
+}
 // MaxRects: cut `used` out of every free rectangle it overlaps, then drop free
 // rectangles contained in others.
 function split(free, used) {

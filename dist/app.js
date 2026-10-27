@@ -1,16 +1,16 @@
-import { saveFile } from './file-download.js?v=0.32.3';
-import { shelfLayout } from "./quick-layout.js?v=0.32.3";
-import { t as tr, onLanguageChange } from './locale.js?v=0.32.3';
-import { installCutStrategy } from "./cut-strategy-ui.js?v=0.32.3";
+import { saveFile } from './file-download.js?v=0.33.0';
+import { shelfLayout, outlineLayout } from "./quick-layout.js?v=0.33.0";
+import { t as tr, onLanguageChange } from './locale.js?v=0.33.0';
+import { installCutStrategy } from "./cut-strategy-ui.js?v=0.33.0";
 let cutStrategyUI = null;
-import { installWorkspace } from "./workspace-ui.js?v=0.32.3";
+import { installWorkspace } from "./workspace-ui.js?v=0.33.0";
 let workspaceUI = null;
-import { SHEET_PRESETS } from "./sheet-presets.js?v=0.32.3";
+import { SHEET_PRESETS } from "./sheet-presets.js?v=0.33.0";
 import {
   remnantPlan,
   visibleRemnantRectangles,
-} from "./remnant-policy.js?v=0.32.3";
-import { extractPartEdges } from "./common-edge.js?v=0.32.3";
+} from "./remnant-policy.js?v=0.33.0";
+import { extractPartEdges } from "./common-edge.js?v=0.33.0";
 import {
   sampleParts,
   partSVG,
@@ -19,16 +19,16 @@ import {
   validateLayout,
   partHoles,
   nestedCount,
-} from "./geometry.js?v=0.32.3";
-import { parseDXF, parseSVG } from "./importers.js?v=0.32.3";
-import { exportSVG, exportDXF } from "./exporters.js?v=0.32.3";
+} from "./geometry.js?v=0.33.0";
+import { parseDXF, parseSVG } from "./importers.js?v=0.33.0";
+import { exportSVG, exportDXF } from "./exporters.js?v=0.33.0";
 import {
   ROTATIONS,
   searchSettings,
   evaluateLayout,
   improves,
   searchSeed,
-} from "./search.js?v=0.32.3";
+} from "./search.js?v=0.33.0";
 const $ = (id) => document.getElementById(id);
 const state = {
   parts: sampleParts(),
@@ -469,7 +469,7 @@ function updateSearchStatus() {
 function startEngine() {
   const run = ++state.run;
   compactor = new Worker(
-    new URL("./compaction-worker.js?v=0.32.3", import.meta.url),
+    new URL("./compaction-worker.js?v=0.33.0", import.meta.url),
     { type: "module" },
   );
   compactor.onmessage = ({ data }) => {
@@ -508,8 +508,12 @@ function startEngine() {
   }
   // Show a valid layout at once and let compaction work on it while the engine runs.
   if (!state.placements.length) {
-    const quick = shelfLayout(state.parts, runSettings);
-    if (quick.length && considerLayout(quick)) scheduleCompaction();
+    // Two instant layouts: real outlines (fills the inside corners of L and C shapes)
+    // and packed boxes; the better one by the offcut score is kept.
+    let shown = false;
+    for (const quick of [outlineLayout(state.parts, runSettings), shelfLayout(state.parts, runSettings)])
+      if (quick.length && considerLayout(quick)) shown = true;
+    if (shown) scheduleCompaction();
   }
   const frame = document.createElement("iframe");
   engine = frame;
@@ -534,7 +538,7 @@ function startEngine() {
       location.origin,
     );
   };
-  frame.src = "engine/index.html?v=0.32.3";
+  frame.src = "engine/index.html?v=0.33.0";
   document.body.append(frame);
   stopTimer = setTimeout(() => {
     stop();

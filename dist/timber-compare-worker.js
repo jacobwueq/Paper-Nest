@@ -1,4 +1,4 @@
-import { planTimber } from './timber-planner.js?v=0.32.3';
+import { planTimber } from './timber-planner.js?v=0.33.0';
 // Roadmap 2.7: plan the same list for a panel saw, off the main thread, so Review can
 // say how many steps the table saw adds and why.
 self.onmessage = ({ data }) => {

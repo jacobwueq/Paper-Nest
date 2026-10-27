@@ -1,4 +1,4 @@
-import { t, onLanguageChange } from './locale.js?v=0.32.3';
+import { t, onLanguageChange } from './locale.js?v=0.33.0';
 const PLAYBACK_RATE = 2;
 
 export class CutTimeline {
