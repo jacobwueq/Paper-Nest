@@ -162,8 +162,9 @@ Phase 2 now finishes when its items are done and no benchmark run gets worse.
   Result: `repackPlan()` keeps the plan's order for all other parts and puts the weakest sheet's parts last (largest first, then longest side first; current + 2 other strategies), for the 2 least-used sheets, up to 3 rounds; kept only when `compareTimberPlans` ranks it better. On by default in the quick plan and at the end of Improve layout (`repack: false` keeps the old path for tests). Benchmark: 0 runs worse; 12 of 21 runs 1–3 steps fewer; no sheet saved (see revised phase check); quick plan at 139 pieces 0.9–1.1 s. New baseline saved.
 - [x] **2.5 Paste rows into the parts tray** from a spreadsheet; one parts list.
   Result: Ctrl/⌘ V anywhere on the timber page (outside text fields), or a multi-cell paste into the parts table/tray, adds part rows via `parsePastedParts()` (planner): header row read by name (EN/中文, units allowed), otherwise label + two largest numbers as size + whole number ≤ 500 as qty + leftover as thickness; tab, semicolon or comma separated. Skipped lines are counted, never guessed; a single value pasted into a field behaves as normal. Notice with Undo. Tray shows the hint. The tray and the detailed table are already one list (same rows).
-- [ ] **2.6 Laser collision grid.** Broad-phase grid so collision tests only check
+- [x] **2.6 Laser collision grid.** Broad-phase grid so collision tests only check
   nearby parts; record candidate moves at 64 parts (was 42 in 1.8 s).
+  Result: **Closed without the grid — measurement refuted the premise.** New `scripts/benchmark-laser64.mjs` (fixed work, exact result signature): of 57 s, layout scoring takes 56.3 s (98 %) and collision tests + no-fit polygons under 2 s. Each scored layout runs ~266 offcut histogram passes (the remnant beam search in `offcut.js`). Two exact speed-ups were tried and dropped: reusing the fixed parts' raster (−3 %) and caching the best utility (0 %). A real gain needs fewer or incremental histogram passes; that is new item **3.6**.
 - [ ] **2.7 Say why the table saw adds steps** on Review.
 
 ## Phase 3 · Bigger bets / 較大型項目
@@ -176,6 +177,11 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
   parts inside their openings.
 - [ ] **3.4 Keep no-fit polygons between runs.**
 - [ ] **3.5 Fast discretised placement** as the laser search's inner loop (spike first).
+- [ ] **3.6 Faster offcut scoring for the laser search** (from 2.6). Scoring is 98 % of
+  compaction time: ~266 grid histogram passes per scored layout in the remnant beam.
+  Spike: resume each beam child's histogram from the first row its new rectangle
+  touches (exact), or a coarse first pass that only re-scores close calls. Done when
+  \`benchmark-laser64.mjs\` gives the same signature at least 2× faster.
 
 ## Log / 紀錄
 
@@ -197,3 +203,4 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
 | 2026-10-27 | 2.3 Part labels | 254/254 tests; also fixes digit spacing in all PDFs |
 | 2026-10-27 | 2.4 Repack weakest sheets | 257/257 tests; 12/21 runs fewer steps, none worse; no sheet saved; new baseline |
 | 2026-10-27 | 2.5 Paste rows | 261/261 tests; browser: paste, undo, header, junk, 中文 |
+| 2026-10-27 | 2.6 Laser collision grid | closed: scoring is 98 % of laser time, collisions < 2 %; benchmark added; work moved to 3.6 |
