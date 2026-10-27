@@ -1,12 +1,12 @@
-import { installPanelResize } from "./panel-resize.js?v=0.27.3";
+import { installPanelResize } from "./panel-resize.js?v=0.28.0";
 import {
   proposeCutSets,
   checkedCutSets,
   remainingOffcutFrames,
-} from "./separation-sets.js?v=0.27.3";
-import { cuttingMetrics } from "./cut-metrics.js?v=0.27.3";
-import { recoveryLines } from "./exporters.js?v=0.27.3";
-import { lineLength } from "./common-line.js?v=0.27.3";
+} from "./separation-sets.js?v=0.28.0";
+import { cuttingMetrics } from "./cut-metrics.js?v=0.28.0";
+import { recoveryLines } from "./exporters.js?v=0.28.0";
+import { lineLength } from "./common-line.js?v=0.28.0";
 export function installCutStrategy({
   state,
   readSettings,

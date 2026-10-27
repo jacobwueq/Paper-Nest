@@ -1,15 +1,15 @@
-import { planTimber, validateProject, parseCSV, toCSV, offcutStockRow } from './timber-planner.js?v=0.27.3';
-import { TIMBER_SETTINGS, cleanTimberSettings, defaultTimberSettings } from './timber-settings.js?v=0.27.3';
-import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.27.3';
-import { installTimberWorkflow } from './timber-workflow.js?v=0.27.3';
-import { timberCutOverlay, updateCutTrace } from './timber-cut-overlay.js?v=0.27.3';
-import { installCutPlayback } from './timber-playback.js?v=0.27.3';
-import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.27.3';
-import { t, getLanguage, onLanguageChange } from './locale.js?v=0.27.3';
-import { saveFile } from './file-download.js?v=0.27.3';
-import { createTimberPDF, loadPDFTools } from './timber-pdf.js?v=0.27.3';
-import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency } from './timber-text.js?v=0.27.3';
-import { installSawHelp } from './timber-saw-help.js?v=0.27.3';
+import { planTimber, validateProject, parseCSV, toCSV, offcutStockRow } from './timber-planner.js?v=0.28.0';
+import { TIMBER_SETTINGS, cleanTimberSettings, defaultTimberSettings } from './timber-settings.js?v=0.28.0';
+import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.28.0';
+import { installTimberWorkflow } from './timber-workflow.js?v=0.28.0';
+import { timberCutOverlay, updateCutTrace } from './timber-cut-overlay.js?v=0.28.0';
+import { installCutPlayback } from './timber-playback.js?v=0.28.0';
+import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.28.0';
+import { t, getLanguage, onLanguageChange } from './locale.js?v=0.28.0';
+import { saveFile } from './file-download.js?v=0.28.0';
+import { createTimberPDF, loadPDFTools } from './timber-pdf.js?v=0.28.0';
+import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency } from './timber-text.js?v=0.28.0';
+import { installSawHelp } from './timber-saw-help.js?v=0.28.0';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const fmt = (n) => Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
@@ -161,8 +161,8 @@ function renderPlan() {
     for (const p of plan.unplaced) { const key = `${p.label} (${fmt(p.length)} × ${fmt(p.width)} mm, ${p.material} ${fmt(p.thickness)} mm)`; counts.set(key, (counts.get(key) || 0) + 1); }
     $('unplaced').textContent = plan.manual ? `${plan.unplaced.length} part(s) not yet placed · 尚未放入：${[...counts].map(([label, count]) => `${label} × ${count}`).join('; ')}. Continue placing them in the visual workspace.` : `${plan.unplaced.length} part(s) could not be placed: ${[...counts].map(([label, count]) => `${label} × ${count}`).join('; ')}. Check stock quantity, usable dimensions, material/thickness matches and grain locks. This heuristic may leave parts unplaced even if a different layout could fit.`;
   }
-  $('sheet-select').innerHTML = plan.sheets.map((s, i) => `<option value="${i}">${t('Sheet','板材')} ${s.number}</option>`).join('');
   activeSheet = 0; activeStep = 1;
+  renderSheetStrip();
   document.querySelector('.plan-grid').hidden = !plan.sheets.length;
   renderSheet();
   $('finished-parts').innerHTML = plan.sheets.flatMap((s) => s.parts.map((p) => ({ ...p, sheet: s.number }))).sort((a, b) => a.row - b.row || a.copy - b.copy).map((p) => `<tr><td>${esc(p.id)}</td><td data-user-content>${esc(p.label)}</td><td>${fmt(p.length)} × ${fmt(p.width)}${p.rotated ? ' ↻' : ''}</td><td data-user-content>${esc(p.material)} / ${fmt(p.thickness)} mm</td><td class="${p.priority === 0 ? 'priority-high' : ''}">${priorityNames[p.priority]}</td><td>S${p.sheet} / ${esc(p.workpiece)}</td></tr>`).join('');
@@ -221,7 +221,34 @@ $('timber-form').addEventListener('submit', (event) => {
     finally { $('calculate').disabled = false; $('calculate').innerHTML = 'Optimise cutting plan <span aria-hidden="true">→</span>'; }
   }, 20);
 });
-$('sheet-select').onchange = () => { activeSheet = Number($('sheet-select').value); activeStep = 1; renderSheet(); };
+// Sheet strip (roadmap 2.1): one thumbnail per sheet with its use %, weakest sheet
+// marked, instead of a dropdown that hid how full each sheet is.
+function sheetThumb(s) {
+  const L = s.stock.length, W = s.stock.width;
+  const parts = s.parts.map((p) => `<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" class="thumb-part"/>`).join('');
+  return `<svg viewBox="0 0 ${L} ${W}" aria-hidden="true" preserveAspectRatio="xMidYMid meet"><rect width="${L}" height="${W}" class="thumb-stock"/>${parts}</svg>`;
+}
+function renderSheetStrip() {
+  if (!plan) return;
+  const lowest = plan.sheets.length > 1 ? Math.min(...plan.sheets.map((s) => s.yield)) : -1;
+  const materials = new Set(plan.sheets.map((s) => `${s.stock.material} ${s.stock.thickness}`)).size > 1;
+  $('sheet-strip').innerHTML = plan.sheets.map((s, i) => {
+    const use = Math.round(s.yield * 100), weak = s.yield === lowest;
+    return `<button type="button" role="tab" class="sheet-thumb${weak ? ' is-weak' : ''}" data-sheet="${i}" aria-selected="${i === activeSheet}" tabindex="${i === activeSheet ? 0 : -1}" aria-label="${t(`Sheet ${s.number}, ${use}% used`, `板材 ${s.number}，用料 ${use}%`)}${weak ? t(', least used', '，用料最少') : ''}">${sheetThumb(s)}<span class="thumb-name">S${s.number}${materials ? ` <small>${esc(s.stock.material)} ${fmt(s.stock.thickness)}</small>` : ''}</span><span class="thumb-use"><span class="thumb-bar"><i style="width:${use}%"></i></span><b>${use}%</b></span></button>`;
+  }).join('');
+}
+function chooseSheet(i, focus = false) {
+  if (!plan || i < 0 || i >= plan.sheets.length) return;
+  activeSheet = i; activeStep = 1; renderSheetStrip(); renderSheet();
+  if (focus) $('sheet-strip').querySelector(`[data-sheet="${i}"]`)?.focus();
+}
+$('sheet-strip').addEventListener('click', (event) => { const b = event.target.closest('[data-sheet]'); if (b) chooseSheet(Number(b.dataset.sheet)); });
+$('sheet-strip').addEventListener('keydown', (event) => {
+  const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
+  if (step) { event.preventDefault(); chooseSheet(activeSheet + step, true); }
+  else if (event.key === 'Home') { event.preventDefault(); chooseSheet(0, true); }
+  else if (event.key === 'End') { event.preventDefault(); chooseSheet(plan.sheets.length - 1, true); }
+});
 $('cut-guide').onclick = (event) => {
   const step = event.target.closest('[data-step]'); if (!step || !plan) return;
   cutPlayback.selectStep(Number(step.dataset.step));
@@ -378,5 +405,5 @@ function planCaption() {
   return t(`${plannedProject.name || 'Untitled project'} · ${t("Kerf","鋸縫")} ${fmt(plan.settings.kerf)} mm · Edge trim ${fmt(plan.settings.trim)} mm · ${plan.settings.usePriorities ? 'Optional part priorities enabled' : 'Whole-list optimisation · fewer cuts first'} · ${plan.settings.direction === 'auto' ? 'Automatic cut direction' : plan.settings.direction === 'rip' ? 'Rip first' : 'Crosscut first'}`, `${plannedProject.name || '未命名專案'} · 鋸縫 ${fmt(plan.settings.kerf)} 毫米 · 修邊 ${fmt(plan.settings.trim)} 毫米 · ${plan.settings.usePriorities ? '已啟用可選優先級' : '整體優化，優先減少切割'} · ${plan.settings.direction === 'auto' ? '自動切割方向' : plan.settings.direction === 'rip' ? '先順紋切割' : '先橫紋切割'}`);
 }
 onLanguageChange(() => {
-  if (plan) { $('plan-caption').textContent = planCaption(); const value = $('sheet-select').value; $('sheet-select').innerHTML = plan.sheets.map((s,i) => `<option value="${i}">${t('Sheet','板材')} ${s.number}</option>`).join(''); $('sheet-select').value = value; renderSheet(false); }
+  if (plan) { $('plan-caption').textContent = planCaption(); renderSheetStrip(); renderSheet(false); }
 });

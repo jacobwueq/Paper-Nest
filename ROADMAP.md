@@ -145,7 +145,8 @@ and every Phase 1 UI fix is visible in the preview in both languages. **Passed 2
 Check to finish the phase: one sheet saved on the 139-piece list, and a full cut can
 be followed on a phone in the workshop view.
 
-- [ ] **2.1 Sheet thumbnails with use %.** Replace the sheet dropdown with a strip.
+- [x] **2.1 Sheet thumbnails with use %.** Replace the sheet dropdown with a strip.
+  Result: Review shows one thumbnail per sheet (parts drawn, use % bar, least-used sheet in amber, material when several); arrow keys, Home/End move between sheets. Fits a 390 px phone without page scroll. Checked EN/中文.
 - [ ] **2.2 Workshop view.** Full screen, one step at a time, large measurement and
   fence edge, big Back/Next, screen kept awake; machine colour in Hybrid.
 - [ ] **2.3 Printable part labels.** PDF of labels: part ID, size, sheet, releasing step.
@@ -182,3 +183,4 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
 | 2026-10-26 | 1.4 Offcuts → stock | 242/242 tests; add 2 offcuts → 3 stock rows → Undo → 1 row, in the browser |
 | 2026-10-26 | 1.5 Undo deletions | 243/243 tests; tray and table removals undo in the browser |
 | 2026-10-26 | 1.6 Laser flags | 247/247 tests; nested-part SVG flagged, sample not; Arrange runs without a tick. Phase 1 done |
+| 2026-10-27 | 2.1 Sheet thumbnails | 248/248 tests; strip replaces dropdown |
