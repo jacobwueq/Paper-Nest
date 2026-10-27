@@ -1,29 +1,29 @@
-import { dockConnectedClusters } from "./cluster-docking.js?v=0.31.3";
-import { clusterPierceLowerBound } from "./cluster-pierces.js?v=0.31.3";
+import { dockConnectedClusters } from "./cluster-docking.js?v=0.31.4";
+import { clusterPierceLowerBound } from "./cluster-pierces.js?v=0.31.4";
 import {
   extractPartEdges,
   commonEdgeCandidates,
-} from "./common-edge.js?v=0.31.3";
+} from "./common-edge.js?v=0.31.4";
 import {
   contactsAtPlacement,
   commonContactClearance,
-} from "./common-contact.js?v=0.31.3";
+} from "./common-contact.js?v=0.31.4";
 import {
   createPartCluster,
   expandPairCluster,
-} from "./pair-cluster.js?v=0.31.3";
+} from "./pair-cluster.js?v=0.31.4";
 import {
   area,
   bounds,
   transformed,
   clearance,
   validateLayout,
-} from "./geometry.js?v=0.31.3";
-import { cuttingMetrics } from "./cut-metrics.js?v=0.31.3";
-import { pocketTranslations } from "./pocket-search.js?v=0.31.3";
-import { evaluateLayout, improves } from "./search.js?v=0.31.3";
-import { count, measured } from "./nesting-profile.js?v=0.31.3";
-import { scoreDecision } from "./nesting-debug.js?v=0.31.3";
+} from "./geometry.js?v=0.31.4";
+import { cuttingMetrics } from "./cut-metrics.js?v=0.31.4";
+import { pocketTranslations } from "./pocket-search.js?v=0.31.4";
+import { evaluateLayout, improves } from "./search.js?v=0.31.4";
+import { count, measured } from "./nesting-profile.js?v=0.31.4";
+import { scoreDecision } from "./nesting-debug.js?v=0.31.4";
 const norm = (a) => ((a % 360) + 360) % 360;
 const perimeter = (p) =>
   p.reduce((s, a, i) => {

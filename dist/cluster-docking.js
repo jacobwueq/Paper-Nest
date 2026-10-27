@@ -1,9 +1,9 @@
-import { commonEdgeCandidates } from "./common-edge.js?v=0.31.3";
-import { contactsAtPlacement } from "./common-contact.js?v=0.31.3";
-import { transform, validateLayout } from "./geometry.js?v=0.31.3";
-import { evaluateLayout, improves } from "./search.js?v=0.31.3";
-import { count, measured } from "./nesting-profile.js?v=0.31.3";
-import { scoreDecision } from "./nesting-debug.js?v=0.31.3";
+import { commonEdgeCandidates } from "./common-edge.js?v=0.31.4";
+import { contactsAtPlacement } from "./common-contact.js?v=0.31.4";
+import { transform, validateLayout } from "./geometry.js?v=0.31.4";
+import { evaluateLayout, improves } from "./search.js?v=0.31.4";
+import { count, measured } from "./nesting-profile.js?v=0.31.4";
+import { scoreDecision } from "./nesting-debug.js?v=0.31.4";
 
 // Components use declared, validated contacts, not proximity or bounding boxes.
 export function contactComponents(placements) {

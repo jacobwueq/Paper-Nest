@@ -1,4 +1,4 @@
-import * as vendor from "./engine/util/clipper.js?v=0.31.3";
+import * as vendor from "./engine/util/clipper.js?v=0.31.4";
 import {
   transformed,
   transform,
@@ -6,11 +6,11 @@ import {
   area,
   clearance,
   validateLayout,
-} from "./geometry.js?v=0.31.3";
-import { commonContactClearance } from "./common-contact.js?v=0.31.3";
-import { pocketTranslations } from "./pocket-search.js?v=0.31.3";
-import { evaluateLayout, improves } from "./search.js?v=0.31.3";
-import { count, measured } from "./nesting-profile.js?v=0.31.3";
+} from "./geometry.js?v=0.31.4";
+import { commonContactClearance } from "./common-contact.js?v=0.31.4";
+import { pocketTranslations } from "./pocket-search.js?v=0.31.4";
+import { evaluateLayout, improves } from "./search.js?v=0.31.4";
+import { count, measured } from "./nesting-profile.js?v=0.31.4";
 const C = globalThis.ClipperLib || vendor.default,
   S = 1e6;
 

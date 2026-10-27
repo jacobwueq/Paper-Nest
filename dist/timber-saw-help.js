@@ -1,4 +1,4 @@
-import { t, onLanguageChange } from './locale.js?v=0.31.3';
+import { t, onLanguageChange } from './locale.js?v=0.31.4';
 
 // A floating explainer beside the Saw setting: why a panel saw and a table saw get different
 // cut orders. Each card can also choose that saw, which updates the real <select>.

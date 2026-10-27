@@ -1,6 +1,6 @@
-import { count, measured } from "./nesting-profile.js?v=0.31.3";
-import * as vendor from "./engine/util/clipper.js?v=0.31.3";
-import { bounds } from "./geometry.js?v=0.31.3";
+import { count, measured } from "./nesting-profile.js?v=0.31.4";
+import * as vendor from "./engine/util/clipper.js?v=0.31.4";
+import { bounds } from "./geometry.js?v=0.31.4";
 const C = globalThis.ClipperLib || vendor.default,
   S = 100000;
 const path = (p) =>

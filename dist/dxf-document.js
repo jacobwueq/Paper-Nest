@@ -1,4 +1,4 @@
-import { dxfTemplate } from "./dxf-template.js?v=0.31.3";
+import { dxfTemplate } from "./dxf-template.js?v=0.31.4";
 
 export const DXF_MODEL_SPACE = dxfTemplate.modelSpace;
 export const DXF_GROUP_DICTIONARY = dxfTemplate.groupDictionary;

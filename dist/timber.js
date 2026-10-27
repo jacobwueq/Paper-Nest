@@ -1,16 +1,16 @@
-import { planTimber, validateProject, parseCSV, toCSV, offcutStockRow, partLabels, parsePastedParts } from './timber-planner.js?v=0.31.3';
-import { TIMBER_SETTINGS, cleanTimberSettings, defaultTimberSettings } from './timber-settings.js?v=0.31.3';
-import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.31.3';
-import { installTimberWorkflow } from './timber-workflow.js?v=0.31.3';
-import { timberCutOverlay, updateCutTrace } from './timber-cut-overlay.js?v=0.31.3';
-import { installCutPlayback } from './timber-playback.js?v=0.31.3';
-import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.31.3';
-import { t, getLanguage, onLanguageChange } from './locale.js?v=0.31.3';
-import { installWorkshop } from './timber-workshop.js?v=0.31.3';
-import { saveFile } from './file-download.js?v=0.31.3';
-import { createTimberPDF, createLabelsPDF, loadPDFTools } from './timber-pdf.js?v=0.31.3';
-import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency, sawComparison } from './timber-text.js?v=0.31.3';
-import { installSawHelp } from './timber-saw-help.js?v=0.31.3';
+import { planTimber, validateProject, parseCSV, toCSV, offcutStockRow, partLabels, parsePastedParts } from './timber-planner.js?v=0.31.4';
+import { TIMBER_SETTINGS, cleanTimberSettings, defaultTimberSettings } from './timber-settings.js?v=0.31.4';
+import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.31.4';
+import { installTimberWorkflow } from './timber-workflow.js?v=0.31.4';
+import { timberCutOverlay, updateCutTrace } from './timber-cut-overlay.js?v=0.31.4';
+import { installCutPlayback } from './timber-playback.js?v=0.31.4';
+import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.31.4';
+import { t, getLanguage, onLanguageChange } from './locale.js?v=0.31.4';
+import { installWorkshop } from './timber-workshop.js?v=0.31.4';
+import { saveFile } from './file-download.js?v=0.31.4';
+import { createTimberPDF, createLabelsPDF, loadPDFTools } from './timber-pdf.js?v=0.31.4';
+import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency, sawComparison } from './timber-text.js?v=0.31.4';
+import { installSawHelp } from './timber-saw-help.js?v=0.31.4';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const fmt = (n) => Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
@@ -161,7 +161,7 @@ function showSawNote() {
   const known = panelComparisons.get(key);
   if (known) { note.textContent = sawComparison(plan, known); note.hidden = !note.textContent; return; }
   try {
-    compareWorker ||= new Worker(new URL('./timber-compare-worker.js?v=0.31.3', import.meta.url), { type: 'module' });
+    compareWorker ||= new Worker(new URL('./timber-compare-worker.js?v=0.31.4', import.meta.url), { type: 'module' });
     compareWorker.onmessage = ({ data }) => { if (!data.error) panelComparisons.set(data.key, data); if (data.key === key) showSawNote(); };
     compareWorker.postMessage({ key, project: structuredClone(plannedProject) });
   } catch { /* the note is optional */ }
@@ -351,7 +351,7 @@ $('download-labels').onclick = async () => {
   try {
     // Ask where to save while the click still counts as a user gesture, as for the plan PDF.
     let handle = null;
-    if (typeof window.showSaveFilePicker === 'function') {
+    if (typeof window.showSaveFilePicker === 'function' && !window.claude) { // in an artifact the viewer offers the save
       try { handle = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: 'PDF', accept: { 'application/pdf': ['.pdf'] } }] }); }
       catch (error) { if (error.name === 'AbortError') return; }
     }
@@ -367,7 +367,7 @@ $('download-pdf').onclick = async () => {
   cutPlayback?.pause(); button.disabled = true; button.textContent = t('Preparing PDF…', '正在製作 PDF…');
   try {
     let handle = null;
-    if (typeof window.showSaveFilePicker === 'function') {
+    if (typeof window.showSaveFilePicker === 'function' && !window.claude) { // in an artifact the viewer offers the save
       try { handle = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: 'PDF', accept: { 'application/pdf': ['.pdf'] } }] }); }
       catch (error) { if (error.name === 'AbortError') return; }
     }
