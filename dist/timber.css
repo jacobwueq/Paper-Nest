@@ -42,3 +42,4 @@
 @media(max-width:760px){.workshop-body{grid-template-columns:1fr;align-content:start}.workshop-drawing svg{max-height:34vh}.workshop-measure{font-size:clamp(44px,15vw,72px)}}
 @media print{.workshop,.workshop-open-button{display:none!important}}
 .saw-note{font-size:12px;line-height:1.7;color:var(--ink-2);background:var(--accent-soft);border:1px solid var(--accent-line);border-radius:6px;padding:10px 12px;margin:10px 0 0;max-width:900px}
+.workshop-stage{position:relative;min-width:0;display:flex}.workshop-stage .workshop-drawing{flex:1}.workshop-replay{position:absolute;right:10px;bottom:10px;min-height:44px;padding:8px 14px;background:#fff;border:1px solid var(--line);color:var(--ink-2);font-size:14px;border-radius:6px;box-shadow:0 2px 8px #17253614}

@@ -37,3 +37,12 @@ test('Review opens the workshop view; it keeps the screen awake and traps focus'
   assert.match(view, /navigator\.wakeLock\.request\('screen'\)/);
   assert.match(view, /aria-modal/); assert.match(view, /event\.key === 'Tab'/);
 });
+
+test('the workshop view animates each cut and can replay it', () => {
+  const view = fs.readFileSync(new URL('../dist/timber-workshop.js', import.meta.url), 'utf8');
+  const page = fs.readFileSync(new URL('../dist/timber.js', import.meta.url), 'utf8');
+  assert.match(view, /requestAnimationFrame\(tick\)/);
+  assert.match(view, /data-workshop="replay"/);
+  assert.match(view, /prefers-reduced-motion: reduce/);
+  assert.match(page, /animateFrame: \(svg, s, cut, state\) => \{ updateBoardSeparation\(svg, s, state\); updateCutTrace\(svg, cut, state\); \}/);
+});

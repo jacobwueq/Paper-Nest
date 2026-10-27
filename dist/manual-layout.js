@@ -4,18 +4,18 @@ import {
   edgeCompatibility,
   sharedSection,
   commonEdgeCandidates,
-} from "./common-edge.js?v=0.31.4";
-import { contactsAtPlacement } from "./common-contact.js?v=0.31.4";
+} from "./common-edge.js?v=0.31.5";
+import { contactsAtPlacement } from "./common-contact.js?v=0.31.5";
 import {
   contactComponents,
   moveRigidComponent,
-} from "./cluster-docking.js?v=0.31.4";
+} from "./cluster-docking.js?v=0.31.5";
 import {
   validateLayout,
   transform,
   bounds,
   transformed,
-} from "./geometry.js?v=0.31.4";
+} from "./geometry.js?v=0.31.5";
 const clone = (x) => structuredClone(x);
 export function rebuildContacts(parts, poses, settings) {
   const clean = poses.map(({ sharedEdges, ...t }) => t);
