@@ -1,4 +1,4 @@
-import { transformed, bounds, partHoles, containsPolygon, insideHole, pointIn } from "./geometry.js?v=0.32.1";
+import { transformed, bounds, partHoles, containsPolygon, insideHole, pointIn, clearance } from "./geometry.js?v=0.32.2";
 // A first layout in milliseconds, before the nesting engine answers (found with the
 // 80-part A2 stress test: the engine had not placed even 20 irregular parts after its
 // 20 s budget). Bounding boxes are packed largest first (MaxRects), turned 90° when
@@ -50,8 +50,10 @@ export function shelfLayout(parts, settings) {
     const t = shelve(host);
     for (const local of partHoles(host.part)) {
       const hole = transformed(local, t);
-      // Try each candidate rectangle and keep the one that holds the most guest area.
-      let best = null;
+      // Try the true-shape fill and each candidate rectangle; keep whichever holds the
+      // most guest area.
+      const filled = fillHole(hole, t.sheet);
+      let best = { packed: filled, area: filled.reduce((n, { g }) => n + g.option.b.w * g.option.b.h, 0) };
       for (const r of inscribed(hole)) {
         const packed = packInto(hole, r, t.sheet);
         const area = packed.reduce((n, { g }) => n + g.option.b.w * g.option.b.h, 0);
@@ -59,6 +61,61 @@ export function shelfLayout(parts, settings) {
       }
       for (const { g, placed } of best?.packed || []) { placements.push(placed); guests.delete(g); }
     }
+  }
+  // Bottom-left fill with the real outlines: largest guest first, each at the first
+  // grid position (rows from the top of the opening) and allowed angle where it sits
+  // inside the opening with the gap to its edges and to guests already there. Finds
+  // room in concave openings (arrows, C shapes) that no single rectangle covers.
+  // A raster screens positions first: a cell is usable when its centre lies inside the
+  // opening at least `gap` from its edge and clear of guests already placed, and a
+  // guest needs every cell whose centre it covers to be usable. Any position that
+  // truly fits passes that screen, so only the exact check below decides.
+  function fillHole(hole, sheet) {
+    const hb = bounds(hole), out = [], polys = [], g2 = settings.gap + 0.05;
+    const c = Math.max(0.5, Math.min(hb.w, hb.h) / 60);
+    const nx = Math.max(1, Math.ceil(hb.w / c)), ny = Math.max(1, Math.ceil(hb.h / c));
+    const free = new Uint8Array(nx * ny);
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      const q = { x: hb.x + (i + 0.5) * c, y: hb.y + (j + 0.5) * c };
+      free[j * nx + i] = pointIn(q, hole) && edgeDistance(q, hole) >= settings.gap ? 1 : 0;
+    }
+    const angleStep = Math.max(45, 360 / Math.max(1, settings.rotations));
+    let left = Math.abs(polygonArea(hole));
+    for (const g of [...guests].sort((a, b) => b.option.b.w * b.option.b.h - a.option.b.w * a.option.b.h)) {
+      if (Math.abs(polygonArea(g.part.outer)) * (settings.scale ?? 1) ** 2 > left) continue;
+      let hit = null;
+      for (let angle = 0; angle < 360 && !hit; angle += angleStep) {
+        const t0 = { id: g.id, x: 0, y: 0, angle, scale: settings.scale ?? 1, mirrored: false, sheet };
+        const base = transformed(g.part.outer, t0), bb = bounds(base);
+        const cw = Math.ceil(bb.w / c), ch = Math.ceil(bb.h / c);
+        if (cw > nx || ch > ny) continue;
+        const cells = [];
+        for (let v = 0; v < ch; v++) for (let u = 0; u < cw; u++)
+          if (pointIn({ x: bb.x + (u + 0.5) * c, y: bb.y + (v + 0.5) * c }, base)) cells.push(v * nx + u);
+        for (let j = 0; j + ch <= ny && !hit; j++)
+          for (let i = 0; i + cw <= nx; i++) {
+            const at = j * nx + i;
+            if (!cells.every((k) => free[at + k])) continue;
+            const dx = hb.x + i * c - bb.x, dy = hb.y + j * c - bb.y, poly = base.map((q) => ({ x: q.x + dx, y: q.y + dy }));
+            if (!insideHole(hole, poly, g2)) continue;
+            if (polys.some((o) => !clearance(o, poly, g2))) continue;
+            hit = { placed: { ...t0, x: dx, y: dy }, poly };
+            break;
+          }
+      }
+      if (!hit) continue;
+      out.push({ g, placed: hit.placed }); polys.push(hit.poly);
+      left -= Math.abs(polygonArea(hit.poly));
+      // Cells now covered by the guest, or within the gap of it, are no longer usable.
+      const pb = bounds(hit.poly);
+      for (let j = Math.max(0, Math.floor((pb.y - g2 - hb.y) / c)); j < Math.min(ny, Math.ceil((pb.y + pb.h + g2 - hb.y) / c)); j++)
+        for (let i = Math.max(0, Math.floor((pb.x - g2 - hb.x) / c)); i < Math.min(nx, Math.ceil((pb.x + pb.w + g2 - hb.x) / c)); i++) {
+          if (!free[j * nx + i]) continue;
+          const q = { x: hb.x + (i + 0.5) * c, y: hb.y + (j + 0.5) * c };
+          if (pointIn(q, hit.poly) || edgeDistance(q, hit.poly) < settings.gap) free[j * nx + i] = 0;
+        }
+    }
+    return out;
   }
   // Pack the largest guests that fit into rectangle r inside the hole, on small shelves.
   function packInto(hole, r, sheet) {
@@ -81,6 +138,16 @@ export function shelfLayout(parts, settings) {
   [...guests].sort(byArea).forEach(shelve);
   return placements;
 }
+function edgeDistance(q, poly) {
+  let best = Infinity;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i], b = poly[(i + 1) % poly.length], dx = b.x - a.x, dy = b.y - a.y, l = dx * dx + dy * dy;
+    const f = l ? Math.max(0, Math.min(1, ((q.x - a.x) * dx + (q.y - a.y) * dy) / l)) : 0;
+    best = Math.min(best, Math.hypot(q.x - a.x - f * dx, q.y - a.y - f * dy));
+  }
+  return best;
+}
+const polygonArea = (p) => p.reduce((n, a, i) => { const b = p[(i + 1) % p.length]; return n + a.x * b.y - b.x * a.y; }, 0) / 2;
 // MaxRects: cut `used` out of every free rectangle it overlaps, then drop free
 // rectangles contained in others.
 function split(free, used) {

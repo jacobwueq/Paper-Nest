@@ -1,15 +1,15 @@
-import { preservedRemnants } from "./remnant-policy.js?v=0.32.1";
+import { preservedRemnants } from "./remnant-policy.js?v=0.32.2";
 import {
   cached,
   objectKey,
   poseKey,
   count,
-} from "./nesting-profile.js?v=0.32.1";
+} from "./nesting-profile.js?v=0.32.2";
 import {
   commonContactClearance,
   sharedJunctions,
   junctionClearance,
-} from "./common-contact.js?v=0.32.1";
+} from "./common-contact.js?v=0.32.2";
 // Geometry is expressed in millimetres, with screen Y pointing down.
 export const TOL = 0.02;
 export const near = (a, b, e = 1e-5) => Math.hypot(a.x - b.x, a.y - b.y) <= e;
@@ -196,6 +196,21 @@ export function separated(a, b, gap, settings) {
   if (settings?.partInPart !== true) return false;
   return partHoles(a.p).some((h) => insideHole(transformed(h, a.t), b.poly, gap)) ||
     partHoles(b.p).some((h) => insideHole(transformed(h, b.t), a.poly, gap));
+}
+// How many placed parts sit inside an opening of another part.
+export function nestedCount(parts, placements, settings) {
+  if (settings?.partInPart !== true) return 0;
+  const byId = new Map(parts.map((p) => [p.id, p]));
+  const hosts = placements.filter((t) => partHoles(byId.get(t.id)).length)
+    .map((t) => ({ t, holes: partHoles(byId.get(t.id)).map((h) => transformed(h, t)) }));
+  if (!hosts.length) return 0;
+  const gap = settings.gap;
+  let n = 0;
+  for (const t of placements) {
+    const poly = transformed(byId.get(t.id).outer, t);
+    if (hosts.some((h) => h.t !== t && h.t.sheet === t.sheet && h.holes.some((hole) => insideHole(hole, poly, gap)))) n++;
+  }
+  return n;
 }
 export function validateLayout(parts, placements, settings) {
   const errors = [],

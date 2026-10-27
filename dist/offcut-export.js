@@ -1,4 +1,4 @@
-import { transformed, clearance } from "./geometry.js?v=0.32.1";
+import { transformed, clearance } from "./geometry.js?v=0.32.2";
 export const rectanglePoints = (r) => [
   { x: r.x, y: r.y },
   { x: r.x + r.w, y: r.y },

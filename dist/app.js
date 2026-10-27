@@ -1,16 +1,16 @@
-import { saveFile } from './file-download.js?v=0.32.1';
-import { shelfLayout } from "./quick-layout.js?v=0.32.1";
-import { t as tr, onLanguageChange } from './locale.js?v=0.32.1';
-import { installCutStrategy } from "./cut-strategy-ui.js?v=0.32.1";
+import { saveFile } from './file-download.js?v=0.32.2';
+import { shelfLayout } from "./quick-layout.js?v=0.32.2";
+import { t as tr, onLanguageChange } from './locale.js?v=0.32.2';
+import { installCutStrategy } from "./cut-strategy-ui.js?v=0.32.2";
 let cutStrategyUI = null;
-import { installWorkspace } from "./workspace-ui.js?v=0.32.1";
+import { installWorkspace } from "./workspace-ui.js?v=0.32.2";
 let workspaceUI = null;
-import { SHEET_PRESETS } from "./sheet-presets.js?v=0.32.1";
+import { SHEET_PRESETS } from "./sheet-presets.js?v=0.32.2";
 import {
   remnantPlan,
   visibleRemnantRectangles,
-} from "./remnant-policy.js?v=0.32.1";
-import { extractPartEdges } from "./common-edge.js?v=0.32.1";
+} from "./remnant-policy.js?v=0.32.2";
+import { extractPartEdges } from "./common-edge.js?v=0.32.2";
 import {
   sampleParts,
   partSVG,
@@ -18,16 +18,17 @@ import {
   esc,
   validateLayout,
   partHoles,
-} from "./geometry.js?v=0.32.1";
-import { parseDXF, parseSVG } from "./importers.js?v=0.32.1";
-import { exportSVG, exportDXF } from "./exporters.js?v=0.32.1";
+  nestedCount,
+} from "./geometry.js?v=0.32.2";
+import { parseDXF, parseSVG } from "./importers.js?v=0.32.2";
+import { exportSVG, exportDXF } from "./exporters.js?v=0.32.2";
 import {
   ROTATIONS,
   searchSettings,
   evaluateLayout,
   improves,
   searchSeed,
-} from "./search.js?v=0.32.1";
+} from "./search.js?v=0.32.2";
 const $ = (id) => document.getElementById(id);
 const state = {
   parts: sampleParts(),
@@ -199,6 +200,10 @@ function reviewText(p) {
     notes.push(tr("No closed outline around the whole group; its outline is the group's outer envelope.", "群組外圍冇封閉輪廓，外形按群組外包線計算。"));
   return `<br><span class="check-note">${notes.map(esc).join("<br>")}</span>`;
 }
+// The part's material: its outline with every opening cut away, so an opening shows
+// the sheet behind it and a part placed inside it reads as sitting in the hole.
+const loopPath = (pts) => "M" + pts.map((v) => `${v.x} ${v.y}`).join("L") + "Z";
+const partArea = (p) => [p.outer, ...partHoles(p)].map(loopPath).join("");
 function render() {
   const parts = state.parts,
     s = readSettings();
@@ -262,7 +267,7 @@ function render() {
     draws
       .map(
         ({ p, t }) =>
-          `<g class="drawing-part ${state.selected === p.id ? "selected" : ""}${!layout && needsCheck(p) ? " needs-check" : ""}" data-part="${p.id}" transform="translate(${t.x} ${t.y}) rotate(${t.angle}) scale(${(t.scale ?? 1) * (t.mirrored ? -1 : 1)} ${t.scale ?? 1})"><polygon class="part-hit" points="${pathPoints(p.outer)}"/><g class="part-detail">${partSVG(p)}</g>${!layout ? `<text class="part-label" x="0" y="${p.size.h + 11}">${esc(p.name)}${needsCheck(p) ? ` · ${tr("check grouping", "核對分組")}` : ""}</text>` : ""}</g>`,
+          `<g class="drawing-part ${state.selected === p.id ? "selected" : ""}${!layout && needsCheck(p) ? " needs-check" : ""}" data-part="${p.id}" transform="translate(${t.x} ${t.y}) rotate(${t.angle}) scale(${(t.scale ?? 1) * (t.mirrored ? -1 : 1)} ${t.scale ?? 1})"><path class="part-hit" fill-rule="evenodd" d="${partArea(p)}"/><g class="part-detail">${partSVG(p)}</g>${!layout ? `<text class="part-label" x="0" y="${p.size.h + 11}">${esc(p.name)}${needsCheck(p) ? ` · ${tr("check grouping", "核對分組")}` : ""}</text>` : ""}</g>`,
       )
       .join("");
   $("canvas-label").textContent = layout
@@ -464,7 +469,7 @@ function updateSearchStatus() {
 function startEngine() {
   const run = ++state.run;
   compactor = new Worker(
-    new URL("./compaction-worker.js?v=0.32.1", import.meta.url),
+    new URL("./compaction-worker.js?v=0.32.2", import.meta.url),
     { type: "module" },
   );
   compactor.onmessage = ({ data }) => {
@@ -529,7 +534,7 @@ function startEngine() {
       location.origin,
     );
   };
-  frame.src = "engine/index.html?v=0.32.1";
+  frame.src = "engine/index.html?v=0.32.2";
   document.body.append(frame);
   stopTimer = setTimeout(() => {
     stop();
@@ -599,6 +604,13 @@ function considerLayout(placements) {
     return;
   }
   const candidate = evaluateLayout(state.parts, placements, runSettings);
+  // With part-in-part on, a layout that takes parts back out of openings is not
+  // taken unless it needs fewer sheets: parts in openings are what was asked for.
+  if (runSettings.partInPart === true && state.metrics && placements.length === state.placements.length) {
+    const sheetsOf = (list) => new Set(list.map((t) => t.sheet)).size;
+    if (sheetsOf(placements) >= sheetsOf(state.placements) &&
+        nestedCount(state.parts, placements, runSettings) < nestedCount(state.parts, state.placements, runSettings)) return false;
+  }
   if (
     placements.length &&
     (!state.metrics || improves(candidate.score, state.metrics.score))

@@ -1,18 +1,18 @@
-import { alignNearby } from "./auto-align.js?v=0.32.1";
-import { compactMultiPartClusters } from "./multi-cluster.js?v=0.32.1";
+import { alignNearby } from "./auto-align.js?v=0.32.2";
+import { compactMultiPartClusters } from "./multi-cluster.js?v=0.32.2";
 import {
   createNestingDiagnostics,
   scoreDecision,
-} from "./nesting-debug.js?v=0.32.1";
-import { compactPairClusters } from "./pair-cluster.js?v=0.32.1";
-import { profiled, count } from "./nesting-profile.js?v=0.32.1";
+} from "./nesting-debug.js?v=0.32.2";
+import { compactPairClusters } from "./pair-cluster.js?v=0.32.2";
+import { profiled, count } from "./nesting-profile.js?v=0.32.2";
 import {
   contactFromCandidate,
   replacePlacement,
   contactsAtPlacement,
-} from "./common-contact.js?v=0.32.1";
-import { commonEdgeCandidates } from "./common-edge.js?v=0.32.1";
-import { pocketTranslations } from "./pocket-search.js?v=0.32.1";
+} from "./common-contact.js?v=0.32.2";
+import { commonEdgeCandidates } from "./common-edge.js?v=0.32.2";
+import { pocketTranslations } from "./pocket-search.js?v=0.32.2";
 import {
   bounds,
   transformed,
@@ -20,8 +20,8 @@ import {
   validateLayout,
   partHoles,
   insideHole,
-} from "./geometry.js?v=0.32.1";
-import { evaluateLayout, improves } from "./search.js?v=0.32.1";
+} from "./geometry.js?v=0.32.2";
+import { evaluateLayout, improves } from "./search.js?v=0.32.2";
 
 // Remove two parts together, keep several alternatives for the first, and
 // reinsert the second. Only complete, improved layouts leave this function.
@@ -318,6 +318,9 @@ function compactLayoutImpl(parts, initial, settings, options) {
       const neighbourHoles = holesOn
         ? placements.filter((t, i) => i !== index && t.sheet === current.sheet).map((t) => partHoles(byId.get(t.id)).map((h) => transformed(h, t)))
         : [];
+      // A part already sitting in an opening stays there: the opening's slug is waste
+      // either way, so moving the part out only uses more sheet.
+      if (holesOn && neighbourHoles.some((hs) => hs.some((h) => insideHole(h, pp[index], gap)))) continue;
       const seen = new Set(),
         exactSeen = new Set();
       let best = null;

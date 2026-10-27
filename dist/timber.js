@@ -1,16 +1,16 @@
-import { planTimber, validateProject, parseCSV, toCSV, offcutStockRow, partLabels, parsePastedParts } from './timber-planner.js?v=0.32.1';
-import { TIMBER_SETTINGS, cleanTimberSettings, defaultTimberSettings } from './timber-settings.js?v=0.32.1';
-import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.32.1';
-import { installTimberWorkflow } from './timber-workflow.js?v=0.32.1';
-import { timberCutOverlay, updateCutTrace } from './timber-cut-overlay.js?v=0.32.1';
-import { installCutPlayback } from './timber-playback.js?v=0.32.1';
-import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.32.1';
-import { t, getLanguage, onLanguageChange } from './locale.js?v=0.32.1';
-import { installWorkshop } from './timber-workshop.js?v=0.32.1';
-import { saveFile } from './file-download.js?v=0.32.1';
-import { createTimberPDF, createLabelsPDF, loadPDFTools } from './timber-pdf.js?v=0.32.1';
-import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency, sawComparison } from './timber-text.js?v=0.32.1';
-import { installSawHelp } from './timber-saw-help.js?v=0.32.1';
+import { planTimber, validateProject, parseCSV, toCSV, offcutStockRow, partLabels, parsePastedParts } from './timber-planner.js?v=0.32.2';
+import { TIMBER_SETTINGS, cleanTimberSettings, defaultTimberSettings } from './timber-settings.js?v=0.32.2';
+import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.32.2';
+import { installTimberWorkflow } from './timber-workflow.js?v=0.32.2';
+import { timberCutOverlay, updateCutTrace } from './timber-cut-overlay.js?v=0.32.2';
+import { installCutPlayback } from './timber-playback.js?v=0.32.2';
+import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.32.2';
+import { t, getLanguage, onLanguageChange } from './locale.js?v=0.32.2';
+import { installWorkshop } from './timber-workshop.js?v=0.32.2';
+import { saveFile } from './file-download.js?v=0.32.2';
+import { createTimberPDF, createLabelsPDF, loadPDFTools } from './timber-pdf.js?v=0.32.2';
+import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency, sawComparison } from './timber-text.js?v=0.32.2';
+import { installSawHelp } from './timber-saw-help.js?v=0.32.2';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const fmt = (n) => Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
@@ -161,7 +161,7 @@ function showSawNote() {
   const known = panelComparisons.get(key);
   if (known) { note.textContent = sawComparison(plan, known); note.hidden = !note.textContent; return; }
   try {
-    compareWorker ||= new Worker(new URL('./timber-compare-worker.js?v=0.32.1', import.meta.url), { type: 'module' });
+    compareWorker ||= new Worker(new URL('./timber-compare-worker.js?v=0.32.2', import.meta.url), { type: 'module' });
     compareWorker.onmessage = ({ data }) => { if (!data.error) panelComparisons.set(data.key, data); if (data.key === key) showSawNote(); };
     compareWorker.postMessage({ key, project: structuredClone(plannedProject) });
   } catch { /* the note is optional */ }
