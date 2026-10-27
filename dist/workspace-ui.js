@@ -5,16 +5,16 @@ import {
   magneticSnap,
   rotationSuggestion,
   rebuildContacts,
-} from "./manual-layout.js?v=0.28.2";
-import { cuttingMetrics } from "./cut-metrics.js?v=0.28.2";
-import { evaluateLayout } from "./search.js?v=0.28.2";
+} from "./manual-layout.js?v=0.29.0";
+import { cuttingMetrics } from "./cut-metrics.js?v=0.29.0";
+import { evaluateLayout } from "./search.js?v=0.29.0";
 import {
   validateLayout,
   bounds,
   transformed,
   esc,
   area,
-} from "./geometry.js?v=0.28.2";
+} from "./geometry.js?v=0.29.0";
 export function installWorkspace({
   state,
   readSettings,

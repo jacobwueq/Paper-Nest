@@ -1,6 +1,6 @@
-import { scheduleCuts, fenceOf } from './timber-cut-passes.js?v=0.28.2';
-import { cachedSimplifyTimberCuts } from './timber-cut-planner.js?v=0.28.2';
-import { validateTimberSettings, settingValue } from './timber-settings.js?v=0.28.2';
+import { scheduleCuts, fenceOf } from './timber-cut-passes.js?v=0.29.0';
+import { cachedSimplifyTimberCuts } from './timber-cut-planner.js?v=0.29.0';
+import { validateTimberSettings, settingValue } from './timber-settings.js?v=0.29.0';
 // Rectangular guillotine plans. Every cut spans its current workpiece.
 const EPS = 1e-7;
 const positive = (v) => Number.isFinite(v) && v > 0 && v <= 20000;
@@ -311,8 +311,38 @@ function randomFor(parts) {
   for (const c of parts.map((p) => `${materialKey(p)}:${p.length}:${p.width}:${p.grain}`).join(';')) seed = Math.imul(seed ^ c.charCodeAt(0), 16777619) >>> 0;
   return () => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return (seed >>> 0) / 4294967296; };
 }
-function* candidates(project, warm, { pruning = true, keep = 8, caching = true } = {}) {
-  const cutCache = caching ? new Map() : null;
+// Roadmap 2.4: try to empty the least-used sheets into the gaps of the others. The
+// plan's own placement order is kept for every other part and the weak sheet's parts
+// go last, largest first, so they land in existing free regions before a new sheet
+// is opened. A result is kept only when compareTimberPlans ranks it better, so the
+// pass can never make a plan worse.
+function repackPlan(project, plan, { cutCache = null, rounds = 3, weakest = 2 } = {}) {
+  if (!plan?.searchSeed || plan.sheets.length < 2) return plan;
+  const byId = new Map(expand(project).map((p) => [p.id, p]));
+  const tails = [(a, b) => b.length * b.width - a.length * a.width, (a, b) => Math.max(b.length, b.width) - Math.max(a.length, a.width)];
+  let best = plan;
+  for (let round = 0; round < rounds; round++) {
+    let improved = false;
+    for (const weak of [...best.sheets].sort((a, b) => a.yield - b.yield || b.number - a.number).slice(0, weakest)) {
+      const moving = new Set(weak.parts.map((p) => p.id));
+      const base = best.searchSeed.order.filter((id) => !moving.has(id)).map((id) => byId.get(id));
+      for (const tail of tails) {
+        const order = [...base, ...[...moving].map((id) => byId.get(id)).sort((a, b) => tail(a, b) || canonicalPart(a, b))];
+        if (project.settings.usePriorities) order.sort((a, b) => a.priority - b.priority);
+        for (const strategy of [best.searchSeed.strategy, ...strategies.filter((s) => s !== best.searchSeed.strategy).slice(0, 2)]) {
+          const candidate = build(project, order, strategy, best.fitness.primary, cutCache);
+          if (!candidate.pruned && compareTimberPlans(candidate, best) < 0) { best = candidate; improved = true; break; }
+        }
+        if (improved) break;
+      }
+      if (improved) break;
+    }
+    if (!improved) break;
+  }
+  if (best !== plan) best.repacked = true;
+  return best;
+}
+function* candidates(project, warm, { pruning = true, keep = 8, caching = true, cutCache = caching ? new Map() : null } = {}) {
   const expanded = expand(project), random = randomFor(expanded), population = [];
   const record = (order, strategy) => {
     // Only the best `keep` plans matter (8 for the evolving search, which picks parents
@@ -360,23 +390,27 @@ function* candidates(project, warm, { pruning = true, keep = 8, caching = true }
 }
 // pruning (default on) skips cut ordering for layouts that cannot rank; caching (on)
 // reuses the cut order of a sheet already seen in this search. Off gives the same
-// plan more slowly; the switches are kept for tests and benchmarks.
-export function planTimber(project, { pruning = true, caching = true } = {}) {
+// plan more slowly; the switches are kept for tests and benchmarks. repack (on) runs
+// repackPlan on the winner; it only ever replaces it with a better plan.
+export function planTimber(project, { pruning = true, caching = true, repack = true } = {}) {
   validateProject(project);
   let best, trials = 0, pruned = 0;
+  const cutCache = caching ? new Map() : null;
   // Its 30 tries are fixed sorts and never draw parents from the population.
-  for (const plan of candidates(project, null, { pruning, caching, keep: 1 })) {
+  for (const plan of candidates(project, null, { pruning, caching, cutCache, keep: 1 })) {
     trials++; if (plan.pruned) pruned++; else if (!best || compareTimberPlans(plan, best) < 0) best = plan;
     if (trials >= 30) break;
   }
+  if (repack) best = repackPlan(project, best, { cutCache });
   best.searchKey = searchKey(project); best.search = { trials, pruned, complete: true };
   return best;
 }
-export async function optimizeTimber(project, { budgetMs = 1200, maxTrials = 256, initialPlan, onProgress = () => {}, shouldCancel = () => false, pruning = true, caching = true } = {}) {
+export async function optimizeTimber(project, { budgetMs = 1200, maxTrials = 256, initialPlan, onProgress = () => {}, shouldCancel = () => false, pruning = true, caching = true, repack = true } = {}) {
   validateProject(project);
   const started = performance.now(), duration = Math.max(0, Math.min(10000, budgetMs));
   let best, trials = 0, pruned = 0, lastReport = started, improved = false;
-  for (const plan of candidates(project, initialPlan, { pruning, caching })) {
+  const cutCache = caching ? new Map() : null;
+  for (const plan of candidates(project, initialPlan, { pruning, caching, cutCache })) {
     if (shouldCancel()) return null;
     trials++; if (plan.pruned) pruned++;
     else if (!best || compareTimberPlans(plan, best) < 0) { best = plan; improved = true; }
@@ -386,6 +420,8 @@ export async function optimizeTimber(project, { budgetMs = 1200, maxTrials = 256
     if (trials % 4 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
   }
   if (shouldCancel()) return null;
+  // Polish the winner once at the end; the pass only ever keeps a better plan.
+  if (repack && !best.repacked) { const polished = repackPlan(project, best, { cutCache }); if (polished !== best) { polished.searchKey = searchKey(project); best = polished; } }
   best.search = { trials, pruned, complete: true }; return best;
 }
 export function parseCSV(text) {

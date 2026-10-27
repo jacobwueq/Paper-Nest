@@ -144,6 +144,11 @@ and every Phase 1 UI fix is visible in the preview in both languages. **Passed 2
 
 Check to finish the phase: one sheet saved on the 139-piece list, and a full cut can
 be followed on a phone in the workshop view.
+*Revised 27 Oct after 2.4:* a pairwise bound shows 6/12 is already optimal (5 sheets)
+and 15/21, 15/22, 30/31 sit on the area bound; refilling the k weakest sheets into
+k − 1 failed for every list and k ≤ 5 (the waste is spread ~10–15 % over every sheet).
+Saving a sheet at 139 pieces needs a global method, so that target moves to **3.1**.
+Phase 2 now finishes when its items are done and no benchmark run gets worse.
 
 - [x] **2.1 Sheet thumbnails with use %.** Replace the sheet dropdown with a strip.
   Result: Review shows one thumbnail per sheet (parts drawn, use % bar, least-used sheet in amber, material when several); arrow keys, Home/End move between sheets. Fits a 390 px phone without page scroll. Checked EN/中文.
@@ -152,8 +157,9 @@ be followed on a phone in the workshop view.
   Result: Review → "Workshop view ⤢" opens a full-screen dialog: sheet and step, machine badge (panel/table colours in Hybrid), progress bar, the setting in large type (`cutHeadline()`: measurement + edge to measure from, or fence distance + fence edge, and says when pieces differ), full instructions below, 64 px Back/Next. Step 0 of each sheet is edge preparation; Next runs into the next sheet. Arrow keys, Space, Esc; focus trapped; screen wake lock; closing returns Review to that sheet and step. Checked EN/中文, desktop and 390 px phone. New `[data-localized]` lets t()-made text skip the page translator.
 - [x] **2.3 Printable part labels.** PDF of labels: part ID, size, sheet, releasing step.
   Result: More exports → Part labels PDF: `partLabels()` (planner) gives one label per placed part with sheet and releasing step (and machine in Hybrid), in cutting order; `createLabelsPDF()` lays them out 3 × 7 on A4 (63.5 × 38.1 mm stickers, corner marks for plain paper). Found and fixed a font bug affecting every PDF: default shaping swapped digit glyphs missing from the width table, so digits printed 1 em wide ("1 ,4 2 8"); `PDF_FONT_OPTIONS` turns that shaping off and a test checks the glyphs.
-- [ ] **2.4 Repack the weakest sheets.** A post-pass that tries to empty the least-used
+- [x] **2.4 Repack the weakest sheets.** A post-pass that tries to empty the least-used
   sheets into the gaps of others. Behind a switch until it never makes a plan worse.
+  Result: `repackPlan()` keeps the plan's order for all other parts and puts the weakest sheet's parts last (largest first, then longest side first; current + 2 other strategies), for the 2 least-used sheets, up to 3 rounds; kept only when `compareTimberPlans` ranks it better. On by default in the quick plan and at the end of Improve layout (`repack: false` keeps the old path for tests). Benchmark: 0 runs worse; 12 of 21 runs 1–3 steps fewer; no sheet saved (see revised phase check); quick plan at 139 pieces 0.9–1.1 s. New baseline saved.
 - [ ] **2.5 Paste rows into the parts tray** from a spreadsheet; one parts list.
 - [ ] **2.6 Laser collision grid.** Broad-phase grid so collision tests only check
   nearby parts; record candidate moves at 64 parts (was 42 in 1.8 s).
@@ -188,3 +194,4 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
 | 2026-10-27 | 2.1 Sheet thumbnails | 248/248 tests; strip replaces dropdown |
 | 2026-10-27 | 2.2 Workshop view | 251/251 tests; checked EN/中文, desktop and phone |
 | 2026-10-27 | 2.3 Part labels | 254/254 tests; also fixes digit spacing in all PDFs |
+| 2026-10-27 | 2.4 Repack weakest sheets | 257/257 tests; 12/21 runs fewer steps, none worse; no sheet saved; new baseline |
