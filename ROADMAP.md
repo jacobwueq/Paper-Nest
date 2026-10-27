@@ -171,6 +171,7 @@ Phase 2 now finishes when its items are done and no benchmark run gets worse. **
 ## Phase 3 · Bigger bets / 較大型項目
 
 Each starts with a short spike (prototype + numbers) before any change to `dist/`.
+**Finished 27 Oct 2026:** 3.1, 3.2, 3.3, 3.4, 3.6 built; 3.5 closed by measurement; 3.2b (stage limit) waits for a workshop request.
 
 - [x] **3.1 Sheet-by-sheet filling with re-weighting** (sequential value correction).
   Result: Spike: one round of sheet-by-sheet filling already gives 17 sheets at 139 pieces on all saws (whole-list greedy: 18). Built as `valueCorrection()` + `finishSheets()` (each sheet's own parts re-laid for fewest cuts) on a new `place()` split out of `build()` (plans unchanged, 21/21). Runs inside Improve layout from half the time/tries, at most 8 rounds or 15 % of the time, only when sheets > area bound, all parts fit and priorities are off; kept only if it ranks better; the usual search then resumes. Fixed-tries comparison: 0 of 21 runs worse, 3 save a sheet (50/41: 18 → 17 on panel/table/hybrid, +12–24 cuts). Manual Adjust can replay these plans. The phase-2 sheet target is met here.
@@ -182,7 +183,8 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
   Result: Spike then build, behind a setting (More options → "Place small parts inside openings", off by default). `partHoles()` finds closed loops inside the outline on the outline's layer (sample walls: one 28 × 53 mm opening each; score lines ignored). `insideHole()`/`separated()` allow a part wholly inside a hole with the gap to every hole edge; compaction adds hole corner/centre candidates; holes are sent precomputed to the worker. Test: three 20 × 40 tabs move into the sample walls' openings (used height 139 → 105 mm). Browser: an imported drawing of two frames moved two squares into an opening. Option off: laser benchmark signature unchanged.
 - [x] **3.4 Keep no-fit polygons between runs.**
   Result: Spike: in the 64-part benchmark the 63 Minkowski sums per run come from only 4 shape pairs, and a re-run asks for the same 63 again. `minkowski()` in `pocket-search.js` now caches sums by shape (both shapes moved to a fixed corner, result moved back by whole Clipper units) in a bounded module-level map (600 entries) that survives between runs. No-fit time over three runs: 629/402/295 ms → 237/70/43 ms (7–15 % of those runs). A test checks the cached sum equals the direct sum for 45 shape/angle/position cases.
-- [ ] **3.5 Fast discretised placement** as the laser search's inner loop (spike first).
+- [x] **3.5 Fast discretised placement** as the laser search's inner loop (spike first).
+  Result: **Closed after the spike — not worth building now.** Profile of `benchmark-laser64` after 3.6: offcut scoring is still ~85 % of the time; candidate generation, collision tests and no-fit polygons together under 5 %. A discretised placement loop would speed up the cheap part. With scoring 7.5× faster, the search already tries 7.5× more layouts in the same time. Revisit only if a profile shows placement above ~30 %.
 - [x] **3.6 Faster offcut scoring for the laser search** (from 2.6). Scoring is 98 % of
   compaction time: ~266 grid histogram passes per scored layout in the remnant beam.
   Spike: resume each beam child's histogram from the first row its new rectangle
@@ -218,3 +220,4 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
 | 2026-10-27 | 3.4 No-fit cache | 275/275 tests; no-fit time ÷3–7; exact on 45 cases |
 | 2026-10-27 | 3.6 Faster offcut scoring | 276/276 tests; laser64 4.7× faster, identical result |
 | 2026-10-27 | 3.6 follow-up | duplicate keys built once: laser64 7.7 s (from 57.5 s), same signature |
+| 2026-10-27 | 3.5 Discretised placement | closed: placement < 5 % of laser time after 3.6. Phase 3 done (3.2b open on request) |
