@@ -1,4 +1,4 @@
-import { t } from './locale.js?v=0.33.0';
+import { t } from './locale.js?v=0.33.1';
 const retained = [];
 function feedback(text, link = null) {
   let box = document.getElementById('download-feedback');
@@ -14,6 +14,25 @@ function feedback(text, link = null) {
 // Elsewhere window.claude does not exist and nothing changes.
 const ALLOWED = /\.(gif|png|jpe?g|webp|mp4|webm|txt|json|md|docx|pptx|epub|csv|ttf|html|svg|pdf|xlsx|zip)$/i;
 let artifactDownloads;
+// A .zip holding one file, stored without compression (any unzip tool opens it).
+const CRC = new Uint32Array(256).map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+export function zipOne(name, bytes) {
+  let crc = 0xffffffff;
+  for (const b of bytes) crc = CRC[(crc ^ b) & 0xff] ^ (crc >>> 8);
+  crc = (crc ^ 0xffffffff) >>> 0;
+  const file = new TextEncoder().encode(name), size = bytes.length;
+  const local = new DataView(new ArrayBuffer(30)), central = new DataView(new ArrayBuffer(46)), end = new DataView(new ArrayBuffer(22));
+  const now = new Date(), time = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1), date = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+  local.setUint32(0, 0x04034b50, true); local.setUint16(4, 20, true); local.setUint16(6, 0x0800, true); local.setUint16(8, 0, true);
+  local.setUint16(10, time, true); local.setUint16(12, date, true); local.setUint32(14, crc, true); local.setUint32(18, size, true); local.setUint32(22, size, true);
+  local.setUint16(26, file.length, true); local.setUint16(28, 0, true);
+  central.setUint32(0, 0x02014b50, true); central.setUint16(4, 20, true); central.setUint16(6, 20, true); central.setUint16(8, 0x0800, true); central.setUint16(10, 0, true);
+  central.setUint16(12, time, true); central.setUint16(14, date, true); central.setUint32(16, crc, true); central.setUint32(20, size, true); central.setUint32(24, size, true);
+  central.setUint16(28, file.length, true); central.setUint32(42, 0, true);
+  const centralOffset = 30 + file.length + size;
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, 1, true); end.setUint16(10, 1, true); end.setUint32(12, 46 + file.length, true); end.setUint32(16, centralOffset, true);
+  return new Blob([local, file, bytes, central, file, end], { type: 'application/zip' });
+}
 function viewerDownloads() {
   if (artifactDownloads === undefined) artifactDownloads = typeof window !== 'undefined' && typeof window.claude?.use === 'function' ? window.claude.use('downloads').catch(() => null) : Promise.resolve(null);
   return artifactDownloads;
@@ -22,11 +41,14 @@ export async function saveFile(contents, name, type, { picker = true, handle = n
   const blob = contents instanceof Blob ? contents : new Blob([contents], { type });
   const downloads = handle ? null : await viewerDownloads();
   if (downloads) {
-    // Formats the viewer does not accept (e.g. .dxf) are offered as text: rename after saving.
-    const filename = ALLOWED.test(name) ? name : name + '.txt';
+    // The viewer only saves certain formats; a file in any other (e.g. .dxf) goes out
+    // inside a .zip, which opens to the file under its own name and extension.
+    const direct = ALLOWED.test(name);
+    const filename = direct ? name : name.replace(/\.[^.]*$/, '') + '.zip';
     try {
-      await downloads.save({ filename, data: blob });
-      feedback(filename === name ? t(`Saved ${name}`, `已儲存 ${name}`) : t(`Saved as ${filename}. Remove ".txt" from the name to open it as ${name}.`, `已儲存為 ${filename}。將檔名尾嘅「.txt」刪走，就係 ${name}。`));
+      const data = direct ? blob : zipOne(name, new Uint8Array(await blob.arrayBuffer()));
+      await downloads.save({ filename, data });
+      feedback(direct ? t(`Saved ${name}`, `已儲存 ${name}`) : t(`Saved ${filename}. Open it to get ${name}.`, `已儲存 ${filename}，打開即可取得 ${name}。`));
       return { method: 'viewer', name: filename };
     } catch (error) {
       if (error?.code === 'declined') { feedback(t('Download cancelled.', '已取消下載。')); return { method: 'cancelled', name }; }

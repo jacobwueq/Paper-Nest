@@ -3,9 +3,9 @@ import {
   objectKey,
   count,
   poseKey,
-} from "./nesting-profile.js?v=0.33.0";
+} from "./nesting-profile.js?v=0.33.1";
 // Candidate geometry only: does not authorise contact, change scoring or merge cuts.
-import { area, transform, segmentDistance, TOL } from "./geometry.js?v=0.33.0";
+import { area, transform, segmentDistance, TOL } from "./geometry.js?v=0.33.1";
 const dot = (a, b) => a.x * b.x + a.y * b.y;
 const cross = (a, b) => a.x * b.y - a.y * b.x;
 const sub = (a, b) => ({ x: a.x - b.x, y: a.y - b.y });

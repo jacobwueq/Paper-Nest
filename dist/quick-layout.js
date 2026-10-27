@@ -1,4 +1,4 @@
-import { transformed, bounds, partHoles, containsPolygon, insideHole, pointIn, clearance, separated } from "./geometry.js?v=0.33.0";
+import { transformed, bounds, partHoles, containsPolygon, insideHole, pointIn, clearance, separated } from "./geometry.js?v=0.33.1";
 // A first layout in milliseconds, before the nesting engine answers (found with the
 // 80-part A2 stress test: the engine had not placed even 20 irregular parts after its
 // 20 s budget). Bounding boxes are packed largest first (MaxRects), turned 90° when
