@@ -1674,3 +1674,17 @@ body[data-stage="export"] .controls {
 .drawing-part.needs-check:not(.selected) .part-label {
   fill: var(--warn);
 }
+/* Detail lines (holes, score lines) keep a visible width at any zoom. */
+.part-detail * {
+  vector-effect: non-scaling-stroke;
+}
+.message-action {
+  margin-top: 8px;
+  padding: 6px 12px;
+  font-weight: 650;
+  border: 1px solid currentColor;
+  border-radius: 5px;
+  background: #fff;
+  color: inherit;
+  cursor: pointer;
+}

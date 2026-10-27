@@ -223,3 +223,4 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
 | 2026-10-27 | 3.6 follow-up | duplicate keys built once: laser64 7.7 s (from 57.5 s), same signature |
 | 2026-10-27 | 3.5 Discretised placement | closed: placement < 5 % of laser time after 3.6. Phase 3 done (3.2b open on request) |
 | 2026-10-27 | Laser stress test | 80-part A2 file: engine gave no layout in 20 s → instant shelf layout (fills openings with part-in-part, ~27 parts); cross-sheet opening moves; 281/281 tests |
+| 2026-10-27 | User DXF fix (0.32.1) | inch-unit drawings detected with a one-click "read as mm"; oversize message; MaxRects quick layout; opening rectangles chosen by packed area (24 parts inside on stress file); user file: 19 parts on 1 A2 in ~1 s |

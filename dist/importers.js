@@ -1,4 +1,4 @@
-import { svgStraightSegments } from "./common-edge.js?v=0.32.0";
+import { svgStraightSegments } from "./common-edge.js?v=0.32.1";
 import {
   bounds,
   area,
@@ -8,7 +8,7 @@ import {
   simplePolygon,
   sampleArc,
   TOL,
-} from "./geometry.js?v=0.32.0";
+} from "./geometry.js?v=0.32.1";
 import aciColours from "./vendor/aci-colours.js";
 const fail = (s) => {
   throw new Error(s);
@@ -456,6 +456,8 @@ export function parseDXF(text, unitOverride = "auto") {
   return {
     parts: identifyParts(out),
     format: "dxf",
+    unitScale: scale,
+    unitFromFile: unitOverride === "auto",
     unitLabel: `DXF · ${scale === 1 ? "mm" : `${scale} mm / drawing unit`} · ${out.length} entities / 圖元`,
     warnings: [
       "Check inferred groups and physical dimensions before arranging. / 排料前請核對分組及實際尺寸。",

@@ -1,16 +1,16 @@
-import { saveFile } from './file-download.js?v=0.32.0';
-import { shelfLayout } from "./quick-layout.js?v=0.32.0";
-import { t as tr, onLanguageChange } from './locale.js?v=0.32.0';
-import { installCutStrategy } from "./cut-strategy-ui.js?v=0.32.0";
+import { saveFile } from './file-download.js?v=0.32.1';
+import { shelfLayout } from "./quick-layout.js?v=0.32.1";
+import { t as tr, onLanguageChange } from './locale.js?v=0.32.1';
+import { installCutStrategy } from "./cut-strategy-ui.js?v=0.32.1";
 let cutStrategyUI = null;
-import { installWorkspace } from "./workspace-ui.js?v=0.32.0";
+import { installWorkspace } from "./workspace-ui.js?v=0.32.1";
 let workspaceUI = null;
-import { SHEET_PRESETS } from "./sheet-presets.js?v=0.32.0";
+import { SHEET_PRESETS } from "./sheet-presets.js?v=0.32.1";
 import {
   remnantPlan,
   visibleRemnantRectangles,
-} from "./remnant-policy.js?v=0.32.0";
-import { extractPartEdges } from "./common-edge.js?v=0.32.0";
+} from "./remnant-policy.js?v=0.32.1";
+import { extractPartEdges } from "./common-edge.js?v=0.32.1";
 import {
   sampleParts,
   partSVG,
@@ -18,16 +18,16 @@ import {
   esc,
   validateLayout,
   partHoles,
-} from "./geometry.js?v=0.32.0";
-import { parseDXF, parseSVG } from "./importers.js?v=0.32.0";
-import { exportSVG, exportDXF } from "./exporters.js?v=0.32.0";
+} from "./geometry.js?v=0.32.1";
+import { parseDXF, parseSVG } from "./importers.js?v=0.32.1";
+import { exportSVG, exportDXF } from "./exporters.js?v=0.32.1";
 import {
   ROTATIONS,
   searchSettings,
   evaluateLayout,
   improves,
   searchSeed,
-} from "./search.js?v=0.32.0";
+} from "./search.js?v=0.32.1";
 const $ = (id) => document.getElementById(id);
 const state = {
   parts: sampleParts(),
@@ -127,10 +127,32 @@ function checkSettings(s) {
     );
   return s;
 }
-function message(text = "", error = false) {
+function message(text = "", error = false, action = null) {
   $("message").hidden = !text;
   $("message").textContent = text;
   $("message").classList.toggle("error", error);
+  if (action) {
+    const button = document.createElement("button");
+    button.type = "button"; button.className = "message-action"; button.textContent = action.label;
+    button.onclick = action.run;
+    $("message").append(document.createElement("br"), button);
+  }
+}
+// The largest outline size, in mm.
+const largestSide = (parts) => Math.max(0, ...parts.map((p) => Math.max(p.size.w, p.size.h)));
+// Parts that fit the sheet at none of the allowed angles (checked every 15°, or at the
+// allowed angles when there are fewer).
+function oversizedParts(parts, settings) {
+  const w = settings.width - 2 * settings.margin, h = settings.height - 2 * settings.margin;
+  const step = Math.max(15, 360 / settings.rotations);
+  return parts.filter((p) => {
+    for (let angle = 0; angle < 360; angle += step) {
+      const r = (angle * Math.PI) / 180, c = Math.cos(r), s = Math.sin(r);
+      const xs = p.outer.map((v) => (v.x * c - v.y * s) * settings.scale), ys = p.outer.map((v) => (v.x * s + v.y * c) * settings.scale);
+      if (Math.max(...xs) - Math.min(...xs) <= w + 1e-6 && Math.max(...ys) - Math.min(...ys) <= h + 1e-6) return false;
+    }
+    return true;
+  });
 }
 function setStatus(text) {
   $("status").textContent = text;
@@ -393,6 +415,16 @@ function beginNest(continuing = false) {
     return;
   }
   if (continuing && !state.placements.length) return;
+  const tooBig = oversizedParts(state.parts, settings);
+  if (tooBig.length) {
+    const list = tooBig.slice(0, 3).map((p) => `${p.name.split(" / ")[0]} (${Math.round(p.size.w)} × ${Math.round(p.size.h)} mm)`).join(", ");
+    message(
+      `${tooBig.length} part${tooBig.length === 1 ? " is" : "s are"} larger than the sheet: ${list}${tooBig.length > 3 ? "…" : ""}. Check the drawing units (Setup → Units) or choose a larger sheet. / ${tooBig.length} 件零件大過板材，請檢查圖檔單位（設定 → 單位）或選較大板材。`,
+      true,
+      state.unitFix,
+    );
+    return;
+  }
   if (continuing) {
     captureRemnants();
     settings.preservedRemnants = state.preservedRemnants;
@@ -432,7 +464,7 @@ function updateSearchStatus() {
 function startEngine() {
   const run = ++state.run;
   compactor = new Worker(
-    new URL("./compaction-worker.js?v=0.32.0", import.meta.url),
+    new URL("./compaction-worker.js?v=0.32.1", import.meta.url),
     { type: "module" },
   );
   compactor.onmessage = ({ data }) => {
@@ -497,7 +529,7 @@ function startEngine() {
       location.origin,
     );
   };
-  frame.src = "engine/index.html?v=0.32.0";
+  frame.src = "engine/index.html?v=0.32.1";
   document.body.append(frame);
   stopTimer = setTimeout(() => {
     stop();
@@ -613,6 +645,19 @@ function loadText(name, text) {
     state.name = name;
     state.meta = result.unitLabel;
     message(result.warnings.join("\n"));
+    // A drawing made in millimetres inside an inch template reads 25.4 times too big
+    // (AutoCAD's default template says inches). Offer millimetres when the file's unit
+    // makes the parts bigger than any laser bed but millimetres would not.
+    const big = largestSide(result.parts);
+    state.unitFix = null;
+    if (result.unitFromFile && result.unitScale !== 1 && big > 1000 && big / result.unitScale <= 1000) {
+      const mm = (v) => Math.round(v).toLocaleString("en-GB");
+      message(
+        `This drawing says its unit is ${result.unitScale === 25.4 ? "inches" : `${result.unitScale} mm`}, which makes the largest part ${mm(big)} mm. In millimetres it would be ${mm(big / result.unitScale)} mm. / 圖檔標示單位為${result.unitScale === 25.4 ? "英吋" : ` ${result.unitScale} 毫米`}，最大零件變成 ${mm(big)} 毫米；如按毫米計係 ${mm(big / result.unitScale)} 毫米。`,
+        true,
+        (state.unitFix = { label: "Read it as millimetres · 改用毫米", run: () => { $("units").value = "1"; loadText(name, text); } }),
+      );
+    }
     setStatus("Review parts / 確認零件");
   } catch (e) {
     state.invalid = true;
