@@ -1,6 +1,6 @@
-import { scheduleCuts, fenceOf } from './timber-cut-passes.js?v=0.28.1';
-import { cachedSimplifyTimberCuts } from './timber-cut-planner.js?v=0.28.1';
-import { validateTimberSettings, settingValue } from './timber-settings.js?v=0.28.1';
+import { scheduleCuts, fenceOf } from './timber-cut-passes.js?v=0.28.2';
+import { cachedSimplifyTimberCuts } from './timber-cut-planner.js?v=0.28.2';
+import { validateTimberSettings, settingValue } from './timber-settings.js?v=0.28.2';
 // Rectangular guillotine plans. Every cut spans its current workpiece.
 const EPS = 1e-7;
 const positive = (v) => Number.isFinite(v) && v > 0 && v <= 20000;
@@ -199,6 +199,19 @@ function finalizePlan(project, sheets, unplaced, required, cutCache = null) {
 export function offcutStockRow(sheet, offcut) {
   const down = (v) => Math.floor(v * 10 + 1e-6) / 10;
   return { label: `Offcut ${offcut.id}`, material: sheet.stock.material, thickness: sheet.stock.thickness, length: down(offcut.w), width: down(offcut.h), qty: 1 };
+}
+// One label per finished part (roadmap 2.3): what is written on it and when it comes
+// off the saw. `step` is the cut that separates the part from its last neighbour on
+// that sheet; null when the part is the whole prepared sheet.
+export function partLabels(plan) {
+  const labels = [];
+  for (const sheet of plan.sheets) {
+    const releasedAt = new Map();
+    for (const c of sheet.cuts) for (const id of c.releasedParts || []) if (!releasedAt.has(id)) releasedAt.set(id, c.step);
+    for (const p of sheet.parts) labels.push({ id: p.id, label: p.label, material: p.material, thickness: p.thickness, length: p.length, width: p.width, grain: !!p.grain, rotated: !!p.rotated, sheet: sheet.number, step: releasedAt.get(p.id) ?? null, machine: sheet.saw === 'hybrid' ? (sheet.cuts.find((c) => c.step === releasedAt.get(p.id))?.saw ?? null) : null });
+  }
+  const order = (id) => id.slice(1).split('.').map(Number);
+  return labels.sort((a, b) => a.sheet - b.sheet || (a.step ?? 0) - (b.step ?? 0) || order(a.id)[0] - order(b.id)[0] || order(a.id)[1] - order(b.id)[1]);
 }
 export function timberFreeRegions(board) { return leaves(board.root).map(({ x, y, w, h }) => ({ x, y, w, h })); }
 export function manualCommandsFromPlan(project, plan) {

@@ -47,7 +47,7 @@ const pairs = [
 ['Length follows the stock grain →. Match material and thickness to your parts.','板材木紋沿長度方向 →；零件必須配對相同物料及厚度。'],
 ['Common sheet: 2440 × 1220 mm · Finite stock quantities are respected.','常用板材：2440 × 1220 毫米 · 排料會遵守可用張數。'],
 ['All dimensions in mm. Size means finished part size; the planner adds kerf between pieces. Priorities apply only when “Use part priorities” is enabled.','全部尺寸以毫米計，輸入完成尺寸；系統會預留零件之間嘅鋸縫。只有勾選「啟用零件優先級」先會按優先級排料。'],
-['Your cutting plan','開料方案'],['Cutting list CSV ↓','下載開料清單 CSV ↓'],['Cut guide CSV ↓','下載切割指引 CSV ↓'],['Download PDF ↓','下載 PDF ↓'],['Print / Save PDF','列印／儲存 PDF'],['Print','列印'],
+['Your cutting plan','開料方案'],['Cutting list CSV ↓','下載開料清單 CSV ↓'],['Cut guide CSV ↓','下載切割指引 CSV ↓'],['Part labels PDF ↓','零件標籤 PDF ↓'],['Download PDF ↓','下載 PDF ↓'],['Print / Save PDF','列印／儲存 PDF'],['Print','列印'],
 ['Stock sheets used','已用板材張數'],['Parts placed','已放入零件'],['Finished-part yield','成品材料利用率'],['Cutting steps','切割步驟'],['Sheet layout','板材排位'],['Sheet','板材'],['Finished parts','完成零件'],['Offcuts','餘料'],['Selected cut','目前切割線'],['Stock grain →','板材木紋 →'],['Cutting sequence','切割次序'],
 ['Part labels & workpiece reference','零件名稱及板件編號對照'],['Part ID','零件編號'],['Finished size · mm','完成尺寸 · 毫米'],['Material / thickness','物料／厚度'],['Sheet / workpiece','板材／板件編號'],['Switch workspace','切換工作模式'],
 ['Changes save in this browser.','改動會儲存喺此瀏覽器。'],['Saved in this browser · timber project & manual layout','已儲存木材專案及手動排位於此瀏覽器'],

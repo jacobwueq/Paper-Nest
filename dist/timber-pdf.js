@@ -1,7 +1,7 @@
-import { cutSegments } from './timber-cut-passes.js?v=0.28.1';
-import { getLanguage } from './locale.js?v=0.28.1';
-import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency } from './timber-text.js?v=0.28.1';
-import { timberCutOverlay } from './timber-cut-overlay.js?v=0.28.1';
+import { cutSegments } from './timber-cut-passes.js?v=0.28.2';
+import { getLanguage } from './locale.js?v=0.28.2';
+import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency } from './timber-text.js?v=0.28.2';
+import { timberCutOverlay } from './timber-cut-overlay.js?v=0.28.2';
 const scripts = new Map();
 function loadScript(path, name) {
   if (window[name]) return Promise.resolve(window[name]);
@@ -11,6 +11,10 @@ function loadScript(path, name) {
   return scripts.get(path);
 }
 let fontData;
+// fontkit's default shaping swaps this font's digits for alternate glyphs that
+// pdf-lib leaves out of the PDF width table, so viewers drew every digit 1 em wide
+// ("1 ,4 2 8"). Horizontal Latin and CJK text needs none of these substitutions.
+export const PDF_FONT_OPTIONS = { subset: false, features: { ccmp: false, locl: false, liga: false, dlig: false, calt: false, clig: false, rlig: false } };
 export async function loadPDFTools() {
   const PDFLib = await loadScript('./vendor/pdf/pdf-lib.min.js', 'PDFLib');
   const fontkit = await loadScript('./vendor/pdf/fontkit.umd.min.js', 'fontkit');
@@ -20,7 +24,7 @@ export async function loadPDFTools() {
 export async function createTimberPDF(project, plan, { PDFLib, fontkit, fontBytes, language = getLanguage() }) {
   const { PDFDocument, rgb } = PDFLib, doc = await PDFDocument.create(); doc.registerFontkit(fontkit);
   // Full embedding avoids fontkit subset glyph mapping errors for this CJK font.
-  const font = await doc.embedFont(fontBytes, { subset: false });
+  const font = await doc.embedFont(fontBytes, PDF_FONT_OPTIONS);
   const L = (en, zh) => language === 'zh-Hant' ? zh : en;
   const gray = rgb(.28,.32,.37), brown = rgb(.6,.36,.25), blue = rgb(.15,.29,.47);
   const characters = new Set(font.getCharacterSet());
@@ -49,6 +53,44 @@ export async function createTimberPDF(project, plan, { PDFLib, fontkit, fontByte
     const title=()=>{draw(guide,`${project.name || 'Paper Nest'} · S${sheet.number} · ${L('Cutting sequence','切割次序')}`,30,565,14,blue);};title();
     if(!sheet.cuts.length)draw(guide,L('No numbered cuts needed after edge preparation.','修邊後毋須再切割。'),30,gy,11);
     for(const c of sheet.cuts){const lines=wrap(`${c.step}. ${cutDescription(c,language)}\n${cutDetail(c,language)} ${cutRetain(c,language)}`,775,10);if(gy-lines.length*15<40){guide=doc.addPage([842,595]);gy=535;title();}for(const line of lines){if(gy<40){guide=doc.addPage([842,595]);gy=535;title();}draw(guide,line,30,gy,10);gy-=15;}gy-=13;}
+  }
+  return doc.save();
+}
+
+// Part labels (roadmap 2.3) on A4 in the common 3 × 7 sticker layout (63.5 × 38.1 mm,
+// e.g. Avery L7160). Light corner marks make plain paper easy to cut by hand too.
+export const LABEL_LAYOUT = { page: [595.28, 841.89], columns: 3, rows: 7, mm: 72 / 25.4, width: 63.5, height: 38.1, left: 7.25, top: 15.15, gap: 2.54 };
+export async function createLabelsPDF(project, labels, { PDFLib, fontkit, fontBytes, language = getLanguage() }) {
+  const { PDFDocument, rgb } = PDFLib, doc = await PDFDocument.create(); doc.registerFontkit(fontkit);
+  const font = await doc.embedFont(fontBytes, PDF_FONT_OPTIONS);
+  const L = (en, zh) => language === 'zh-Hant' ? zh : en;
+  const characters = new Set(font.getCharacterSet());
+  const safe = (s) => [...String(s)].map((c) => characters.has(c.codePointAt(0)) ? c : '?').join('');
+  const fit = (text, size, width) => { let t = safe(text); while (t.length > 1 && font.widthOfTextAtSize(t, size) > width) t = t.slice(0, -2) + '…'; return t; };
+  const { page: [pw, ph], columns, rows, mm, width, height, left, top, gap } = LABEL_LAYOUT;
+  const ink = rgb(.1, .14, .2), muted = rgb(.38, .42, .48), mark = rgb(.78, .8, .83);
+  const machine = { panel: rgb(.18, .44, .56), table: rgb(.54, .31, .69) };
+  const n = (v) => Number(v.toFixed(1)).toLocaleString('en-GB');
+  doc.setTitle(`${project.name || 'Paper Nest'} — ${L('Part labels', '零件標籤')}`); doc.setProducer('Paper Nest');
+  const perPage = columns * rows;
+  for (let start = 0; start < labels.length; start += perPage) {
+    const page = doc.addPage([pw, ph]);
+    labels.slice(start, start + perPage).forEach((p, i) => {
+      const col = i % columns, row = Math.floor(i / columns);
+      const x = (left + col * (width + gap)) * mm, y = ph - (top + (row + 1) * height) * mm, w = width * mm, h = height * mm, pad = 3.5 * mm;
+      for (const [cx, cy, dx, dy] of [[x, y, 1, 1], [x + w, y, -1, 1], [x, y + h, 1, -1], [x + w, y + h, -1, -1]]) {
+        page.drawLine({ start: { x: cx, y: cy }, end: { x: cx + dx * 3 * mm, y: cy }, thickness: .4, color: mark });
+        page.drawLine({ start: { x: cx, y: cy }, end: { x: cx, y: cy + dy * 3 * mm }, thickness: .4, color: mark });
+      }
+      const where = p.step ? L(`S${p.sheet} · step ${p.step}`, `S${p.sheet} · 第 ${p.step} 刀`) : `S${p.sheet}`;
+      const whereSize = 8, whereWidth = font.widthOfTextAtSize(safe(where), whereSize);
+      page.drawText(fit(p.id, 20, w - whereWidth - 3 * pad), { x: x + pad, y: y + h - pad - 17, size: 20, font, color: ink });
+      page.drawText(safe(where), { x: x + w - pad - whereWidth, y: y + h - pad - 9, size: whereSize, font, color: p.machine ? machine[p.machine] : muted });
+      page.drawText(fit(p.label, 10, w - 2 * pad), { x: x + pad, y: y + h - pad - 32, size: 10, font, color: ink });
+      page.drawText(fit(`${n(p.length)} × ${n(p.width)} mm · ${n(p.thickness)} mm ${p.material}`, 8, w - 2 * pad), { x: x + pad, y: y + pad + 11, size: 8, font, color: muted });
+      if (p.grain) page.drawText(safe(L('Grain along length →', '木紋沿長度 →')), { x: x + pad, y: y + pad, size: 7, font, color: muted });
+      if (p.machine) page.drawText(safe(p.machine === 'table' ? L('Table saw', '檯鋸') : L('Panel saw', '板鋸')), { x: x + w - pad - font.widthOfTextAtSize(safe(p.machine === 'table' ? L('Table saw', '檯鋸') : L('Panel saw', '板鋸')), 7), y: y + pad, size: 7, font, color: machine[p.machine] });
+    });
   }
   return doc.save();
 }

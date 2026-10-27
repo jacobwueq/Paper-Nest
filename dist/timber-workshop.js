@@ -1,5 +1,5 @@
-import { t } from './locale.js?v=0.28.1';
-import { cutHeadline, cutDescription, cutDetail, cutRetain } from './timber-text.js?v=0.28.1';
+import { t } from './locale.js?v=0.28.2';
+import { cutHeadline, cutDescription, cutDetail, cutRetain } from './timber-text.js?v=0.28.2';
 // Workshop view (roadmap 2.2): full screen, one step at a time, readable from the saw.
 // Step 0 of each sheet is edge preparation; Next runs on into the following sheet.
 // The screen is kept awake while the view is open, where the browser allows it.

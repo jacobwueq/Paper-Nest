@@ -1,16 +1,16 @@
-import { planTimber, validateProject, parseCSV, toCSV, offcutStockRow } from './timber-planner.js?v=0.28.1';
-import { TIMBER_SETTINGS, cleanTimberSettings, defaultTimberSettings } from './timber-settings.js?v=0.28.1';
-import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.28.1';
-import { installTimberWorkflow } from './timber-workflow.js?v=0.28.1';
-import { timberCutOverlay, updateCutTrace } from './timber-cut-overlay.js?v=0.28.1';
-import { installCutPlayback } from './timber-playback.js?v=0.28.1';
-import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.28.1';
-import { t, getLanguage, onLanguageChange } from './locale.js?v=0.28.1';
-import { installWorkshop } from './timber-workshop.js?v=0.28.1';
-import { saveFile } from './file-download.js?v=0.28.1';
-import { createTimberPDF, loadPDFTools } from './timber-pdf.js?v=0.28.1';
-import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency } from './timber-text.js?v=0.28.1';
-import { installSawHelp } from './timber-saw-help.js?v=0.28.1';
+import { planTimber, validateProject, parseCSV, toCSV, offcutStockRow, partLabels } from './timber-planner.js?v=0.28.2';
+import { TIMBER_SETTINGS, cleanTimberSettings, defaultTimberSettings } from './timber-settings.js?v=0.28.2';
+import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.28.2';
+import { installTimberWorkflow } from './timber-workflow.js?v=0.28.2';
+import { timberCutOverlay, updateCutTrace } from './timber-cut-overlay.js?v=0.28.2';
+import { installCutPlayback } from './timber-playback.js?v=0.28.2';
+import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.28.2';
+import { t, getLanguage, onLanguageChange } from './locale.js?v=0.28.2';
+import { installWorkshop } from './timber-workshop.js?v=0.28.2';
+import { saveFile } from './file-download.js?v=0.28.2';
+import { createTimberPDF, createLabelsPDF, loadPDFTools } from './timber-pdf.js?v=0.28.2';
+import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency } from './timber-text.js?v=0.28.2';
+import { installSawHelp } from './timber-saw-help.js?v=0.28.2';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const fmt = (n) => Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
@@ -308,6 +308,23 @@ $('export-guide').onclick = () => {
     }
   }
   download(toCSV(rows), filename('-cut-guide.csv'), 'text/csv;charset=utf-8');
+};
+$('download-labels').onclick = async () => {
+  if (!plan || !plannedProject) { notify(t('Confirm a cutting layout before downloading.', '請先確認排料方案，再下載。'), true); return; }
+  const button = $('download-labels'), labels = partLabels(plan), project = structuredClone(plannedProject), language = getLanguage(), name = filename('-part-labels.pdf');
+  button.disabled = true; const text = button.textContent; button.textContent = t('Preparing labels…', '正在製作標籤…');
+  try {
+    // Ask where to save while the click still counts as a user gesture, as for the plan PDF.
+    let handle = null;
+    if (typeof window.showSaveFilePicker === 'function') {
+      try { handle = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: 'PDF', accept: { 'application/pdf': ['.pdf'] } }] }); }
+      catch (error) { if (error.name === 'AbortError') return; }
+    }
+    const bytes = await createLabelsPDF(project, labels, { ...(await loadPDFTools()), language });
+    await saveFile(bytes, name, 'application/pdf', { handle, picker: false });
+    notify(t(`${labels.length} part labels · A4, 3 × 7 per page (63.5 × 38.1 mm stickers, or cut plain paper at the corner marks).`, `${labels.length} 張零件標籤 · A4，每頁 3 × 7（63.5 × 38.1 mm 貼紙，或沿角位記號剪開普通紙）。`));
+  } catch (error) { notify(t(`Label download failed: ${error.message}`, `標籤下載失敗：${error.message}`), true); }
+  finally { button.disabled = false; button.textContent = text; }
 };
 $('download-pdf').onclick = async () => {
   if (!plan || !plannedProject) { notify(t('Confirm a cutting layout before downloading.', '請先確認排料方案，再下載。'), true); return; }

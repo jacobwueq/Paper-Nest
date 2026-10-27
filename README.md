@@ -89,6 +89,13 @@ with the sheet's material and thickness, its length along the sheet's grain, siz
 rounded down to 0.1 mm and quantity 1. The notice has Undo.
 Review 上可剔選可用餘料（兩邊 ≥ 50 mm）一次加入板材，每塊成為一行「Offcut S1-W2」，
 物料及厚度同原板，長度沿原板木紋，尺寸向下取至 0.1 mm，數量 1；提示內可撤銷。
+
+**Workshop view** (Review → Workshop view ⤢) shows one step at a time full screen:
+the setting in large type, where to measure from or which edge rides the fence, the
+machine in Hybrid, and big Back/Next buttons; the screen stays awake while it is open.
+**Part labels PDF** (More exports) prints one label per part — ID, name, size, sheet
+and the step that releases it — on A4 in the 3 × 7 sticker layout (63.5 × 38.1 mm).
+工場模式逐步全屏顯示切割設定；零件標籤 PDF 每件一張，列明編號、尺寸、板材及第幾刀切出。
 The final sheet layout also offers **Play cuts**, Pause, previous/next cut,
 Restart and a fixed 2× playback speed. Clicking a cutting-sequence instruction
 starts playback immediately from that cut, with earlier cuts already separated. A moving marker traces each cut within its current
