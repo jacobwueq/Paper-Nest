@@ -1,4 +1,4 @@
-import { lineOperationKey } from "./common-line.js?v=0.31.0";
+import { lineOperationKey } from "./common-line.js?v=0.31.1";
 // Connected source contours provide a lower bound, not a machine pierce schedule.
 // Shared outer contours join; separate holes/engraving operations stay separate.
 export function clusterPierceLowerBound(parts, placements) {

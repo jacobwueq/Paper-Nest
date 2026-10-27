@@ -1,4 +1,5 @@
-// Synchronous, per-job scope. Caches never survive a worker job or retain drawings.
+// Synchronous, per-job scope. These caches never survive a worker job. (The no-fit
+// sums in pocket-search.js are the one exception: shape-relative, bounded, 3.4.)
 let active = null;
 export function count(name, amount = 1) {
   if (active?.measure)

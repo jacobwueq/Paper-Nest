@@ -1,6 +1,6 @@
-import { cached, count, measured } from "./nesting-profile.js?v=0.31.0";
-import * as vendor from "./engine/util/clipper.js?v=0.31.0";
-import { bounds } from "./geometry.js?v=0.31.0";
+import { count, measured } from "./nesting-profile.js?v=0.31.1";
+import * as vendor from "./engine/util/clipper.js?v=0.31.1";
+import { bounds } from "./geometry.js?v=0.31.1";
 const C = globalThis.ClipperLib || vendor.default,
   S = 100000;
 const path = (p) =>
@@ -21,6 +21,29 @@ export function pocketTranslations(
     pocketTranslationsImpl(moving, obstacles, sheet, gap, shouldStop),
   );
 }
+// Roadmap 3.4: no-fit polygons depend only on the two shapes, not on where they are.
+// Sums are computed for both shapes moved to a fixed corner and translated back by
+// whole Clipper units, and kept between runs (bounded), so the same pair of shapes at
+// the same angle is computed once. In the 64-part benchmark 63 sums come from 4 shapes.
+const MINKOWSKI = new Map(), MINKOWSKI_LIMIT = 600;
+export function minkowski(negative, a) {
+  count("minkowskiRequests");
+  const n0 = negative[0];
+  let mx = Infinity, my = Infinity;
+  for (const v of a) { if (v.X < mx) mx = v.X; if (v.Y < my) my = v.Y; }
+  const key = JSON.stringify([negative.map((v) => [v.X - n0.X, v.Y - n0.Y]), a.map((v) => [v.X - mx, v.Y - my])]);
+  let local = MINKOWSKI.get(key);
+  if (local) { count("minkowskiCacheHits"); MINKOWSKI.delete(key); MINKOWSKI.set(key, local); }
+  else {
+    count("minkowskiComputations");
+    local = measured("minkowski", () => C.Clipper.MinkowskiSum(negative.map((v) => ({ X: v.X - n0.X, Y: v.Y - n0.Y })), positive(a.map((v) => ({ X: v.X - mx, Y: v.Y - my }))), true));
+    MINKOWSKI.set(key, local);
+    if (MINKOWSKI.size > MINKOWSKI_LIMIT) MINKOWSKI.delete(MINKOWSKI.keys().next().value);
+  }
+  const dx = n0.X + mx, dy = n0.Y + my;
+  return local.map((path) => path.map((v) => ({ X: v.X + dx, Y: v.Y + dy })));
+}
+export function clearNoFitCache() { MINKOWSKI.clear(); }
 function pocketTranslationsImpl(moving, obstacles, sheet, gap, shouldStop) {
   const b = bounds(moving);
   const left = sheet.x - b.x,
@@ -49,10 +72,7 @@ function pocketTranslationsImpl(moving, obstacles, sheet, gap, shouldStop) {
     );
     offset.Execute(grown, (gap + 0.01) * S);
     for (const a of grown) {
-      count("minkowskiRequests");
-      const sums = cached("minkowski", JSON.stringify([negative, a]), () =>
-        C.Clipper.MinkowskiSum(negative, positive(a), true),
-      );
+      const sums = minkowski(negative, a);
       forbidden.push(...sums);
       // Minkowski's boundary sweep can leave an artificial interior hole.
       // Include the filled obstacle at one moving vertex to fill that interior,

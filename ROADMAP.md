@@ -180,7 +180,8 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
 - [x] **3.3 Laser part-in-part** (parts inside holes). Done when the sample walls hold
   parts inside their openings.
   Result: Spike then build, behind a setting (More options → "Place small parts inside openings", off by default). `partHoles()` finds closed loops inside the outline on the outline's layer (sample walls: one 28 × 53 mm opening each; score lines ignored). `insideHole()`/`separated()` allow a part wholly inside a hole with the gap to every hole edge; compaction adds hole corner/centre candidates; holes are sent precomputed to the worker. Test: three 20 × 40 tabs move into the sample walls' openings (used height 139 → 105 mm). Browser: an imported drawing of two frames moved two squares into an opening. Option off: laser benchmark signature unchanged.
-- [ ] **3.4 Keep no-fit polygons between runs.**
+- [x] **3.4 Keep no-fit polygons between runs.**
+  Result: Spike: in the 64-part benchmark the 63 Minkowski sums per run come from only 4 shape pairs, and a re-run asks for the same 63 again. `minkowski()` in `pocket-search.js` now caches sums by shape (both shapes moved to a fixed corner, result moved back by whole Clipper units) in a bounded module-level map (600 entries) that survives between runs. No-fit time over three runs: 629/402/295 ms → 237/70/43 ms (7–15 % of those runs). A test checks the cached sum equals the direct sum for 45 shape/angle/position cases.
 - [ ] **3.5 Fast discretised placement** as the laser search's inner loop (spike first).
 - [ ] **3.6 Faster offcut scoring for the laser search** (from 2.6). Scoring is 98 % of
   compaction time: ~266 grid histogram passes per scored layout in the remnant beam.
@@ -213,3 +214,4 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
 | 2026-10-27 | 3.1 Sheet-by-sheet filling | 267/267 tests; 139 pieces 18 → 17 sheets on all saws; 0/21 worse at fixed tries |
 | 2026-10-27 | 3.2 Stock area before sheet count | 270/270 tests; offcut rows now replace a new full sheet; single-size plans unchanged |
 | 2026-10-27 | 3.3 Part-in-part | 274/274 tests; sample walls hold parts in their openings; off by default |
+| 2026-10-27 | 3.4 No-fit cache | 275/275 tests; no-fit time ÷3–7; exact on 45 cases |

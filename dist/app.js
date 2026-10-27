@@ -1,15 +1,15 @@
-import { saveFile } from './file-download.js?v=0.31.0';
-import { t as tr, onLanguageChange } from './locale.js?v=0.31.0';
-import { installCutStrategy } from "./cut-strategy-ui.js?v=0.31.0";
+import { saveFile } from './file-download.js?v=0.31.1';
+import { t as tr, onLanguageChange } from './locale.js?v=0.31.1';
+import { installCutStrategy } from "./cut-strategy-ui.js?v=0.31.1";
 let cutStrategyUI = null;
-import { installWorkspace } from "./workspace-ui.js?v=0.31.0";
+import { installWorkspace } from "./workspace-ui.js?v=0.31.1";
 let workspaceUI = null;
-import { SHEET_PRESETS } from "./sheet-presets.js?v=0.31.0";
+import { SHEET_PRESETS } from "./sheet-presets.js?v=0.31.1";
 import {
   remnantPlan,
   visibleRemnantRectangles,
-} from "./remnant-policy.js?v=0.31.0";
-import { extractPartEdges } from "./common-edge.js?v=0.31.0";
+} from "./remnant-policy.js?v=0.31.1";
+import { extractPartEdges } from "./common-edge.js?v=0.31.1";
 import {
   sampleParts,
   partSVG,
@@ -17,16 +17,16 @@ import {
   esc,
   validateLayout,
   partHoles,
-} from "./geometry.js?v=0.31.0";
-import { parseDXF, parseSVG } from "./importers.js?v=0.31.0";
-import { exportSVG, exportDXF } from "./exporters.js?v=0.31.0";
+} from "./geometry.js?v=0.31.1";
+import { parseDXF, parseSVG } from "./importers.js?v=0.31.1";
+import { exportSVG, exportDXF } from "./exporters.js?v=0.31.1";
 import {
   ROTATIONS,
   searchSettings,
   evaluateLayout,
   improves,
   searchSeed,
-} from "./search.js?v=0.31.0";
+} from "./search.js?v=0.31.1";
 const $ = (id) => document.getElementById(id);
 const state = {
   parts: sampleParts(),
@@ -431,7 +431,7 @@ function updateSearchStatus() {
 function startEngine() {
   const run = ++state.run;
   compactor = new Worker(
-    new URL("./compaction-worker.js?v=0.31.0", import.meta.url),
+    new URL("./compaction-worker.js?v=0.31.1", import.meta.url),
     { type: "module" },
   );
   compactor.onmessage = ({ data }) => {
@@ -491,7 +491,7 @@ function startEngine() {
       location.origin,
     );
   };
-  frame.src = "engine/index.html?v=0.31.0";
+  frame.src = "engine/index.html?v=0.31.1";
   document.body.append(frame);
   stopTimer = setTimeout(() => {
     stop();
