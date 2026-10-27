@@ -148,7 +148,7 @@ be followed on a phone in the workshop view.
 and 15/21, 15/22, 30/31 sit on the area bound; refilling the k weakest sheets into
 k − 1 failed for every list and k ≤ 5 (the waste is spread ~10–15 % over every sheet).
 Saving a sheet at 139 pieces needs a global method, so that target moves to **3.1**.
-Phase 2 now finishes when its items are done and no benchmark run gets worse.
+Phase 2 now finishes when its items are done and no benchmark run gets worse. **Passed 27 Oct 2026** (264/264 tests; benchmark: none worse, 12/21 fewer steps).
 
 - [x] **2.1 Sheet thumbnails with use %.** Replace the sheet dropdown with a strip.
   Result: Review shows one thumbnail per sheet (parts drawn, use % bar, least-used sheet in amber, material when several); arrow keys, Home/End move between sheets. Fits a 390 px phone without page scroll. Checked EN/中文.
@@ -165,7 +165,8 @@ Phase 2 now finishes when its items are done and no benchmark run gets worse.
 - [x] **2.6 Laser collision grid.** Broad-phase grid so collision tests only check
   nearby parts; record candidate moves at 64 parts (was 42 in 1.8 s).
   Result: **Closed without the grid — measurement refuted the premise.** New `scripts/benchmark-laser64.mjs` (fixed work, exact result signature): of 57 s, layout scoring takes 56.3 s (98 %) and collision tests + no-fit polygons under 2 s. Each scored layout runs ~266 offcut histogram passes (the remnant beam search in `offcut.js`). Two exact speed-ups were tried and dropped: reusing the fixed parts' raster (−3 %) and caching the best utility (0 %). A real gain needs fewer or incremental histogram passes; that is new item **3.6**.
-- [ ] **2.7 Say why the table saw adds steps** on Review.
+- [x] **2.7 Say why the table saw adds steps** on Review.
+  Result: For Table saw and Hybrid plans, Review plans the same list for a panel saw in a worker (`timber-compare-worker.js`, cached per project) and `sawComparison()` explains: "Why 125 steps: a panel saw would cut this list in 116 steps. One panel-saw pass can run straight through several pieces lined up together, but a table saw guides one piece at a time along the fence, so the table saw needs 129 separate feeds. In return …". When the table saw or Hybrid is not slower (e.g. 15/21, the sample cabinet) it says so instead of inventing a reason. EN/中文.
 
 ## Phase 3 · Bigger bets / 較大型項目
 
@@ -181,7 +182,7 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
   compaction time: ~266 grid histogram passes per scored layout in the remnant beam.
   Spike: resume each beam child's histogram from the first row its new rectangle
   touches (exact), or a coarse first pass that only re-scores close calls. Done when
-  \`benchmark-laser64.mjs\` gives the same signature at least 2× faster.
+  `benchmark-laser64.mjs` gives the same signature at least 2× faster.
 
 ## Log / 紀錄
 
@@ -204,3 +205,4 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
 | 2026-10-27 | 2.4 Repack weakest sheets | 257/257 tests; 12/21 runs fewer steps, none worse; no sheet saved; new baseline |
 | 2026-10-27 | 2.5 Paste rows | 261/261 tests; browser: paste, undo, header, junk, 中文 |
 | 2026-10-27 | 2.6 Laser collision grid | closed: scoring is 98 % of laser time, collisions < 2 %; benchmark added; work moved to 3.6 |
+| 2026-10-27 | 2.7 Table-saw note | 264/264 tests; note checked for table/hybrid/panel, EN/中文. Phase 2 done |

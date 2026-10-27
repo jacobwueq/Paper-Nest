@@ -1,16 +1,16 @@
-import { planTimber, validateProject, parseCSV, toCSV, offcutStockRow, partLabels, parsePastedParts } from './timber-planner.js?v=0.29.1';
-import { TIMBER_SETTINGS, cleanTimberSettings, defaultTimberSettings } from './timber-settings.js?v=0.29.1';
-import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.29.1';
-import { installTimberWorkflow } from './timber-workflow.js?v=0.29.1';
-import { timberCutOverlay, updateCutTrace } from './timber-cut-overlay.js?v=0.29.1';
-import { installCutPlayback } from './timber-playback.js?v=0.29.1';
-import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.29.1';
-import { t, getLanguage, onLanguageChange } from './locale.js?v=0.29.1';
-import { installWorkshop } from './timber-workshop.js?v=0.29.1';
-import { saveFile } from './file-download.js?v=0.29.1';
-import { createTimberPDF, createLabelsPDF, loadPDFTools } from './timber-pdf.js?v=0.29.1';
-import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency } from './timber-text.js?v=0.29.1';
-import { installSawHelp } from './timber-saw-help.js?v=0.29.1';
+import { planTimber, validateProject, parseCSV, toCSV, offcutStockRow, partLabels, parsePastedParts } from './timber-planner.js?v=0.29.2';
+import { TIMBER_SETTINGS, cleanTimberSettings, defaultTimberSettings } from './timber-settings.js?v=0.29.2';
+import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.29.2';
+import { installTimberWorkflow } from './timber-workflow.js?v=0.29.2';
+import { timberCutOverlay, updateCutTrace } from './timber-cut-overlay.js?v=0.29.2';
+import { installCutPlayback } from './timber-playback.js?v=0.29.2';
+import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.29.2';
+import { t, getLanguage, onLanguageChange } from './locale.js?v=0.29.2';
+import { installWorkshop } from './timber-workshop.js?v=0.29.2';
+import { saveFile } from './file-download.js?v=0.29.2';
+import { createTimberPDF, createLabelsPDF, loadPDFTools } from './timber-pdf.js?v=0.29.2';
+import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency, sawComparison } from './timber-text.js?v=0.29.2';
+import { installSawHelp } from './timber-saw-help.js?v=0.29.2';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const fmt = (n) => Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
@@ -150,11 +150,27 @@ function renderSheet(resetPlayback = true) {
   $('offcuts-to-stock')?.toggleAttribute('disabled', !keptOffcuts.size);
   if (resetPlayback) cutPlayback?.setSheet(s, activeStep); else cutPlayback?.refreshLabels();
 }
+// Table saw / Hybrid: plan the same list for a panel saw in a worker and say why the
+// chosen saw takes more steps (roadmap 2.7). Cached per project and settings.
+const panelComparisons = new Map();
+let compareWorker = null;
+function showSawNote() {
+  const note = $('saw-note'), key = plannedProject && JSON.stringify([plannedProject.settings, plannedProject.stocks, plannedProject.parts]);
+  note.hidden = true;
+  if (!plan || (plan.settings?.saw ?? 'panel') === 'panel' || plan.manual) return;
+  const known = panelComparisons.get(key);
+  if (known) { note.textContent = sawComparison(plan, known); note.hidden = !note.textContent; return; }
+  try {
+    compareWorker ||= new Worker(new URL('./timber-compare-worker.js?v=0.29.2', import.meta.url), { type: 'module' });
+    compareWorker.onmessage = ({ data }) => { if (!data.error) panelComparisons.set(data.key, data); if (data.key === key) showSawNote(); };
+    compareWorker.postMessage({ key, project: structuredClone(plannedProject) });
+  } catch { /* the note is optional */ }
+}
 function renderPlan() {
   $('results').hidden = false; $('empty-plan').hidden = true;
   const area = plan.sheets.reduce((n, s) => n + s.area, 0), used = plan.sheets.reduce((n, s) => n + s.usedArea, 0);
   const cuts = plan.sheets.reduce((n, s) => n + s.cuts.length, 0);
-  $('plan-caption').textContent = planCaption();
+  $('plan-caption').textContent = planCaption(); showSawNote();
   $('metrics').innerHTML = `<div class="metric"><span>Stock sheets used</span><strong>${plan.sheets.length}<small>of ${plannedProject.stocks.reduce((n, s) => n + s.qty, 0)} available</small></strong></div><div class="metric"><span>Parts placed</span><strong>${plan.placed}<small>/ ${plan.required}</small></strong></div><div class="metric"><span>Finished-part yield</span><strong>${area ? (used / area * 100).toFixed(1) : '0.0'}%<small>of used stock</small></strong></div><div class="metric"><span>Cutting steps</span><strong>${cuts}<small>+ edge preparation</small></strong></div>`;
   $('unplaced').hidden = plan.unplaced.length === 0;
   if (plan.unplaced.length) {
@@ -450,5 +466,5 @@ function planCaption() {
 }
 onLanguageChange(() => {
   workshop.refresh();
-  if (plan) { $('plan-caption').textContent = planCaption(); renderSheetStrip(); renderSheet(false); }
+  if (plan) { $('plan-caption').textContent = planCaption(); showSawNote(); renderSheetStrip(); renderSheet(false); }
 });

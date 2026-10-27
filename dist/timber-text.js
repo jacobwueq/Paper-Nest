@@ -1,4 +1,4 @@
-import { getLanguage } from './locale.js?v=0.29.1';
+import { getLanguage } from './locale.js?v=0.29.2';
 const n = (value) => Number(value.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
 const choose = (lang, en, zh) => lang === 'zh-Hant' ? zh : en;
 const edgeZh = { left: '左', right: '右', top: '上', bottom: '下' };
@@ -86,4 +86,20 @@ export function cutHeadline(c, lang = getLanguage()) {
   const kind = c.axis === 'x' ? choose(lang, 'Crosscut', '橫紋切割') : choose(lang, 'Rip cut', '順紋切割');
   const shared = c.segments?.length > 1 ? choose(lang, ` · one pass through ${c.segments.length} workpieces`, ` · 一刀切過 ${c.segments.length} 件`) : '';
   return { measure, machine: 'panel', how: choose(lang, `${kind} · measure from the ${from} edge${shared}`, `${kind} · 由${from}邊量${shared}`) };
+}
+
+// Roadmap 2.7: why the table saw (or Hybrid) needs more steps than a panel saw for the
+// same list. `panel` is the panel-saw plan's { sheets, steps } for the same project.
+export function sawComparison(plan, panel, lang = getLanguage()) {
+  const saw = plan.settings?.saw;
+  if (!panel || !['table', 'hybrid'].includes(saw) || panel.unplaced) return '';
+  const steps = plan.fitness.cutCount, feeds = plan.sheets.reduce((n, s) => n + s.cuts.reduce((m, c) => m + (c.saw === 'table' ? c.segments?.length || 1 : 0), 0), 0);
+  const name = saw === 'table' ? choose(lang, 'table saw', '檯鋸') : choose(lang, 'Hybrid plan', '混合方案');
+  const sheets = panel.sheets === plan.sheets.length ? '' : choose(lang, ` on ${panel.sheets} sheets`, `，用 ${panel.sheets} 張板`);
+  if (panel.steps >= steps) return choose(lang,
+    `A panel saw would need ${panel.steps} steps for this list${sheets}; the ${name} is not slower here.`,
+    `同一張清單用板鋸要 ${panel.steps} 步${sheets}；呢次${name}唔會較慢。`);
+  return choose(lang,
+    `Why ${steps} steps: a panel saw would cut this list in ${panel.steps} steps${sheets}. One panel-saw pass can run straight through several pieces lined up together, but a table saw guides one piece at a time along the fence, so the ${name} needs ${feeds} separate feed${feeds === 1 ? '' : 's'}. In return, pieces of the same size share one fence setting, and fence cuts are repeatable and square.`,
+    `點解要 ${steps} 步：同一張清單用板鋸只需 ${panel.steps} 步${sheets}。板鋸一刀直線可以同時切過排齊嘅幾件，但檯鋸每次靠鋸導尺推一件，所以${name}要分開推 ${feeds} 次。好處係同尺寸嘅板件共用一個鋸導尺設定，切口更準更方正。`);
 }

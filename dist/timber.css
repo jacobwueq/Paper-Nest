@@ -41,3 +41,4 @@
 .workshop-nav{display:grid;grid-template-columns:1fr 2fr;gap:12px;padding:14px max(16px,3vw) max(14px,env(safe-area-inset-bottom,0px));border-top:1px solid var(--line)}.workshop-nav button{min-height:64px;font-size:clamp(17px,2vw,22px);border-radius:8px}.workshop-back{background:#fff;border:1px solid var(--line-strong,#cfd6de);color:var(--ink)}.workshop-next{background:var(--machine);color:#fff}.workshop-back:disabled{opacity:.35;cursor:default}
 @media(max-width:760px){.workshop-body{grid-template-columns:1fr;align-content:start}.workshop-drawing svg{max-height:34vh}.workshop-measure{font-size:clamp(44px,15vw,72px)}}
 @media print{.workshop,.workshop-open-button{display:none!important}}
+.saw-note{font-size:12px;line-height:1.7;color:var(--ink-2);background:var(--accent-soft);border:1px solid var(--accent-line);border-radius:6px;padding:10px 12px;margin:10px 0 0;max-width:900px}
