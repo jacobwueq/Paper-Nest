@@ -1,18 +1,18 @@
-import { alignNearby } from "./auto-align.js?v=0.31.5";
-import { compactMultiPartClusters } from "./multi-cluster.js?v=0.31.5";
+import { alignNearby } from "./auto-align.js?v=0.32.0";
+import { compactMultiPartClusters } from "./multi-cluster.js?v=0.32.0";
 import {
   createNestingDiagnostics,
   scoreDecision,
-} from "./nesting-debug.js?v=0.31.5";
-import { compactPairClusters } from "./pair-cluster.js?v=0.31.5";
-import { profiled, count } from "./nesting-profile.js?v=0.31.5";
+} from "./nesting-debug.js?v=0.32.0";
+import { compactPairClusters } from "./pair-cluster.js?v=0.32.0";
+import { profiled, count } from "./nesting-profile.js?v=0.32.0";
 import {
   contactFromCandidate,
   replacePlacement,
   contactsAtPlacement,
-} from "./common-contact.js?v=0.31.5";
-import { commonEdgeCandidates } from "./common-edge.js?v=0.31.5";
-import { pocketTranslations } from "./pocket-search.js?v=0.31.5";
+} from "./common-contact.js?v=0.32.0";
+import { commonEdgeCandidates } from "./common-edge.js?v=0.32.0";
+import { pocketTranslations } from "./pocket-search.js?v=0.32.0";
 import {
   bounds,
   transformed,
@@ -20,8 +20,8 @@ import {
   validateLayout,
   partHoles,
   insideHole,
-} from "./geometry.js?v=0.31.5";
-import { evaluateLayout, improves } from "./search.js?v=0.31.5";
+} from "./geometry.js?v=0.32.0";
+import { evaluateLayout, improves } from "./search.js?v=0.32.0";
 
 // Remove two parts together, keep several alternatives for the first, and
 // reinsert the second. Only complete, improved layouts leave this function.
@@ -515,20 +515,34 @@ function compactLayoutImpl(parts, initial, settings, options) {
       }
 
       // Part-in-part candidates: the corners and centre of every hole of the other parts,
-      // at the current angle and the half turn.
-      if (holesOn)
-        for (const holes of neighbourHoles)
-          for (const hole of holes) {
-            const hb = bounds(hole);
+      // at the current angle and the half turn, on any sheet: moving a part into an
+      // opening on an earlier sheet is how part-in-part empties later sheets.
+      if (holesOn) {
+        const fitsSheet = (poly, b, sheet) => {
+          if (b.x < margin - 1e-6 || b.y < margin - 1e-6 || b.x + b.w > settings.width - margin + 1e-6 || b.y + b.h > settings.height - margin + 1e-6) return false;
+          return placements.every((t, i) => i === index || t.sheet !== sheet || clearance(poly, pp[i], gap) ||
+            partHoles(byId.get(t.id)).some((h) => insideHole(transformed(h, t), poly, gap)));
+        };
+        for (const [i, host] of placements.entries()) {
+          if (i === index) continue;
+          for (const local of partHoles(byId.get(host.id))) {
+            const hole = transformed(local, host), hb = bounds(hole);
             for (const angle of pocketAngles) {
               if (now() >= deadline) break;
-              const base = { ...current, x: 0, y: 0, angle }, pb = bounds(transformed(source, base));
+              const base = { ...current, x: 0, y: 0, angle, sheet: host.sheet }, pb = bounds(transformed(source, base));
               if (pb.w > hb.w - 2 * gap || pb.h > hb.h - 2 * gap) continue;
               const xs = [hb.x + gap + guard, hb.x + hb.w - gap - guard - pb.w, hb.x + (hb.w - pb.w) / 2];
               const ys = [hb.y + gap + guard, hb.y + hb.h - gap - guard - pb.h, hb.y + (hb.h - pb.h) / 2];
-              for (const x of xs) for (const y of ys) consider({ ...base, x: x - pb.x, y: y - pb.y });
+              for (const x of xs) for (const y of ys) {
+                const t = { ...base, x: x - pb.x, y: y - pb.y };
+                if (host.sheet === current.sheet) { consider(t); continue; }
+                const poly = transformed(source, t);
+                if (fitsSheet(poly, bounds(poly), host.sheet)) consider(t, true);
+              }
             }
           }
+        }
+      }
       function slide(t, dir) {
         const p = transformed(source, t),
           b = bounds(p);

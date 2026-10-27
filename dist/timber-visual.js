@@ -1,5 +1,5 @@
-import { t, onLanguageChange } from './locale.js?v=0.31.5';
-import { planTimber, optimizeTimber, compareTimberPlans, manualCommandsFromPlan, manualTimber, timberFreeRegions, validateProject } from './timber-planner.js?v=0.31.5';
+import { t, onLanguageChange } from './locale.js?v=0.32.0';
+import { planTimber, optimizeTimber, compareTimberPlans, manualCommandsFromPlan, manualTimber, timberFreeRegions, validateProject } from './timber-planner.js?v=0.32.0';
 const escapeHTML = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const fmt = (n) => Number.isFinite(n) ? Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 }) : '—';
 const colors = ['#e5d2af', '#c8d8b9', '#bed6de', '#d9c7df', '#e9c4ac', '#becadb'];
@@ -47,7 +47,7 @@ export function installTimberVisual({ readProject, changePart, changeStock, addP
   };
   try {
     if (typeof Worker !== 'undefined') {
-      worker = new Worker(new URL('./timber-live-worker.js?v=0.31.5', import.meta.url), { type: 'module' });
+      worker = new Worker(new URL('./timber-live-worker.js?v=0.32.0', import.meta.url), { type: 'module' });
       worker.onmessage = ({ data }) => scheduleResult(data);
       worker.onerror = () => { worker.terminate(); worker = null; if (!workerFailed) { workerFailed = true; runPreview(project, revision); } };
     }
