@@ -1,4 +1,4 @@
-import { planTimber, optimizeTimber } from './timber-planner.js?v=0.28.0';
+import { planTimber, optimizeTimber } from './timber-planner.js?v=0.28.1';
 const endpoint = self;
 let active = 0;
 endpoint.onmessage = async ({ data }) => {

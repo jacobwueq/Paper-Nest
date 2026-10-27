@@ -1,15 +1,16 @@
-import { planTimber, validateProject, parseCSV, toCSV, offcutStockRow } from './timber-planner.js?v=0.28.0';
-import { TIMBER_SETTINGS, cleanTimberSettings, defaultTimberSettings } from './timber-settings.js?v=0.28.0';
-import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.28.0';
-import { installTimberWorkflow } from './timber-workflow.js?v=0.28.0';
-import { timberCutOverlay, updateCutTrace } from './timber-cut-overlay.js?v=0.28.0';
-import { installCutPlayback } from './timber-playback.js?v=0.28.0';
-import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.28.0';
-import { t, getLanguage, onLanguageChange } from './locale.js?v=0.28.0';
-import { saveFile } from './file-download.js?v=0.28.0';
-import { createTimberPDF, loadPDFTools } from './timber-pdf.js?v=0.28.0';
-import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency } from './timber-text.js?v=0.28.0';
-import { installSawHelp } from './timber-saw-help.js?v=0.28.0';
+import { planTimber, validateProject, parseCSV, toCSV, offcutStockRow } from './timber-planner.js?v=0.28.1';
+import { TIMBER_SETTINGS, cleanTimberSettings, defaultTimberSettings } from './timber-settings.js?v=0.28.1';
+import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.28.1';
+import { installTimberWorkflow } from './timber-workflow.js?v=0.28.1';
+import { timberCutOverlay, updateCutTrace } from './timber-cut-overlay.js?v=0.28.1';
+import { installCutPlayback } from './timber-playback.js?v=0.28.1';
+import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.28.1';
+import { t, getLanguage, onLanguageChange } from './locale.js?v=0.28.1';
+import { installWorkshop } from './timber-workshop.js?v=0.28.1';
+import { saveFile } from './file-download.js?v=0.28.1';
+import { createTimberPDF, loadPDFTools } from './timber-pdf.js?v=0.28.1';
+import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency } from './timber-text.js?v=0.28.1';
+import { installSawHelp } from './timber-saw-help.js?v=0.28.1';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const fmt = (n) => Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
@@ -242,6 +243,13 @@ function chooseSheet(i, focus = false) {
   activeSheet = i; activeStep = 1; renderSheetStrip(); renderSheet();
   if (focus) $('sheet-strip').querySelector(`[data-sheet="${i}"]`)?.focus();
 }
+const workshop = installWorkshop({
+  getPlan: () => plan,
+  drawSheet: (s, step) => sheetSVG(s, step),
+  prepareText: (s) => trimText(s),
+  onClose: (sheet, step) => { if (!plan) return; activeSheet = sheet; activeStep = Math.min(step, plan.sheets[sheet].cuts.length) || 1; renderSheetStrip(); renderSheet(); },
+});
+$('open-workshop').onclick = () => workshop.open(activeSheet, 0);
 $('sheet-strip').addEventListener('click', (event) => { const b = event.target.closest('[data-sheet]'); if (b) chooseSheet(Number(b.dataset.sheet)); });
 $('sheet-strip').addEventListener('keydown', (event) => {
   const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
@@ -405,5 +413,6 @@ function planCaption() {
   return t(`${plannedProject.name || 'Untitled project'} · ${t("Kerf","鋸縫")} ${fmt(plan.settings.kerf)} mm · Edge trim ${fmt(plan.settings.trim)} mm · ${plan.settings.usePriorities ? 'Optional part priorities enabled' : 'Whole-list optimisation · fewer cuts first'} · ${plan.settings.direction === 'auto' ? 'Automatic cut direction' : plan.settings.direction === 'rip' ? 'Rip first' : 'Crosscut first'}`, `${plannedProject.name || '未命名專案'} · 鋸縫 ${fmt(plan.settings.kerf)} 毫米 · 修邊 ${fmt(plan.settings.trim)} 毫米 · ${plan.settings.usePriorities ? '已啟用可選優先級' : '整體優化，優先減少切割'} · ${plan.settings.direction === 'auto' ? '自動切割方向' : plan.settings.direction === 'rip' ? '先順紋切割' : '先橫紋切割'}`);
 }
 onLanguageChange(() => {
+  workshop.refresh();
   if (plan) { $('plan-caption').textContent = planCaption(); renderSheetStrip(); renderSheet(false); }
 });

@@ -1,4 +1,4 @@
-import { getLanguage } from './locale.js?v=0.28.0';
+import { getLanguage } from './locale.js?v=0.28.1';
 const n = (value) => Number(value.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
 const choose = (lang, en, zh) => lang === 'zh-Hant' ? zh : en;
 const edgeZh = { left: '左', right: '右', top: '上', bottom: '下' };
@@ -66,4 +66,24 @@ export function cutEfficiency(sheet, lang = getLanguage()) {
   return choose(lang,
     `Fewer cuts first · ${shared} shared passes across aligned workpieces.${saved ? ` ${saved} redundant cuts removed from the initial placement sequence.` : ''}`,
     `優先減少切割 · ${shared} 刀共用直線切割，指定板件需按原位置對齊。${saved ? `較原本逐件排位次序減少 ${saved} 刀。` : ''}`);
+}
+
+// Workshop view (roadmap 2.2): the one number to set and where to measure it from,
+// large enough to read at the saw. `measure` is null when a shared pass has
+// different measurements per workpiece; the detail line then lists them.
+export function cutHeadline(c, lang = getLanguage()) {
+  const offsets = c.segments?.length > 1 ? [...new Set(c.segments.map((s) => n(c.saw === 'table' ? fenceAt(s) : s.offset)))] : [n(c.saw === 'table' ? fenceAt(c) : c.offset)];
+  const measure = offsets.length === 1 ? `${offsets[0]} mm` : null;
+  if (c.saw === 'table') {
+    const edges = [...new Set((c.segments?.length > 1 ? c.segments : [c]).map(fenceEdge))], pieces = c.segments?.length > 1 ? c.segments.length : 1;
+    const same = c.fenceRepeat ? choose(lang, ' · fence unchanged', ' · 鋸導尺不變') : '';
+    const count = pieces > 1 ? choose(lang, `${pieces} pieces · `, `${pieces} 件 · `) : '';
+    return { measure, machine: 'table', how: edges.length === 1
+      ? count + choose(lang, `Fence · ${edges[0]} edge against the fence`, `鋸導尺 · ${edgeZh[edges[0]]}邊靠鋸導尺`) + same
+      : count + choose(lang, 'Fence · edge against the fence differs per piece, see below', '鋸導尺 · 每件靠鋸導尺嘅邊唔同，見下') + same };
+  }
+  const from = c.axis === 'x' ? choose(lang, 'left', '左') : choose(lang, 'top', '上');
+  const kind = c.axis === 'x' ? choose(lang, 'Crosscut', '橫紋切割') : choose(lang, 'Rip cut', '順紋切割');
+  const shared = c.segments?.length > 1 ? choose(lang, ` · one pass through ${c.segments.length} workpieces`, ` · 一刀切過 ${c.segments.length} 件`) : '';
+  return { measure, machine: 'panel', how: choose(lang, `${kind} · measure from the ${from} edge${shared}`, `${kind} · 由${from}邊量${shared}`) };
 }

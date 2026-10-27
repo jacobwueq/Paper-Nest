@@ -107,12 +107,12 @@ function translateDOM(root) {
       if (pair && normalize(small.textContent) === normalize(pair[1])) { small.hidden = true; small.dataset.localeSecondary = ''; }
     }
     for (const element of root.querySelectorAll?.('[title],[aria-label]') || []) {
-      if (element.closest('[data-user-content],[data-language-switch]')) continue;
+      if (element.closest('[data-user-content],[data-language-switch],[data-localized]')) continue;
       for (const attribute of ['title','aria-label']) { const value = element.getAttribute(attribute); if (value) element.setAttribute(attribute, translateText(value)); }
     }
     const walker = document.createTreeWalker(root, 4); let node;
     while ((node = walker.nextNode())) {
-      if (!node.parentElement || node.parentElement.closest('script,style,input,textarea,svg,pre,code,[data-user-content],[data-language-switch],[data-locale-secondary]')) continue;
+      if (!node.parentElement || node.parentElement.closest('script,style,input,textarea,svg,pre,code,[data-user-content],[data-language-switch],[data-locale-secondary],[data-localized]')) continue;
       const old = originals.get(node), source = old && node.nodeValue === old.output ? old.source : node.nodeValue;
       const output = translateText(source);
       originals.set(node, { source, output }); if (node.nodeValue !== output) node.nodeValue = output;
@@ -125,7 +125,7 @@ function translateDOM(root) {
 // is tagged; locale.css then hides the part that does not match the chosen language.
 // Text stays in the page, so textContent reads by the app are unchanged.
 const CJK = /[\u3400-\u9fff]/, LATIN = /[A-Za-z]/;
-const SKIP = 'script,style,input,textarea,select,option,svg,canvas,pre,code,[data-user-content],[data-language-switch]';
+const SKIP = 'script,style,input,textarea,select,option,svg,canvas,pre,code,[data-user-content],[data-language-switch],[data-localized]';
 function sourceText(node) {
   if (node.nodeType === 3) { const old = originals.get(node); return old && node.nodeValue === old.output ? old.source : node.nodeValue; }
   let text = ''; const walker = document.createTreeWalker(node, 4); let n;

@@ -147,8 +147,9 @@ be followed on a phone in the workshop view.
 
 - [x] **2.1 Sheet thumbnails with use %.** Replace the sheet dropdown with a strip.
   Result: Review shows one thumbnail per sheet (parts drawn, use % bar, least-used sheet in amber, material when several); arrow keys, Home/End move between sheets. Fits a 390 px phone without page scroll. Checked EN/中文.
-- [ ] **2.2 Workshop view.** Full screen, one step at a time, large measurement and
+- [x] **2.2 Workshop view.** Full screen, one step at a time, large measurement and
   fence edge, big Back/Next, screen kept awake; machine colour in Hybrid.
+  Result: Review → "Workshop view ⤢" opens a full-screen dialog: sheet and step, machine badge (panel/table colours in Hybrid), progress bar, the setting in large type (`cutHeadline()`: measurement + edge to measure from, or fence distance + fence edge, and says when pieces differ), full instructions below, 64 px Back/Next. Step 0 of each sheet is edge preparation; Next runs into the next sheet. Arrow keys, Space, Esc; focus trapped; screen wake lock; closing returns Review to that sheet and step. Checked EN/中文, desktop and 390 px phone. New `[data-localized]` lets t()-made text skip the page translator.
 - [ ] **2.3 Printable part labels.** PDF of labels: part ID, size, sheet, releasing step.
 - [ ] **2.4 Repack the weakest sheets.** A post-pass that tries to empty the least-used
   sheets into the gaps of others. Behind a switch until it never makes a plan worse.
@@ -184,3 +185,4 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
 | 2026-10-26 | 1.5 Undo deletions | 243/243 tests; tray and table removals undo in the browser |
 | 2026-10-26 | 1.6 Laser flags | 247/247 tests; nested-part SVG flagged, sample not; Arrange runs without a tick. Phase 1 done |
 | 2026-10-27 | 2.1 Sheet thumbnails | 248/248 tests; strip replaces dropdown |
+| 2026-10-27 | 2.2 Workshop view | 251/251 tests; checked EN/中文, desktop and phone |

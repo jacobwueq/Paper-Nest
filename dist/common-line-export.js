@@ -1,5 +1,5 @@
-import { transform, esc } from "./geometry.js?v=0.28.0";
-import { mergeCommonLines, lineOperationKey } from "./common-line.js?v=0.28.0";
+import { transform, esc } from "./geometry.js?v=0.28.1";
+import { mergeCommonLines, lineOperationKey } from "./common-line.js?v=0.28.1";
 
 // Make an export-only copy. Geometry stays in each owner's source coordinates;
 // detection happens after the complete placement transform, in physical mm.
