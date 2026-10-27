@@ -183,11 +183,12 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
 - [x] **3.4 Keep no-fit polygons between runs.**
   Result: Spike: in the 64-part benchmark the 63 Minkowski sums per run come from only 4 shape pairs, and a re-run asks for the same 63 again. `minkowski()` in `pocket-search.js` now caches sums by shape (both shapes moved to a fixed corner, result moved back by whole Clipper units) in a bounded module-level map (600 entries) that survives between runs. No-fit time over three runs: 629/402/295 ms → 237/70/43 ms (7–15 % of those runs). A test checks the cached sum equals the direct sum for 45 shape/angle/position cases.
 - [ ] **3.5 Fast discretised placement** as the laser search's inner loop (spike first).
-- [ ] **3.6 Faster offcut scoring for the laser search** (from 2.6). Scoring is 98 % of
+- [x] **3.6 Faster offcut scoring for the laser search** (from 2.6). Scoring is 98 % of
   compaction time: ~266 grid histogram passes per scored layout in the remnant beam.
   Spike: resume each beam child's histogram from the first row its new rectangle
   touches (exact), or a coarse first pass that only re-scores close calls. Done when
   `benchmark-laser64.mjs` gives the same signature at least 2× faster.
+  Result: Exact shortcut in the remnant beam (`keptAlternatives()` in `offcut.js`): adding a rectangle only removes free space, so if the parent has another equal-best rectangle clear of the added rectangle's cells, the child's best value is unchanged and its equal-best set is the parent's minus those touching it — no grid pass. About 95 % of child analyses are skipped. `benchmark-laser64.mjs` at fixed work: 57.5 s → 12.2 s (4.7×), same result signature 3529331495. A verify mode re-runs the full pass for every reuse; thousands of checks, no mismatch.
 
 ## Log / 紀錄
 
@@ -215,3 +216,4 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
 | 2026-10-27 | 3.2 Stock area before sheet count | 270/270 tests; offcut rows now replace a new full sheet; single-size plans unchanged |
 | 2026-10-27 | 3.3 Part-in-part | 274/274 tests; sample walls hold parts in their openings; off by default |
 | 2026-10-27 | 3.4 No-fit cache | 275/275 tests; no-fit time ÷3–7; exact on 45 cases |
+| 2026-10-27 | 3.6 Faster offcut scoring | 276/276 tests; laser64 4.7× faster, identical result |

@@ -214,6 +214,41 @@
     { x: r.x + r.w, y: r.y + r.h },
     { x: r.x, y: r.y + r.h },
   ];
+  // The analysis grid for a sheet (same arithmetic as analyse).
+  function grid(sheet) {
+    var step = Math.max(sheet.w, sheet.h) / 256;
+    var cols = Math.max(1, Math.ceil(sheet.w / step)), rows = Math.max(1, Math.ceil(sheet.h / step));
+    return { x: sheet.x || 0, y: sheet.y || 0, cols, rows, dx: sheet.w / cols, dy: sheet.h / rows };
+  }
+  // Cells a rectangle covers when rasterised as a blocked polygon (with padding),
+  // exactly as analyse's row/column arithmetic does for an axis-aligned rectangle.
+  function blockedCells(r, g, padding) {
+    return {
+      top: Math.max(0, Math.floor((r.y - padding - g.y) / g.dy)),
+      bottom: Math.min(g.rows - 1, Math.floor((r.y + r.h + padding - g.y) / g.dy)),
+      left: Math.max(0, Math.floor((r.x - padding - g.x) / g.dx)),
+      right: Math.min(g.cols - 1, Math.floor((r.x + r.w + padding - g.x) / g.dx)),
+    };
+  }
+  // Cells of a free rectangle produced by the histogram (whole cells).
+  function freeCells(r, g) {
+    var left = Math.round((r.x - g.x) / g.dx), top = Math.round((r.y - g.y) / g.dy);
+    return { top, bottom: top + Math.round(r.h / g.dy) - 1, left, right: left + Math.round(r.w / g.dx) - 1 };
+  }
+  function keptAlternatives(parent, added, sheet, padding) {
+    if (!parent || !parent.alternatives || parent.alternatives.length < 2) return null;
+    var g = grid(sheet), b = blockedCells(added, g, padding);
+    var kept = parent.alternatives.filter((r) => {
+      var c = freeCells(r, g);
+      return c.right < b.left || c.left > b.right || c.bottom < b.top || c.top > b.bottom;
+    });
+    if (!kept.length) return null;
+    // analyse's tie rule: the first rectangle, replaced only by a later one with a
+    // strictly longer short side.
+    var best = kept[0];
+    for (var r of kept) if (Math.min(r.w, r.h) > Math.min(best.w, best.h)) best = r;
+    return { alternatives: kept, rectangle: { ...best, area: best.w * best.h } };
+  }
   function collect(polygons, sheet, padding = 0, minSide = 20, options = {}) {
     const context = {
       baseCount: polygons.length,
@@ -256,6 +291,8 @@
             rectangles: [...state.rectangles, r],
             blocked,
             next: null,
+            parent: state.next,
+            added: r,
             done: false,
           });
         }
@@ -275,15 +312,23 @@
       });
       // Same first-wins deduplication as before, before the expensive analysis.
       for (const state of next)
-        if (!state.next)
-          state.next = analyse(
-            state.blocked,
-            sheet,
-            padding,
-            minSide,
-            true,
-            context,
-          );
+        if (!state.next) {
+          // Roadmap 3.6: adding rectangle r only removes free space. If an
+          // equal-best rectangle of the parent stays clear of r's cells, the best
+          // value cannot change and the child's equal-best set is exactly the
+          // parent's minus those that touch r; no new grid pass is needed.
+          const kept = keptAlternatives(state.parent, state.added, sheet, padding);
+          state.next = kept
+            ? (context.count?.("offcutAnalysesSkipped"), kept)
+            : analyse(state.blocked, sheet, padding, minSide, true, context);
+          if (kept && options.verifyShortcut) {
+            const full = analyse(state.blocked, sheet, padding, minSide, true, { ...context, count: null });
+            const key = (r) => [r.x, r.y, r.w, r.h].map((v) => v.toFixed(7)).join(",");
+            if (key(full.rectangle) !== key(kept.rectangle) || full.alternatives.map(key).join(";") !== kept.alternatives.map(key).join(";"))
+              throw new Error("offcut shortcut mismatch");
+          }
+          state.parent = null;
+        }
       const ranked = (s) => [
         ...s.rectangles.map((r) => utility(r, context.shapeWeight)),
         ...(s.done ? [] : [utility(s.next.rectangle, context.shapeWeight)]),
