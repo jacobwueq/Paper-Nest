@@ -96,6 +96,14 @@ machine in Hybrid, and big Back/Next buttons; the screen stays awake while it is
 **Part labels PDF** (More exports) prints one label per part — ID, name, size, sheet
 and the step that releases it — on A4 in the 3 × 7 sticker layout (63.5 × 38.1 mm).
 工場模式逐步全屏顯示切割設定；零件標籤 PDF 每件一張，列明編號、尺寸、板材及第幾刀切出。
+
+**Paste rows**: copy rows from a spreadsheet and press Ctrl/⌘ V anywhere on the timber
+page (or into the parts table). With a header row (Name/Length/Width/Qty, units such
+as "Length (mm)" are fine, Chinese headers too) the columns are read by name; without
+one, the text is the label, the two largest numbers are the size, a whole number ≤ 500
+is the quantity and a leftover number the thickness. Unreadable lines are skipped and
+counted; the notice has Undo.
+貼上試算表行：喺木材頁按 Ctrl/⌘ V 即可加入零件；有標題行就按欄名讀取，冇就自動辨認名稱、尺寸及數量；讀唔到嘅行會略過並列明數目，可撤銷。
 The final sheet layout also offers **Play cuts**, Pause, previous/next cut,
 Restart and a fixed 2× playback speed. Clicking a cutting-sequence instruction
 starts playback immediately from that cut, with earlier cuts already separated. A moving marker traces each cut within its current

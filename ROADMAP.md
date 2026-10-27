@@ -160,7 +160,8 @@ Phase 2 now finishes when its items are done and no benchmark run gets worse.
 - [x] **2.4 Repack the weakest sheets.** A post-pass that tries to empty the least-used
   sheets into the gaps of others. Behind a switch until it never makes a plan worse.
   Result: `repackPlan()` keeps the plan's order for all other parts and puts the weakest sheet's parts last (largest first, then longest side first; current + 2 other strategies), for the 2 least-used sheets, up to 3 rounds; kept only when `compareTimberPlans` ranks it better. On by default in the quick plan and at the end of Improve layout (`repack: false` keeps the old path for tests). Benchmark: 0 runs worse; 12 of 21 runs 1–3 steps fewer; no sheet saved (see revised phase check); quick plan at 139 pieces 0.9–1.1 s. New baseline saved.
-- [ ] **2.5 Paste rows into the parts tray** from a spreadsheet; one parts list.
+- [x] **2.5 Paste rows into the parts tray** from a spreadsheet; one parts list.
+  Result: Ctrl/⌘ V anywhere on the timber page (outside text fields), or a multi-cell paste into the parts table/tray, adds part rows via `parsePastedParts()` (planner): header row read by name (EN/中文, units allowed), otherwise label + two largest numbers as size + whole number ≤ 500 as qty + leftover as thickness; tab, semicolon or comma separated. Skipped lines are counted, never guessed; a single value pasted into a field behaves as normal. Notice with Undo. Tray shows the hint. The tray and the detailed table are already one list (same rows).
 - [ ] **2.6 Laser collision grid.** Broad-phase grid so collision tests only check
   nearby parts; record candidate moves at 64 parts (was 42 in 1.8 s).
 - [ ] **2.7 Say why the table saw adds steps** on Review.
@@ -195,3 +196,4 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
 | 2026-10-27 | 2.2 Workshop view | 251/251 tests; checked EN/中文, desktop and phone |
 | 2026-10-27 | 2.3 Part labels | 254/254 tests; also fixes digit spacing in all PDFs |
 | 2026-10-27 | 2.4 Repack weakest sheets | 257/257 tests; 12/21 runs fewer steps, none worse; no sheet saved; new baseline |
+| 2026-10-27 | 2.5 Paste rows | 261/261 tests; browser: paste, undo, header, junk, 中文 |

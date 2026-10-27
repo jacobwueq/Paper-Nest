@@ -1,6 +1,6 @@
-import { scheduleCuts, fenceOf } from './timber-cut-passes.js?v=0.29.0';
-import { cachedSimplifyTimberCuts } from './timber-cut-planner.js?v=0.29.0';
-import { validateTimberSettings, settingValue } from './timber-settings.js?v=0.29.0';
+import { scheduleCuts, fenceOf } from './timber-cut-passes.js?v=0.29.1';
+import { cachedSimplifyTimberCuts } from './timber-cut-planner.js?v=0.29.1';
+import { validateTimberSettings, settingValue } from './timber-settings.js?v=0.29.1';
 // Rectangular guillotine plans. Every cut spans its current workpiece.
 const EPS = 1e-7;
 const positive = (v) => Number.isFinite(v) && v > 0 && v <= 20000;
@@ -458,4 +458,46 @@ export function toCSV(rows) {
   // Prefix spreadsheet formulas while retaining ordinary numeric values.
   const cell = (value) => { let s = String(value ?? ''); if (typeof value === 'string' && /^[=+\-@\t\r]/.test(s)) s = "'" + s; return '"' + s.replaceAll('"', '""') + '"'; };
   return '\uFEFF' + rows.map((row) => row.map(cell).join(',')).join('\r\n');
+}
+
+// Roadmap 2.5: rows pasted from a spreadsheet (tab-separated; comma or semicolon when
+// there are no tabs). A header row names the columns; without one, the text cell is
+// the label, the two largest numbers are length and width, a whole number ≤ 500 is the
+// quantity and any number left over is the thickness. Lines that cannot be read are
+// counted in `skipped`, never guessed.
+const PASTE_HEADERS = {
+  label: ['label', 'name', 'part', 'description', '名稱', '零件'], length: ['length', 'l', 'len', '長', '長度'], width: ['width', 'w', '闊', '寬', '寬度'],
+  qty: ['qty', 'quantity', 'count', 'no', 'pcs', '數量'], material: ['material', '物料', '材料'], thickness: ['thickness', 't', 'thk', '厚', '厚度'], grain: ['grain', '木紋'],
+};
+const pasteNumber = (v) => { const t = String(v).trim().replace(/\s*(mm|毫米)$/i, '').replace(/(\d),(\d{3})/g, '$1$2'); return /^\d+(\.\d+)?$/.test(t) ? Number(t) : null; };
+export function parsePastedParts(text, defaults = {}) {
+  const { material = 'Plywood', thickness = 18 } = defaults;
+  const lines = String(text).replace(/^﻿/, '').split(/\r?\n/).filter((l) => l.trim());
+  if (!lines.length) return { rows: [], skipped: 0, header: false };
+  const sep = lines.some((l) => l.includes('\t')) ? '\t' : lines.some((l) => l.includes(';')) ? ';' : ',';
+  const cells = lines.map((l) => l.split(sep).map((c) => c.trim().replace(/^"(.*)"$/, '$1')));
+  const column = (name) => cells[0].findIndex((h) => PASTE_HEADERS[name].includes(h.toLowerCase().replace(/\(.*?\)|（.*?）|\bmm\b|毫米/g, '').replace(/[^a-z\u4e00-\u9fff]/g, '')));
+  const header = column('length') >= 0 && column('width') >= 0;
+  const rows = []; let skipped = 0;
+  for (const row of header ? cells.slice(1) : cells) {
+    let part;
+    if (header) {
+      const get = (name) => { const i = column(name); return i >= 0 ? row[i] ?? '' : ''; };
+      const grain = get('grain').toLowerCase();
+      part = { label: get('label'), length: pasteNumber(get('length')), width: pasteNumber(get('width')), qty: get('qty') ? pasteNumber(get('qty')) : 1, material: get('material') || material, thickness: get('thickness') ? pasteNumber(get('thickness')) : thickness, grain: ['yes', 'y', 'true', '1', '是'].includes(grain) };
+    } else {
+      const numbers = row.map((v, i) => ({ v: pasteNumber(v), i })).filter((x) => x.v !== null);
+      const words = row.filter((v) => v && pasteNumber(v) === null);
+      if (numbers.length < 2) { skipped++; continue; }
+      const dims = [...numbers].sort((a, b) => b.v - a.v).slice(0, 2).sort((a, b) => a.i - b.i);
+      const rest = numbers.filter((x) => !dims.includes(x));
+      const qty = rest.filter((x) => Number.isInteger(x.v) && x.v >= 1 && x.v <= 500).sort((a, b) => a.v - b.v)[0];
+      const thick = rest.find((x) => x !== qty);
+      part = { label: words[0] || '', length: Math.max(dims[0].v, dims[1].v), width: Math.min(dims[0].v, dims[1].v), qty: qty ? qty.v : 1, material, thickness: thick ? thick.v : thickness, grain: false };
+    }
+    const ok = [part.length, part.width, part.qty, part.thickness].every((v) => Number.isFinite(v) && v > 0) && Number.isInteger(part.qty) && part.qty <= 500 && part.length <= 20000;
+    if (!ok) { skipped++; continue; }
+    rows.push({ ...part, label: part.label.slice(0, 100), material: part.material.slice(0, 80), priority: 1 });
+  }
+  return { rows, skipped, header };
 }

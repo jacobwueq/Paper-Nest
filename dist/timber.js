@@ -1,16 +1,16 @@
-import { planTimber, validateProject, parseCSV, toCSV, offcutStockRow, partLabels } from './timber-planner.js?v=0.29.0';
-import { TIMBER_SETTINGS, cleanTimberSettings, defaultTimberSettings } from './timber-settings.js?v=0.29.0';
-import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.29.0';
-import { installTimberWorkflow } from './timber-workflow.js?v=0.29.0';
-import { timberCutOverlay, updateCutTrace } from './timber-cut-overlay.js?v=0.29.0';
-import { installCutPlayback } from './timber-playback.js?v=0.29.0';
-import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.29.0';
-import { t, getLanguage, onLanguageChange } from './locale.js?v=0.29.0';
-import { installWorkshop } from './timber-workshop.js?v=0.29.0';
-import { saveFile } from './file-download.js?v=0.29.0';
-import { createTimberPDF, createLabelsPDF, loadPDFTools } from './timber-pdf.js?v=0.29.0';
-import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency } from './timber-text.js?v=0.29.0';
-import { installSawHelp } from './timber-saw-help.js?v=0.29.0';
+import { planTimber, validateProject, parseCSV, toCSV, offcutStockRow, partLabels, parsePastedParts } from './timber-planner.js?v=0.29.1';
+import { TIMBER_SETTINGS, cleanTimberSettings, defaultTimberSettings } from './timber-settings.js?v=0.29.1';
+import { installTimberVisual, normalizeVisualDraft } from './timber-visual.js?v=0.29.1';
+import { installTimberWorkflow } from './timber-workflow.js?v=0.29.1';
+import { timberCutOverlay, updateCutTrace } from './timber-cut-overlay.js?v=0.29.1';
+import { installCutPlayback } from './timber-playback.js?v=0.29.1';
+import { separatedBoardSVG, updateBoardSeparation } from './timber-separation.js?v=0.29.1';
+import { t, getLanguage, onLanguageChange } from './locale.js?v=0.29.1';
+import { installWorkshop } from './timber-workshop.js?v=0.29.1';
+import { saveFile } from './file-download.js?v=0.29.1';
+import { createTimberPDF, createLabelsPDF, loadPDFTools } from './timber-pdf.js?v=0.29.1';
+import { cutDescription, cutDetail, cutRetain, trimGuide, cutEfficiency } from './timber-text.js?v=0.29.1';
+import { installSawHelp } from './timber-saw-help.js?v=0.29.1';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const fmt = (n) => Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 });
@@ -198,6 +198,25 @@ $('offcut-list').addEventListener('click', (event) => {
   document.querySelector('.visual-details').open = true;
   notifyUndo(t(`Added ${rows.map((r) => r.label).join(', ')} to stock.`, `已將 ${rows.map((r) => r.label).join('、')} 加入板材。`), before);
   $('message').scrollIntoView({ block: 'center' });
+});
+// Paste rows from a spreadsheet (roadmap 2.5): anywhere on the page except inside a
+// text field, or into the parts table / tray when the clipboard holds several cells.
+document.addEventListener('paste', (event) => {
+  const text = event.clipboardData?.getData('text/plain') || '', target = event.target;
+  const inField = !!target.closest?.('input, textarea, select, [contenteditable]');
+  const multiCell = /[\t\n]/.test(text.trim());
+  if (!text.trim() || $('timber-form').closest('[hidden]')) return;
+  if (inField && !(multiCell && target.closest('#parts, #timber-visual'))) return;
+  const before = readProject(), stock = before.stocks[0];
+  const { rows, skipped } = parsePastedParts(text, { material: stock?.material, thickness: stock?.thickness });
+  if (!rows.length) { if (!inField) notify(t('Could not read any part rows. Paste rows with a name, length, width and quantity, e.g. from a spreadsheet.', '讀唔到零件資料。請貼上包含名稱、長、闊及數量嘅行，例如由試算表複製。'), true); return; }
+  event.preventDefault();
+  const p = readProject(), room = 100 - p.parts.length, added = rows.slice(0, Math.max(0, room));
+  if (!added.length) { notify(t('Use up to 100 part rows.', '最多 100 行零件。'), true); return; }
+  p.parts.push(...added); renderInputs(p);
+  const extra = [skipped ? t(` ${skipped} line${skipped === 1 ? '' : 's'} skipped.`, ` 略過 ${skipped} 行。`) : '', rows.length > added.length ? t(` ${rows.length - added.length} over the 100-row limit.`, ` ${rows.length - added.length} 行超出 100 行上限。`) : ''].join('');
+  const list = added.slice(0, 3).map((r) => `${r.label || '—'} ${fmt(r.length)} × ${fmt(r.width)} × ${r.qty}`);
+  notifyUndo(t(`Pasted ${added.length} part row${added.length === 1 ? '' : 's'}: ${list.join(', ')}${added.length > 3 ? '…' : ''}.${extra}`, `已貼上 ${added.length} 行零件：${list.join('、')}${added.length > 3 ? '…' : ''}。${extra}`), before);
 });
 $('add-stock').onclick = () => {
   const p = readProject(); if (p.stocks.length >= 50) { notify('Use up to 50 stock rows.', true); return; }

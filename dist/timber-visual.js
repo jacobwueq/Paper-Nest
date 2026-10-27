@@ -1,5 +1,5 @@
-import { t, onLanguageChange } from './locale.js?v=0.29.0';
-import { planTimber, optimizeTimber, compareTimberPlans, manualCommandsFromPlan, manualTimber, timberFreeRegions, validateProject } from './timber-planner.js?v=0.29.0';
+import { t, onLanguageChange } from './locale.js?v=0.29.1';
+import { planTimber, optimizeTimber, compareTimberPlans, manualCommandsFromPlan, manualTimber, timberFreeRegions, validateProject } from './timber-planner.js?v=0.29.1';
 const escapeHTML = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const fmt = (n) => Number.isFinite(n) ? Number(n.toFixed(2)).toLocaleString('en-GB', { maximumFractionDigits: 2 }) : '—';
 const colors = ['#e5d2af', '#c8d8b9', '#bed6de', '#d9c7df', '#e9c4ac', '#becadb'];
@@ -14,7 +14,7 @@ export function installTimberVisual({ readProject, changePart, changeStock, addP
     <div class="visual-heading"><div><p class="eyebrow">LIVE MATERIAL WORKSPACE · 即時可視化</p><h2>See every piece as you type.<small>一路輸入，一路睇到。</small></h2></div><div class="visual-mode" role="group" aria-label="Planning mode"><button type="button" data-mode="preview" aria-pressed="true">Auto optimise · 自動排料</button><button type="button" data-mode="manual" aria-pressed="false">Place parts · 手動放置</button></div></div>
     <div class="visual-stats" id="visual-stats" role="status" aria-live="polite"></div>
     <div class="visual-workspace">
-      <aside class="visual-parts"><div class="visual-parts-heading"><div><h3>Parts tray <small>零件區</small></h3><span>Click a part to edit / 點選修改尺寸</span></div><button type="button" id="visual-add" aria-label="Add part">＋</button></div><div id="visual-tray" class="visual-tray"></div>
+      <aside class="visual-parts"><div class="visual-parts-heading"><div><h3>Parts tray <small>零件區</small></h3><span>Click a part to edit / 點選修改尺寸</span><span class="tray-hint">Paste rows from a spreadsheet (Ctrl/⌘ V) / 可直接貼上試算表行</span></div><button type="button" id="visual-add" aria-label="Add part">＋</button></div><div id="visual-tray" class="visual-tray"></div>
         <div class="visual-inspector"><div class="inspector-heading"><strong id="visual-selected-name" data-user-content>Selected part</strong><span id="visual-selected-code"></span></div><label>Label · 名稱<input id="visual-label" data-visual-field="label" maxlength="100"></label><div class="visual-field-pair"><label>Length → · 長<input id="visual-length" data-visual-field="length" type="number" min="0.01" max="20000" step="any"></label><label>Width · 闊<input id="visual-width" data-visual-field="width" type="number" min="0.01" max="20000" step="any"></label></div><div class="visual-field-pair"><label>Qty · 數量<input id="visual-qty" data-visual-field="qty" type="number" min="1" max="500" step="1"></label><label>Thickness · 厚<input id="visual-thickness" data-visual-field="thickness" type="number" min="0.01" max="20000" step="any"></label></div><label>Material · 物料<input id="visual-material" data-visual-field="material" maxlength="80"></label><label class="visual-grain"><input id="visual-grain" data-visual-field="grain" type="checkbox">Lock grain along length · 固定木紋方向</label><div class="visual-place-actions"><button type="button" id="visual-rotate">↻ 90°</button><button type="button" id="visual-place">Place one · 放入一件 →</button></div></div>
       </aside>
       <div class="visual-board-area"><div class="visual-stock-toolbar"><label>Stock type · 板材<select id="visual-stock-type" data-user-content aria-label="Stock type"></select></label><label>Length · 長<input id="visual-stock-length" data-visual-stock="length" type="number" min="1" max="20000" step="any" aria-label="Stock length in millimetres"></label><span class="stock-times" aria-hidden="true">×</span><label>Width · 闊<input id="visual-stock-width" data-visual-stock="width" type="number" min="1" max="20000" step="any" aria-label="Stock width in millimetres"></label><label>Sheets · 張<input id="visual-stock-qty" data-visual-stock="qty" type="number" min="1" max="200" step="1" aria-label="Available stock quantity"></label><span class="visual-mm">mm</span></div>
@@ -47,7 +47,7 @@ export function installTimberVisual({ readProject, changePart, changeStock, addP
   };
   try {
     if (typeof Worker !== 'undefined') {
-      worker = new Worker(new URL('./timber-live-worker.js?v=0.29.0', import.meta.url), { type: 'module' });
+      worker = new Worker(new URL('./timber-live-worker.js?v=0.29.1', import.meta.url), { type: 'module' });
       worker.onmessage = ({ data }) => scheduleResult(data);
       worker.onerror = () => { worker.terminate(); worker = null; if (!workerFailed) { workerFailed = true; runPreview(project, revision); } };
     }
