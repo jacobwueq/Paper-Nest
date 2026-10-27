@@ -39,3 +39,15 @@ test('part-in-part is on by default and openings are drawn as holes', () => {
   assert.match(app, /<path class="part-hit" fill-rule="evenodd" d="\$\{partArea\(p\)\}"\/>/);
   assert.match(app, /nestedCount\(state\.parts, placements, runSettings\) < nestedCount/);
 });
+
+test('a part inside an opening is valid with common-line cutting on (the user\'s manual drag)', () => {
+  const parts = [host, guests[1]];
+  const placements = [{ id: 'host', x: 10, y: 10, angle: 0, sheet: 0 }, { id: 'sq1', x: 40, y: 80, angle: 0, sheet: 0 }];
+  const common = { ...settings, commonEdgeMode: true };
+  assert.deepEqual(validateLayout(parts, placements, common), []);
+  assert.notDeepEqual(validateLayout(parts, placements, { ...common, partInPart: false }), []);
+  // The quick layout is no longer rejected in common-line mode.
+  const quick = shelfLayout([host, ...guests], common);
+  assert.deepEqual(validateLayout([host, ...guests], quick, common), []);
+  assert.ok(nestedCount([host, ...guests], quick, common) >= 2);
+});

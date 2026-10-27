@@ -1,8 +1,8 @@
 import {
   checkedCutSets,
   remainingOffcutFrames,
-} from "./separation-sets.js?v=0.32.2";
-import { checkedSeparations } from "./separation.js?v=0.32.2";
+} from "./separation-sets.js?v=0.32.3";
+import { checkedSeparations } from "./separation.js?v=0.32.3";
 import {
   dxfDocument,
   dxfTags,
@@ -11,11 +11,11 @@ import {
   DXF_LAYER_TABLE,
   DXF_PLOT_STYLE,
   DXF_MATERIAL,
-} from "./dxf-document.js?v=0.32.2";
-import { mergeCommonLines } from "./common-line.js?v=0.32.2";
-import { prepareCommonLineExport } from "./common-line-export.js?v=0.32.2";
-import { partSVG, transform, fmt, esc } from "./geometry.js?v=0.32.2";
-import { checkedOffcuts } from "./offcut-export.js?v=0.32.2";
+} from "./dxf-document.js?v=0.32.3";
+import { mergeCommonLines } from "./common-line.js?v=0.32.3";
+import { prepareCommonLineExport } from "./common-line-export.js?v=0.32.3";
+import { partSVG, transform, fmt, esc } from "./geometry.js?v=0.32.3";
+import { checkedOffcuts } from "./offcut-export.js?v=0.32.3";
 export function recoveryLines(cuts, separation, options = {}) {
   const merged = mergeCommonLines(
     [

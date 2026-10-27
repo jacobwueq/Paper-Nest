@@ -1,10 +1,10 @@
-import { entityPoints, bulgeArc } from "./geometry.js?v=0.32.2";
-import { commonContactClearance } from "./common-contact.js?v=0.32.2";
+import { entityPoints, bulgeArc } from "./geometry.js?v=0.32.3";
+import { commonContactClearance } from "./common-contact.js?v=0.32.3";
 import {
   mergeCommonLines,
   lineLength,
   lineOperationKey,
-} from "./common-line.js?v=0.32.2";
+} from "./common-line.js?v=0.32.3";
 const perimeter = (p, closed = true) =>
   p.reduce((s, a, i) => {
     const b = p[(i + 1) % p.length];

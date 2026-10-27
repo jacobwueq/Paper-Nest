@@ -1,15 +1,15 @@
-import { preservedRemnants } from "./remnant-policy.js?v=0.32.2";
+import { preservedRemnants } from "./remnant-policy.js?v=0.32.3";
 import {
   cached,
   objectKey,
   poseKey,
   count,
-} from "./nesting-profile.js?v=0.32.2";
+} from "./nesting-profile.js?v=0.32.3";
 import {
   commonContactClearance,
   sharedJunctions,
   junctionClearance,
-} from "./common-contact.js?v=0.32.2";
+} from "./common-contact.js?v=0.32.3";
 // Geometry is expressed in millimetres, with screen Y pointing down.
 export const TOL = 0.02;
 export const near = (a, b, e = 1e-5) => Math.hypot(a.x - b.x, a.y - b.y) <= e;
@@ -190,6 +190,11 @@ export function insideHole(hole, poly, gap) {
       if (segmentGap(poly[i], poly[(i + 1) % poly.length], hole[j], hole[(j + 1) % hole.length]) < gap - 1e-5) return false;
   return true;
 }
+function inOpening(a, b, gap, settings) {
+  if (settings?.partInPart !== true) return false;
+  return partHoles(a.p).some((h) => insideHole(transformed(h, a.t), b.poly, gap)) ||
+    partHoles(b.p).some((h) => insideHole(transformed(h, b.t), a.poly, gap));
+}
 // Two placed parts are far enough apart, or one sits in a hole of the other.
 export function separated(a, b, gap, settings) {
   if (clearance(a.poly, b.poly, gap)) return true;
@@ -297,6 +302,9 @@ export function validateLayout(parts, placements, settings) {
                 valid: separated(a, b, settings.gap, settings),
                 reason: "clearance",
               };
+        // A part sitting wholly inside an opening of the other, with the gap to the
+        // opening's edges, is valid in every cutting mode: it shares no line with it.
+        if (!result.valid && settings.commonEdgeMode === true && inOpening(a, b, settings.gap, settings)) continue;
         if (!result.valid) failures.push({ a, b, result });
         else if (
           settings.multiPartClusteringEnabled === true &&
