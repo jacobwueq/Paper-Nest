@@ -172,7 +172,8 @@ Phase 2 now finishes when its items are done and no benchmark run gets worse. **
 
 Each starts with a short spike (prototype + numbers) before any change to `dist/`.
 
-- [ ] **3.1 Sheet-by-sheet filling with re-weighting** (sequential value correction).
+- [x] **3.1 Sheet-by-sheet filling with re-weighting** (sequential value correction).
+  Result: Spike: one round of sheet-by-sheet filling already gives 17 sheets at 139 pieces on all saws (whole-list greedy: 18). Built as `valueCorrection()` + `finishSheets()` (each sheet's own parts re-laid for fewest cuts) on a new `place()` split out of `build()` (plans unchanged, 21/21). Runs inside Improve layout from half the time/tries, at most 8 rounds or 15 % of the time, only when sheets > area bound, all parts fit and priorities are off; kept only if it ranks better; the usual search then resumes. Fixed-tries comparison: 0 of 21 runs worse, 3 save a sheet (50/41: 18 → 17 on panel/table/hybrid, +12–24 cuts). Manual Adjust can replay these plans. The phase-2 sheet target is met here.
 - [ ] **3.2 Stage limit and stock cost** (multistage along length/width; cheapest material).
 - [ ] **3.3 Laser part-in-part** (parts inside holes). Done when the sample walls hold
   parts inside their openings.
@@ -206,3 +207,4 @@ Each starts with a short spike (prototype + numbers) before any change to `dist/
 | 2026-10-27 | 2.5 Paste rows | 261/261 tests; browser: paste, undo, header, junk, 中文 |
 | 2026-10-27 | 2.6 Laser collision grid | closed: scoring is 98 % of laser time, collisions < 2 %; benchmark added; work moved to 3.6 |
 | 2026-10-27 | 2.7 Table-saw note | 264/264 tests; note checked for table/hybrid/panel, EN/中文. Phase 2 done |
+| 2026-10-27 | 3.1 Sheet-by-sheet filling | 267/267 tests; 139 pieces 18 → 17 sheets on all saws; 0/21 worse at fixed tries |

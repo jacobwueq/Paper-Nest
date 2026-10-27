@@ -104,6 +104,13 @@ one, the text is the label, the two largest numbers are the size, a whole number
 is the quantity and a leftover number the thickness. Unreadable lines are skipped and
 counted; the notice has Undo.
 貼上試算表行：喺木材頁按 Ctrl/⌘ V 即可加入零件；有標題行就按欄名讀取，冇就自動辨認名稱、尺寸及數量；讀唔到嘅行會略過並列明數目，可撤銷。
+
+**Sheet-by-sheet filling (0.30).** When the search still leaves a gap to the area
+lower bound, the background search also fills sheets one at a time, each with the
+most valuable set of remaining parts it can hold (sequential value correction), and
+keeps that plan only if it ranks better. On the 139-piece test list this saves a
+sheet (18 → 17) for about 10 % more cuts; plans are ranked by sheets first, then cuts.
+逐張填板：如仲有機會慳板，背景搜尋會一張一張咁填板；139 件測試清單由 18 張減到 17 張（刀數多約 10%）。排序仍然係先比較用板，再比較刀數。
 The final sheet layout also offers **Play cuts**, Pause, previous/next cut,
 Restart and a fixed 2× playback speed. Clicking a cutting-sequence instruction
 starts playback immediately from that cut, with earlier cuts already separated. A moving marker traces each cut within its current

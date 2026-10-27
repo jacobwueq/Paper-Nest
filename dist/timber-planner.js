@@ -1,6 +1,6 @@
-import { scheduleCuts, fenceOf } from './timber-cut-passes.js?v=0.29.2';
-import { cachedSimplifyTimberCuts } from './timber-cut-planner.js?v=0.29.2';
-import { validateTimberSettings, settingValue } from './timber-settings.js?v=0.29.2';
+import { scheduleCuts, fenceOf } from './timber-cut-passes.js?v=0.30.0';
+import { cachedSimplifyTimberCuts } from './timber-cut-planner.js?v=0.30.0';
+import { validateTimberSettings, settingValue } from './timber-settings.js?v=0.30.0';
 // Rectangular guillotine plans. Every cut spans its current workpiece.
 const EPS = 1e-7;
 const positive = (v) => Number.isFinite(v) && v > 0 && v <= 20000;
@@ -78,7 +78,9 @@ function primaryScore(project, sheets, unplaced) {
 }
 // cutoff: a primary score to beat. A layout already worse than it cannot rank, so its
 // cuts are not ordered (the slow part) and a pruned stand-in is returned instead.
-function build(project, order, strategy, cutoff = null, cutCache = null) {
+// Guillotine placement only: parts in `order` go into the best free region by
+// `strategy`, opening stock sheets as needed. No cut ordering.
+function place(project, order, strategy) {
   const { settings } = project;
   const remaining = project.stocks.map((s) => s.qty), sheets = [], unplaced = [];
   const stockOrder = project.stocks.map((_, i) => i).sort((i, j) => materialKey(project.stocks[i]).localeCompare(materialKey(project.stocks[j])) || project.stocks[i].length - project.stocks[j].length || project.stocks[i].width - project.stocks[j].width);
@@ -129,6 +131,10 @@ function build(project, order, strategy, cutoff = null, cutCache = null) {
     if (!best) { unplaced.push(p); continue; }
     insert(best.leaf, p, best.rotated, best.direction, settings.kerf);
   }
+  return { sheets, unplaced };
+}
+function build(project, order, strategy, cutoff = null, cutCache = null) {
+  const { sheets, unplaced } = place(project, order, strategy);
   if (cutoff) {
     const primary = primaryScore(project, sheets, unplaced);
     if (compareNumbers(primary, cutoff) > 0) return { pruned: true, score: primary, fitness: { primary }, sheets: [], unplaced };
@@ -317,7 +323,7 @@ function randomFor(parts) {
 // is opened. A result is kept only when compareTimberPlans ranks it better, so the
 // pass can never make a plan worse.
 function repackPlan(project, plan, { cutCache = null, rounds = 3, weakest = 2 } = {}) {
-  if (!plan?.searchSeed || plan.sheets.length < 2) return plan;
+  if (!plan?.searchSeed?.strategy || plan.sheets.length < 2) return plan;
   const byId = new Map(expand(project).map((p) => [p.id, p]));
   const tails = [(a, b) => b.length * b.width - a.length * a.width, (a, b) => Math.max(b.length, b.width) - Math.max(a.length, a.width)];
   let best = plan;
@@ -342,6 +348,71 @@ function repackPlan(project, plan, { cutCache = null, rounds = 3, weakest = 2 } 
   if (best !== plan) best.repacked = true;
   return best;
 }
+// Roadmap 3.1: sheet-by-sheet filling with value correction (SVC). Each round fills one
+// sheet at a time with the most valuable set of remaining parts it can hold, trying a
+// few orders; afterwards the parts on poorly used sheets are made more valuable, so the
+// next round places them earlier. It finds plans with fewer sheets where the
+// whole-list greedy orders cannot, at the cost of some extra cuts.
+const partIds = (node, out = []) => { if (node.kind === 'part') out.push(node.part.id); if (node.first) partIds(node.first, out); if (node.second) partIds(node.second, out); return out; };
+// No plan can use fewer sheets than total part area over usable sheet area, per material.
+function sheetLowerBound(project) {
+  const t = project.settings.trim, need = new Map(), sheet = new Map();
+  for (const p of project.parts) need.set(materialKey(p), (need.get(materialKey(p)) || 0) + p.qty * p.length * p.width);
+  for (const s of project.stocks) sheet.set(materialKey(s), Math.max(sheet.get(materialKey(s)) || 0, (s.length - 2 * t) * (s.width - 2 * t)));
+  return [...need].reduce((n, [key, area]) => n + (sheet.get(key) ? Math.ceil(area / sheet.get(key) - 1e-9) : 0), 0);
+}
+function* valueCorrection(project, { alpha = 0.3, ordersPerSheet = 12 } = {}) {
+  const items = expand(project), byId = new Map(items.map((p) => [p.id, p]));
+  const value = new Map(items.map((p) => [p.id, p.length * p.width])), random = randomFor(items);
+  for (;;) {
+    let remaining = items; const sheets = [], stockLeft = project.stocks.map((s) => s.qty);
+    while (remaining.length) {
+      let pick = null;
+      for (let k = 0; k < ordersPerSheet; k++) {
+        const noise = k === 0 ? 0 : 0.25, size = k % 3 !== 1;
+        const key = new Map(remaining.map((p) => [p.id, (value.get(p.id) / (p.length * p.width)) * (1 + noise * (random() - 0.5)) * (size ? p.length * p.width : 1)]));
+        const order = [...remaining].sort((a, b) => key.get(b.id) - key.get(a.id) || canonicalPart(a, b));
+        const stocks = project.stocks.map((s, i) => ({ ...s, qty: Math.min(1, stockLeft[i]) }));
+        const one = place({ ...project, stocks }, order, strategies[k % strategies.length]).sheets[0];
+        if (!one) continue;
+        const ids = partIds(one.root), worth = ids.reduce((n, id) => n + value.get(id), 0);
+        if (!pick || worth > pick.worth) { const on = new Set(ids); one.placedOrder = order.filter((p) => on.has(p.id)).map((p) => p.id); pick = { sheet: one, ids, worth }; }
+      }
+      if (!pick) break;
+      stockLeft[pick.sheet.stockIndex]--; sheets.push(pick.sheet);
+      const placed = new Set(pick.ids); remaining = remaining.filter((p) => !placed.has(p.id));
+    }
+    for (const sheet of sheets) {
+      const ids = partIds(sheet.root), used = ids.reduce((n, id) => n + byId.get(id).length * byId.get(id).width, 0) / (sheet.stock.length * sheet.stock.width);
+      for (const id of ids) { const area = byId.get(id).length * byId.get(id).width; value.set(id, (1 - alpha) * value.get(id) + alpha * area / Math.max(used, 0.05)); }
+    }
+    for (const p of remaining) value.set(p.id, value.get(p.id) * 1.5);
+    yield { sheets, unplaced: remaining };
+  }
+}
+// Re-lay each sheet's own parts for the fewest cuts (same parts, same stock), then
+// number and finalize the plan.
+function finishSheets(project, raw, unplaced, cutCache) {
+  const byId = new Map(expand(project).map((p) => [p.id, p]));
+  const sheets = raw.map((sheet) => {
+    const own = partIds(sheet.root).map((id) => byId.get(id));
+    const sub = { ...project, stocks: project.stocks.map((s, i) => ({ ...s, qty: i === sheet.stockIndex ? 1 : 0 })) };
+    let top = null;
+    for (const sort of sorts) for (const strategy of strategies) {
+      const order = [...own].sort((a, b) => sort(a, b) || canonicalPart(a, b));
+      const plan = build(sub, order, strategy, null, cutCache);
+      if (!plan.unplaced.length && (!top || compareTimberPlans(plan, top.plan) < 0)) top = { plan, order, strategy };
+    }
+    if (!top) return sheet;
+    const laid = place(sub, top.order, top.strategy).sheets[0]; laid.placedOrder = top.order.map((p) => p.id); return laid;
+  });
+  sheets.forEach((s, i) => { s.number = i + 1; });
+  const plan = finalizePlan(project, sheets, unplaced, byId.size, cutCache);
+  // The placement order, sheet by sheet, lets Manual Adjust replay the layout. With no
+  // strategy it is not a seed for the whole-list search.
+  plan.searchSeed = { order: sheets.flatMap((s) => s.placedOrder), strategy: null }; plan.method = 'value-correction';
+  return plan;
+}
 function* candidates(project, warm, { pruning = true, keep = 8, caching = true, cutCache = caching ? new Map() : null } = {}) {
   const expanded = expand(project), random = randomFor(expanded), population = [];
   const record = (order, strategy) => {
@@ -354,7 +425,7 @@ function* candidates(project, warm, { pruning = true, keep = 8, caching = true, 
     if (population.length > 8) population.length = 8;
     return plan;
   };
-  if (warm?.searchKey === searchKey(project) && warm.searchSeed) {
+  if (warm?.searchKey === searchKey(project) && warm.searchSeed?.strategy) {
     const byId = new Map(expanded.map((p) => [p.id, p]));
     const order = warm.searchSeed.order.map((id) => byId.get(id));
     if (order.length === expanded.length && order.every(Boolean) && new Set(order).size === expanded.length) yield record(order, warm.searchSeed.strategy);
@@ -405,12 +476,20 @@ export function planTimber(project, { pruning = true, caching = true, repack = t
   best.searchKey = searchKey(project); best.search = { trials, pruned, complete: true };
   return best;
 }
-export async function optimizeTimber(project, { budgetMs = 1200, maxTrials = 256, initialPlan, onProgress = () => {}, shouldCancel = () => false, pruning = true, caching = true, repack = true } = {}) {
+export async function optimizeTimber(project, { budgetMs = 1200, maxTrials = 256, initialPlan, onProgress = () => {}, shouldCancel = () => false, pruning = true, caching = true, repack = true, valueCorrection: svc = true } = {}) {
   validateProject(project);
   const started = performance.now(), duration = Math.max(0, Math.min(10000, budgetMs));
   let best, trials = 0, pruned = 0, lastReport = started, improved = false;
   const cutCache = caching ? new Map() : null;
-  for (const plan of candidates(project, initialPlan, { pruning, caching, cutCache })) {
+  // Sheet-by-sheet value correction (3.1) runs only when the usual search leaves a gap
+  // to the area lower bound, every part fits and part priorities are off.
+  const bound = svc && !project.settings.usePriorities ? sheetLowerBound(project) : Infinity;
+  const gap = () => best && !best.unplaced.length && best.sheets.length > bound;
+  const svcStart = started + duration * 0.5, svcShare = duration * 0.15;
+  const search = candidates(project, initialPlan, { pruning, caching, cutCache });
+  let svcDone = false, rounds = 0;
+  for (;;) {
+    const { value: plan } = search.next();
     if (shouldCancel()) return null;
     trials++; if (plan.pruned) pruned++;
     else if (!best || compareTimberPlans(plan, best) < 0) { best = plan; improved = true; }
@@ -418,11 +497,30 @@ export async function optimizeTimber(project, { budgetMs = 1200, maxTrials = 256
     if (trials === 1 || (improved && performance.now() - lastReport > 100)) { onProgress(best); lastReport = performance.now(); improved = false; }
     if (trials >= Math.max(1, Math.min(2000, maxTrials)) || performance.now() - started >= duration) break;
     if (trials % 4 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
+    // Value correction runs once, from half the time or half the tries, for at most 8 rounds or 15 % of the
+    // time (on the benchmark lists its first round already saves the sheet); the usual
+    // search then resumes where it stopped.
+    if (!svcDone && gap() && (performance.now() >= svcStart || trials >= Math.min(2000, maxTrials) / 2)) {
+      svcDone = true;
+      const svcEnd = performance.now() + svcShare;
+      let top = null;
+      for (const round of valueCorrection(project)) {
+        if (shouldCancel()) return null;
+        rounds++;
+        if (!round.unplaced.length && (!top || round.sheets.length < top.sheets.length)) top = round;
+        if (top?.sheets.length <= bound || rounds >= 8 || performance.now() >= svcEnd) break;
+        if (rounds % 4 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      if (top && top.sheets.length < best.sheets.length) {
+        const plan = finishSheets(project, top.sheets, top.unplaced, cutCache);
+        if (compareTimberPlans(plan, best) < 0) { plan.searchKey = searchKey(project); best = plan; onProgress(best); }
+      }
+    }
   }
   if (shouldCancel()) return null;
   // Polish the winner once at the end; the pass only ever keeps a better plan.
-  if (repack && !best.repacked) { const polished = repackPlan(project, best, { cutCache }); if (polished !== best) { polished.searchKey = searchKey(project); best = polished; } }
-  best.search = { trials, pruned, complete: true }; return best;
+  if (repack && !best.repacked && best.searchSeed?.strategy) { const polished = repackPlan(project, best, { cutCache }); if (polished !== best) { polished.searchKey = searchKey(project); best = polished; } }
+  best.search = { trials, pruned, valueRounds: rounds, complete: true }; return best;
 }
 export function parseCSV(text) {
   const rows = []; let row = [], field = '', quoted = false;

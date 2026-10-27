@@ -4,21 +4,21 @@ import {
   poseKey,
   count,
   measured,
-} from "./nesting-profile.js?v=0.29.2";
+} from "./nesting-profile.js?v=0.30.0";
 // Explicit shared-boundary validation. Ordinary clearance remains untouched.
-import * as vendor from "./engine/util/clipper.js?v=0.29.2";
+import * as vendor from "./engine/util/clipper.js?v=0.30.0";
 import {
   transformed,
   segmentDistance,
   clearance,
   bounds,
-} from "./geometry.js?v=0.29.2";
+} from "./geometry.js?v=0.30.0";
 import {
   extractPartEdges,
   transformEdge,
   edgeCompatibility,
   sharedSection,
-} from "./common-edge.js?v=0.29.2";
+} from "./common-edge.js?v=0.30.0";
 const C = globalThis.ClipperLib || vendor.default;
 const EPS = 1e-6,
   SCALE = 1e6;
